@@ -1,0 +1,164 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { supabase } from "@/lib/supabaseClient";
+
+type Employee = {
+  id: string;
+  name: string;
+  status: string;
+  account_status: string;
+};
+
+type Shift = {
+  id: string;
+  employee_name: string;
+  shift_date: string;
+  start_time: string;
+  end_time: string;
+};
+
+export default function AdminPage() {
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [shifts, setShifts] = useState<Shift[]>([]);
+
+  async function loadEmployees() {
+    const { data, error } = await supabase
+      .from("employees")
+      .select("id, name, status, account_status")
+      .eq("account_status", "active");
+
+    if (error) {
+      console.error(error);
+      return;
+    }
+
+    setEmployees(data);
+  }
+
+  async function loadShifts() {
+    const today = new Date().toLocaleDateString("en-CA");
+
+    const { data, error } = await supabase
+      .from("shifts")
+      .select("*")
+      .eq("shift_date", today)
+      .order("start_time", { ascending: true });
+
+    if (error) {
+      console.error(error);
+      return;
+    }
+
+    setShifts(data);
+  }
+
+  useEffect(() => {
+    loadEmployees();
+    loadShifts();
+  }, []);
+
+  const activeEmployees = employees.filter(
+    (employee) => employee.status === "checked_in"
+  );
+
+  const employeesOnBreak = employees.filter(
+    (employee) => employee.status === "on_break"
+  );
+
+  return (
+    <div>
+      <h1 className="text-4xl font-bold text-blue-950 mb-8">
+        Dashboard
+      </h1>
+
+      <div className="bg-white rounded-2xl p-6 shadow mb-8">
+        <h2 className="text-2xl font-bold text-blue-950 mb-4">
+          Wer arbeitet heute?
+        </h2>
+
+        {shifts.length > 0 ? (
+          <div className="flex flex-col gap-3">
+            {shifts.map((shift) => (
+              <div
+                key={shift.id}
+                className="bg-blue-50 rounded-xl p-4 text-black flex justify-between"
+              >
+                <span className="font-semibold">
+                  {shift.employee_name}
+                </span>
+
+                <span>
+                  {shift.start_time.slice(0, 5)} -{" "}
+                  {shift.end_time.slice(0, 5)}
+                </span>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-gray-500">
+            Für heute sind keine Schichten eingetragen.
+          </p>
+        )}
+      </div>
+
+      <div className="bg-white rounded-2xl p-6 shadow mb-8">
+        <h2 className="text-xl font-semibold text-blue-950 mb-2">
+          Aktive Konten
+        </h2>
+
+        <p className="text-4xl font-bold text-blue-950">
+          {employees.length}
+        </p>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="bg-white rounded-2xl p-6 shadow">
+          <h2 className="text-2xl font-bold text-green-700 mb-4">
+            Aktiv arbeitend
+          </h2>
+
+          {activeEmployees.length > 0 ? (
+            <div className="flex flex-col gap-3">
+              {activeEmployees.map((employee) => (
+                <div
+                  key={employee.id}
+                  className="bg-green-100 text-green-800 rounded-xl p-4 font-semibold"
+                >
+                  {employee.name}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-gray-500">
+              Aktuell arbeitet niemand.
+            </p>
+          )}
+        </div>
+
+        <div className="bg-white rounded-2xl p-6 shadow">
+          <h2 className="text-2xl font-bold text-yellow-600 mb-4">
+            In Pause
+          </h2>
+
+          {employeesOnBreak.length > 0 ? (
+            <div className="flex flex-col gap-3">
+              {employeesOnBreak.map((employee) => (
+                <div
+                  key={employee.id}
+                  className="bg-yellow-100 text-yellow-800 rounded-xl p-4 font-semibold"
+                >
+                  {employee.name}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-gray-500">
+              Aktuell ist niemand in Pause.
+            </p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
