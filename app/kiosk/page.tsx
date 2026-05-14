@@ -14,6 +14,9 @@ type Employee = {
   status: EmployeeStatus;
 };
 
+const MAX_FAILED_ATTEMPTS = 3;
+const LOCK_DURATION_MS = 2 * 60 * 1000;
+
 export default function KioskPage() {
   const [checkingAuth, setCheckingAuth] = useState(true);
   const [pin, setPin] = useState("");
@@ -21,6 +24,10 @@ export default function KioskPage() {
   const [message, setMessage] = useState("");
   const [showPopup, setShowPopup] = useState(false);
   const [businessName, setBusinessName] = useState("");
+
+  const [failedAttempts, setFailedAttempts] = useState(0);
+  const [lockedUntil, setLockedUntil] = useState<number | null>(null);
+  const [currentTime, setCurrentTime] = useState(Date.now());
 
   async function checkKioskAccess() {
     const {
@@ -89,10 +96,86 @@ export default function KioskPage() {
     checkKioskAccess();
   }, []);
 
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setCurrentTime(Date.now());
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    if (lockedUntil && currentTime >= lockedUntil) {
+      setLockedUntil(null);
+      setFailedAttempts(0);
+    }
+  }, [currentTime, lockedUntil]);
+
   function showMessage(text: string) {
     setMessage(text);
     setShowPopup(true);
     setPin("");
+  }
+
+  function getRemainingLockSeconds() {
+    if (!lockedUntil) return 0;
+
+    const remainingMs = lockedUntil - currentTime;
+
+    if (remainingMs <= 0) return 0;
+
+    return Math.ceil(remainingMs / 1000);
+  }
+
+  function isLocked() {
+    if (!lockedUntil) return false;
+
+    return currentTime < lockedUntil;
+  }
+
+  function handleInvalidPin() {
+    const nextFailedAttempts = failedAttempts + 1;
+
+    if (nextFailedAttempts >= MAX_FAILED_ATTEMPTS) {
+      setFailedAttempts(0);
+      setLockedUntil(Date.now() + LOCK_DURATION_MS);
+      showMessage(
+        "Zu viele falsche PIN-Eingaben. Das Terminal ist für 2 Minuten gesperrt."
+      );
+      return;
+    }
+
+    setFailedAttempts(nextFailedAttempts);
+
+    const remainingAttempts = MAX_FAILED_ATTEMPTS - nextFailedAttempts;
+
+    showMessage(
+      `Dieser PIN ist keinem Mitarbeiter zugeordnet. Verbleibende Versuche: ${remainingAttempts}`
+    );
+  }
+
+  function getEmployeeByPinOrHandleFailure() {
+    if (isLocked()) {
+      const remainingSeconds = getRemainingLockSeconds();
+
+      showMessage(
+        `Terminal gesperrt. Bitte in ${remainingSeconds} Sekunden erneut versuchen.`
+      );
+
+      return null;
+    }
+
+    const employee = employees.find((employee) => employee.pin === pin);
+
+    if (!employee) {
+      handleInvalidPin();
+      return null;
+    }
+
+    setFailedAttempts(0);
+    setLockedUntil(null);
+
+    return employee;
   }
 
   async function updateEmployeeStatus(
@@ -148,17 +231,10 @@ export default function KioskPage() {
     return true;
   }
 
-  function findEmployeeByPin() {
-    return employees.find((employee) => employee.pin === pin);
-  }
-
   async function handleCheckIn() {
-    const employee = findEmployeeByPin();
+    const employee = getEmployeeByPinOrHandleFailure();
 
-    if (!employee) {
-      showMessage("Dieser PIN ist keinem Mitarbeiter zugeordnet.");
-      return;
-    }
+    if (!employee) return;
 
     if (employee.status === "checked_in") {
       showMessage(`${employee.name} ist bereits eingestempelt.`);
@@ -180,12 +256,9 @@ export default function KioskPage() {
   }
 
   async function handleStartBreak() {
-    const employee = findEmployeeByPin();
+    const employee = getEmployeeByPinOrHandleFailure();
 
-    if (!employee) {
-      showMessage("Dieser PIN ist keinem Mitarbeiter zugeordnet.");
-      return;
-    }
+    if (!employee) return;
 
     if (employee.status === "not_checked_in") {
       showMessage("Du hast vergessen dich einzustempeln.");
@@ -207,12 +280,9 @@ export default function KioskPage() {
   }
 
   async function handleEndBreak() {
-    const employee = findEmployeeByPin();
+    const employee = getEmployeeByPinOrHandleFailure();
 
-    if (!employee) {
-      showMessage("Dieser PIN ist keinem Mitarbeiter zugeordnet.");
-      return;
-    }
+    if (!employee) return;
 
     if (employee.status !== "on_break") {
       showMessage("Du hast keinen Pausenbeginn gestempelt.");
@@ -229,12 +299,9 @@ export default function KioskPage() {
   }
 
   async function handleCheckOut() {
-    const employee = findEmployeeByPin();
+    const employee = getEmployeeByPinOrHandleFailure();
 
-    if (!employee) {
-      showMessage("Dieser PIN ist keinem Mitarbeiter zugeordnet.");
-      return;
-    }
+    if (!employee) return;
 
     if (employee.status === "not_checked_in") {
       showMessage("Du hast vergessen dich einzustempeln.");
@@ -261,6 +328,9 @@ export default function KioskPage() {
     (employee) => employee.status === "on_break"
   );
 
+  const locked = isLocked();
+  const remainingLockSeconds = getRemainingLockSeconds();
+
   if (checkingAuth) {
     return (
       <main className="min-h-screen bg-gray-100 flex items-center justify-center">
@@ -285,43 +355,55 @@ export default function KioskPage() {
             </p>
           )}
 
-          <p className="text-center text-gray-500 mb-10">
-            PIN eingeben und Stempelschritt auswählen
-          </p>
+          {locked ? (
+            <div className="bg-red-100 text-red-700 p-5 rounded-2xl text-center font-bold mb-8">
+              Terminal gesperrt. Bitte in {remainingLockSeconds} Sekunden erneut
+              versuchen.
+            </div>
+          ) : (
+            <p className="text-center text-gray-500 mb-10">
+              PIN eingeben und Stempelschritt auswählen
+            </p>
+          )}
 
           <input
             type="password"
             placeholder="4-stellige PIN"
             value={pin}
             onChange={(event) => setPin(event.target.value)}
-            className="w-full border p-5 rounded-2xl text-3xl bg-white text-black text-center mb-8"
+            disabled={locked}
+            className="w-full border p-5 rounded-2xl text-3xl bg-white text-black text-center mb-8 disabled:bg-gray-200 disabled:cursor-not-allowed"
           />
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             <button
               onClick={handleCheckIn}
-              className="bg-green-600 text-white py-6 rounded-2xl text-2xl font-semibold hover:bg-green-700 transition hover:scale-105"
+              disabled={locked}
+              className="bg-green-600 text-white py-6 rounded-2xl text-2xl font-semibold hover:bg-green-700 transition hover:scale-105 disabled:bg-gray-400 disabled:hover:scale-100"
             >
               Einstempeln
             </button>
 
             <button
               onClick={handleStartBreak}
-              className="bg-yellow-500 text-white py-6 rounded-2xl text-2xl font-semibold hover:bg-yellow-600 transition hover:scale-105"
+              disabled={locked}
+              className="bg-yellow-500 text-white py-6 rounded-2xl text-2xl font-semibold hover:bg-yellow-600 transition hover:scale-105 disabled:bg-gray-400 disabled:hover:scale-100"
             >
               Pause starten
             </button>
 
             <button
               onClick={handleEndBreak}
-              className="bg-blue-600 text-white py-6 rounded-2xl text-2xl font-semibold hover:bg-blue-700 transition hover:scale-105"
+              disabled={locked}
+              className="bg-blue-600 text-white py-6 rounded-2xl text-2xl font-semibold hover:bg-blue-700 transition hover:scale-105 disabled:bg-gray-400 disabled:hover:scale-100"
             >
               Pause beenden
             </button>
 
             <button
               onClick={handleCheckOut}
-              className="bg-red-600 text-white py-6 rounded-2xl text-2xl font-semibold hover:bg-red-700 transition hover:scale-105"
+              disabled={locked}
+              className="bg-red-600 text-white py-6 rounded-2xl text-2xl font-semibold hover:bg-red-700 transition hover:scale-105 disabled:bg-gray-400 disabled:hover:scale-100"
             >
               Ausstempeln
             </button>
