@@ -261,50 +261,45 @@ export default function EmployeePage() {
       return;
     }
 
-setEmployee(employeeData as Employee);
+    const currentEmployeeId = typedProfile.employee_id;
 
-const currentEmployeeId = typedProfile.employee_id;
+    setEmployee(employeeData as Employee);
+    setEmployeeId(currentEmployeeId);
 
-if (!currentEmployeeId) {
-  alert("Keine Mitarbeiter-ID gefunden.");
-  return;
-}
-
-setEmployeeId(currentEmployeeId);
-
-await loadBusinessName();
-await loadShifts(currentEmployeeId);
-await loadTimeEntries(currentEmployeeId);
-await loadAbsences(currentEmployeeId);
-    await loadNotifications(typedProfile.employee_id);
+    await loadBusinessName();
+    await loadShifts(currentEmployeeId);
+    await loadTimeEntries(currentEmployeeId);
+    await loadAbsences(currentEmployeeId);
+    await loadNotifications(currentEmployeeId);
 
     setCheckingAuth(false);
   }
 
-async function loadShifts(selectedEmployeeId: string) {
-  if (!selectedEmployeeId) return;
+  async function loadShifts(selectedEmployeeId: string) {
+    if (!selectedEmployeeId) return;
 
-  const businessId = await getBusinessId();
+    const businessId = await getBusinessId();
 
-  if (!businessId) return;
+    if (!businessId) return;
 
-  const { data, error } = await supabase
-    .from("shifts")
-    .select("*")
-    .eq("business_id", businessId)
-    .eq("employee_id", selectedEmployeeId)
-    .order("shift_date", { ascending: true });
+    const { data, error } = await supabase
+      .from("shifts")
+      .select("*")
+      .eq("business_id", businessId)
+      .eq("employee_id", selectedEmployeeId)
+      .order("shift_date", { ascending: true });
 
-  if (error) {
-    console.error(error);
-    return;
+    if (error) {
+      console.error(error);
+      return;
+    }
+
+    setShifts(data || []);
   }
-
-  setShifts(data || []);
-}
 
   async function loadTimeEntries(selectedEmployeeId: string) {
     if (!selectedEmployeeId) return;
+
     const businessId = await getBusinessId();
 
     if (!businessId) return;
@@ -326,6 +321,7 @@ async function loadShifts(selectedEmployeeId: string) {
 
   async function loadAbsences(selectedEmployeeId: string) {
     if (!selectedEmployeeId) return;
+
     const businessId = await getBusinessId();
 
     if (!businessId) return;
@@ -351,29 +347,29 @@ async function loadShifts(selectedEmployeeId: string) {
     setAbsences(data || []);
   }
 
-async function loadNotifications(selectedEmployeeId: string) {
-  if (!selectedEmployeeId) return;
+  async function loadNotifications(selectedEmployeeId: string) {
+    if (!selectedEmployeeId) return;
 
-  const businessId = await getBusinessId();
+    const businessId = await getBusinessId();
 
-  if (!businessId) return;
+    if (!businessId) return;
 
-  const { data, error } = await supabase
-    .from("notifications")
-    .select("id, title, message, type, is_read, created_at")
-    .eq("business_id", businessId)
-    .eq("employee_id", selectedEmployeeId)
-    .eq("is_read", false)
-    .order("created_at", { ascending: false })
-    .limit(10);
+    const { data, error } = await supabase
+      .from("notifications")
+      .select("id, title, message, type, is_read, created_at")
+      .eq("business_id", businessId)
+      .eq("employee_id", selectedEmployeeId)
+      .eq("is_read", false)
+      .order("created_at", { ascending: false })
+      .limit(10);
 
-  if (error) {
-    console.error(error);
-    return;
+    if (error) {
+      console.error(error);
+      return;
+    }
+
+    setNotifications((data || []) as Notification[]);
   }
-
-  setNotifications((data || []) as Notification[]);
-}
 
   async function markAllNotificationsAsRead() {
     if (!employeeId) return;
@@ -400,6 +396,42 @@ async function loadNotifications(selectedEmployeeId: string) {
   useEffect(() => {
     loadEmployeeProfile();
   }, []);
+
+  useEffect(() => {
+  let channel: ReturnType<typeof supabase.channel>;
+
+  async function setupRealtime() {
+    if (!employeeId) return;
+
+    channel = supabase
+      .channel(`employee-live-${employeeId}`)
+
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "notifications",
+          filter: `employee_id=eq.${employeeId}`,
+        },
+        async () => {
+          await loadNotifications(employeeId);
+        }
+      )
+
+      .subscribe();
+  }
+
+  if (employeeId) {
+    setupRealtime();
+  }
+
+  return () => {
+    if (channel) {
+      supabase.removeChannel(channel);
+    }
+  };
+}, [employeeId]);
 
   async function handleLogout() {
     await supabase.auth.signOut();
@@ -437,21 +469,29 @@ async function loadNotifications(selectedEmployeeId: string) {
       return;
     }
 
-    const { error: notificationError } = await supabase
-      .from("notifications")
-      .insert([
-        {
-          business_id: businessId,
-          employee_id: employee.id,
-          title: "Neuer Urlaubsantrag",
-          message: `${employee.name} hat Urlaub vom ${startDate} bis ${endDate} beantragt.`,
-          type: "vacation_request",
-          is_read: false,
-        },
-      ]);
+    const { data: adminProfiles, error: adminProfilesError } =
+      await supabase
+        .from("profiles")
+        .select("id")
+        .eq("business_id", businessId)
+        .eq("role", "admin");
 
-    if (notificationError) {
-      console.error(notificationError);
+    if (adminProfilesError) {
+      console.error(adminProfilesError);
+    } else {
+const { error: notificationError } = await supabase.rpc(
+  "create_admin_notification_for_business",
+  {
+    p_business_id: businessId,
+    p_title: "Neuer Urlaubsantrag",
+    p_message: `${employee.name} hat Urlaub vom ${startDate} bis ${endDate} beantragt.`,
+    p_type: "vacation_request",
+  }
+);
+
+if (notificationError) {
+  console.error(notificationError);
+}
     }
 
     setStartDate("");
@@ -535,31 +575,29 @@ async function loadNotifications(selectedEmployeeId: string) {
           </button>
         </div>
 
-        <div className="bg-white rounded-2xl shadow p-4 md:p-6 mb-6">
-          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-4">
-            <h2 className="text-2xl font-semibold text-blue-950">
-              Benachrichtigungen
-            </h2>
+        {notifications.length > 0 && (
+          <div className="bg-white rounded-2xl shadow p-4 md:p-6 mb-6">
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-4">
+              <h2 className="text-2xl font-semibold text-blue-950">
+                Benachrichtigungen
+              </h2>
 
-            {unreadNotifications.length > 0 && (
-              <button
-                type="button"
-                onClick={markAllNotificationsAsRead}
-                className="bg-blue-950 text-white px-4 py-2 rounded-xl hover:bg-blue-900 transition"
-              >
-                Alle als gelesen markieren ({unreadNotifications.length})
-              </button>
-            )}
-          </div>
+              {unreadNotifications.length > 0 && (
+                <button
+                  type="button"
+                  onClick={markAllNotificationsAsRead}
+                  className="bg-blue-950 text-white px-4 py-2 rounded-xl hover:bg-blue-900 transition"
+                >
+                  Alle als gelesen markieren ({unreadNotifications.length})
+                </button>
+              )}
+            </div>
 
-          {notifications.length > 0 ? (
             <div className="flex flex-col gap-3">
               {notifications.map((notification) => (
                 <div
                   key={notification.id}
-                  className={`rounded-xl p-4 border ${
-                    notification.is_read ? "bg-gray-50" : "bg-blue-50"
-                  }`}
+                  className="rounded-xl p-4 border bg-blue-50"
                 >
                   <div className="flex flex-col md:flex-row md:justify-between gap-2">
                     <div>
@@ -579,12 +617,8 @@ async function loadNotifications(selectedEmployeeId: string) {
                 </div>
               ))}
             </div>
-          ) : (
-            <p className="text-gray-500">
-              Keine Benachrichtigungen vorhanden.
-            </p>
-          )}
-        </div>
+          </div>
+        )}
 
         <h2 className="text-2xl font-semibold text-blue-950 mb-4">
           Stundenkonto

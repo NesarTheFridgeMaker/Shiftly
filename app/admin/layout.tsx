@@ -54,15 +54,28 @@ export default function AdminLayout({
     setPendingRequests(data?.length || 0);
   }
 
+  async function getCurrentUserId() {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    return user?.id || null;
+  }
+
   async function loadNotifications() {
     const businessId = await getBusinessId();
 
     if (!businessId) return;
 
+    const userId = await getCurrentUserId();
+
+    if (!userId) return;
+
     const { data, error } = await supabase
       .from("notifications")
       .select("id, title, message, type, is_read, created_at")
       .eq("business_id", businessId)
+      .eq("user_id", userId)
       .order("created_at", { ascending: false })
       .limit(10);
 
@@ -79,10 +92,15 @@ export default function AdminLayout({
 
     if (!businessId) return;
 
+    const userId = await getCurrentUserId();
+
+    if (!userId) return;
+
     const { error } = await supabase
       .from("notifications")
       .update({ is_read: true })
       .eq("business_id", businessId)
+      .eq("user_id", userId)
       .eq("is_read", false);
 
     if (error) {
@@ -143,6 +161,61 @@ export default function AdminLayout({
 
     checkUser();
   }, []);
+
+  useEffect(() => {
+    let channel: ReturnType<typeof supabase.channel>;
+
+    async function setupRealtime() {
+      const businessId = await getBusinessId();
+
+      if (!businessId) return;
+
+      const userId = await getCurrentUserId();
+
+      if (!userId) return;
+
+      channel = supabase
+        .channel(`admin-live-${businessId}-${userId}`)
+
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "notifications",
+            filter: `user_id=eq.${userId}`,
+          },
+          async () => {
+            await loadNotifications();
+          }
+        )
+
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "absences",
+            filter: `business_id=eq.${businessId}`,
+          },
+          async () => {
+            await loadPendingRequests();
+          }
+        )
+
+        .subscribe();
+    }
+
+    if (isLoggedIn) {
+      setupRealtime();
+    }
+
+    return () => {
+      if (channel) {
+        supabase.removeChannel(channel);
+      }
+    };
+  }, [isLoggedIn]);
 
   async function handleLogout() {
     await supabase.auth.signOut();
@@ -223,48 +296,49 @@ export default function AdminLayout({
       {notificationsOpen && (
         <div className="fixed top-20 right-4 z-50 bg-white text-black rounded-2xl shadow-2xl border w-[calc(100%-2rem)] max-w-md p-4">
           <div className="flex items-center justify-between mb-4">
-  <h2 className="font-bold text-blue-950">
-    Benachrichtigungen
-  </h2>
+            <h2 className="font-bold text-blue-950">
+              Benachrichtigungen
+            </h2>
 
-  <div className="flex items-center gap-3">
-    <button
-      type="button"
-      onClick={markAllNotificationsAsRead}
-      className="text-sm text-blue-700 font-semibold hover:text-blue-900"
-    >
-      Alle gelesen
-    </button>
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={markAllNotificationsAsRead}
+                className="text-sm text-blue-700 font-semibold hover:text-blue-900"
+              >
+                Alle gelesen
+              </button>
 
-    <button
-      type="button"
-      onClick={() => setNotificationsOpen(false)}
-      className="text-2xl text-gray-500 hover:text-black leading-none"
-    >
-      ×
-    </button>
-  </div>
-</div>
+              <button
+                type="button"
+                onClick={() => setNotificationsOpen(false)}
+                className="text-2xl text-gray-500 hover:text-black leading-none"
+              >
+                ×
+              </button>
+            </div>
+          </div>
+
           {notifications.length > 0 ? (
             <div className="flex flex-col gap-3 max-h-96 overflow-y-auto">
               {notifications.map((notification) => (
-<button
-  type="button"
-  key={notification.id}
-  onClick={() => {
-    setNotificationsOpen(false);
+                <button
+                  type="button"
+                  key={notification.id}
+                  onClick={() => {
+                    setNotificationsOpen(false);
 
-    if (notification.type === "vacation_request") {
-      window.location.href = "/admin/absences";
-      return;
-    }
+                    if (notification.type === "vacation_request") {
+                      window.location.href = "/admin/absences";
+                      return;
+                    }
 
-    window.location.href = "/admin";
-  }}
-  className={`text-left rounded-xl p-3 border w-full hover:bg-blue-100 transition ${
-    notification.is_read ? "bg-gray-50" : "bg-blue-50"
-  }`}
->
+                    window.location.href = "/admin";
+                  }}
+                  className={`text-left rounded-xl p-3 border w-full hover:bg-blue-100 transition ${
+                    notification.is_read ? "bg-gray-50" : "bg-blue-50"
+                  }`}
+                >
                   <p className="font-bold text-blue-950">
                     {notification.title}
                   </p>
