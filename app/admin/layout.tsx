@@ -248,12 +248,23 @@ export default function AdminLayout({
           {notifications.length > 0 ? (
             <div className="flex flex-col gap-3 max-h-96 overflow-y-auto">
               {notifications.map((notification) => (
-                <div
-                  key={notification.id}
-                  className={`rounded-xl p-3 border ${
-                    notification.is_read ? "bg-gray-50" : "bg-blue-50"
-                  }`}
-                >
+<button
+  type="button"
+  key={notification.id}
+  onClick={() => {
+    setNotificationsOpen(false);
+
+    if (notification.type === "vacation_request") {
+      window.location.href = "/admin/absences";
+      return;
+    }
+
+    window.location.href = "/admin";
+  }}
+  className={`text-left rounded-xl p-3 border w-full hover:bg-blue-100 transition ${
+    notification.is_read ? "bg-gray-50" : "bg-blue-50"
+  }`}
+>
                   <p className="font-bold text-blue-950">
                     {notification.title}
                   </p>
@@ -265,7 +276,7 @@ export default function AdminLayout({
                   <p className="text-xs text-gray-400 mt-2">
                     {formatNotificationDate(notification.created_at)}
                   </p>
-                </div>
+                </button>
               ))}
             </div>
           ) : (

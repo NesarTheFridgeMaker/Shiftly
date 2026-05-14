@@ -150,28 +150,55 @@ export default function AbsencesPage() {
     loadAbsences();
   }
 
-  async function handleUpdateRequestStatus(id: string, newStatus: string) {
-    const businessId = await getBusinessId();
+async function handleUpdateRequestStatus(id: string, newStatus: string) {
+  const businessId = await getBusinessId();
 
-    if (!businessId) {
-      alert("Keine Business-ID gefunden.");
-      return;
-    }
-
-    const { error } = await supabase
-      .from("absences")
-      .update({ request_status: newStatus })
-      .eq("id", id)
-      .eq("business_id", businessId);
-
-    if (error) {
-      console.error(error);
-      alert(JSON.stringify(error, null, 2));
-      return;
-    }
-
-    loadAbsences();
+  if (!businessId) {
+    alert("Keine Business-ID gefunden.");
+    return;
   }
+
+  const selectedAbsence = absences.find((absence) => absence.id === id);
+
+  if (!selectedAbsence) {
+    alert("Antrag wurde nicht gefunden.");
+    return;
+  }
+
+  const { error } = await supabase
+    .from("absences")
+    .update({ request_status: newStatus })
+    .eq("id", id)
+    .eq("business_id", businessId);
+
+  if (error) {
+    console.error(error);
+    alert(JSON.stringify(error, null, 2));
+    return;
+  }
+
+  const statusText =
+    newStatus === "approved" ? "genehmigt" : "abgelehnt";
+
+  const { error: notificationError } = await supabase
+    .from("notifications")
+    .insert([
+      {
+        business_id: businessId,
+        employee_id: selectedAbsence.employee_id,
+        title: "Urlaubsantrag beantwortet",
+        message: `Dein Urlaubsantrag vom ${selectedAbsence.start_date} bis ${selectedAbsence.end_date} wurde ${statusText}.`,
+        type: "vacation_response",
+        is_read: false,
+      },
+    ]);
+
+  if (notificationError) {
+    console.error(notificationError);
+  }
+
+  loadAbsences();
+}
 
   async function handleDeleteAbsence(id: string) {
     const businessId = await getBusinessId();
