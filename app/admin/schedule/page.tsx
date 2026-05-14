@@ -28,6 +28,63 @@ type Absence = {
   request_status: string;
 };
 
+function formatDateForDatabase(date: Date) {
+  return date.toLocaleDateString("en-CA");
+}
+
+function formatDateForDisplay(dateString: string) {
+  return new Date(dateString).toLocaleDateString("de-DE", {
+    weekday: "short",
+    day: "2-digit",
+    month: "2-digit",
+  });
+}
+
+function getMonday(date: Date) {
+  const copiedDate = new Date(date);
+  const day = copiedDate.getDay();
+  const difference = copiedDate.getDate() - day + (day === 0 ? -6 : 1);
+
+  copiedDate.setDate(difference);
+  copiedDate.setHours(0, 0, 0, 0);
+
+  return copiedDate;
+}
+
+function addDays(date: Date, days: number) {
+  const copiedDate = new Date(date);
+  copiedDate.setDate(copiedDate.getDate() + days);
+  return copiedDate;
+}
+
+function getWeekDays(weekStart: Date) {
+  const labels = [
+    "Montag",
+    "Dienstag",
+    "Mittwoch",
+    "Donnerstag",
+    "Freitag",
+    "Samstag",
+    "Sonntag",
+  ];
+
+  return labels.map((label, index) => {
+    const date = addDays(weekStart, index);
+
+    return {
+      label,
+      date: formatDateForDatabase(date),
+      displayDate: formatDateForDisplay(formatDateForDatabase(date)),
+    };
+  });
+}
+
+function formatAbsenceType(type: string) {
+  if (type === "vacation") return "Urlaub";
+  if (type === "sick") return "Krankheit";
+  return type;
+}
+
 export default function SchedulePage() {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [shifts, setShifts] = useState<Shift[]>([]);
@@ -40,6 +97,7 @@ export default function SchedulePage() {
   const [end, setEnd] = useState("");
 
   const [editingShiftId, setEditingShiftId] = useState<string | null>(null);
+  const [selectedWeekStart, setSelectedWeekStart] = useState(getMonday(new Date()));
 
   async function loadEmployees() {
     const businessId = await getBusinessId();
@@ -233,16 +291,6 @@ export default function SchedulePage() {
     loadShifts();
   }
 
-  function getTodayDate() {
-    return new Date().toLocaleDateString("en-CA");
-  }
-
-  function formatAbsenceType(type: string) {
-    if (type === "vacation") return "Urlaub";
-    if (type === "sick") return "Krankheit";
-    return type;
-  }
-
   function findAbsenceForShift(employeeId: string, shiftDate: string) {
     return absences.find(
       (absence) =>
@@ -252,19 +300,24 @@ export default function SchedulePage() {
     );
   }
 
-  const todaysShifts = shifts.filter(
-    (shift) => shift.shift_date === getTodayDate()
-  );
+  function goToPreviousWeek() {
+    setSelectedWeekStart((currentWeekStart) => addDays(currentWeekStart, -7));
+  }
 
-  const weekDays = [
-    { label: "Montag", date: "2026-05-11" },
-    { label: "Dienstag", date: "2026-05-12" },
-    { label: "Mittwoch", date: "2026-05-13" },
-    { label: "Donnerstag", date: "2026-05-14" },
-    { label: "Freitag", date: "2026-05-15" },
-    { label: "Samstag", date: "2026-05-16" },
-    { label: "Sonntag", date: "2026-05-17" },
-  ];
+  function goToNextWeek() {
+    setSelectedWeekStart((currentWeekStart) => addDays(currentWeekStart, 7));
+  }
+
+  function goToCurrentWeek() {
+    setSelectedWeekStart(getMonday(new Date()));
+  }
+
+  const todayDate = formatDateForDatabase(new Date());
+  const todaysShifts = shifts.filter((shift) => shift.shift_date === todayDate);
+
+  const weekDays = getWeekDays(selectedWeekStart);
+  const weekStartText = formatDateForDisplay(weekDays[0].date);
+  const weekEndText = formatDateForDisplay(weekDays[6].date);
 
   return (
     <div>
@@ -403,9 +456,40 @@ export default function SchedulePage() {
       </div>
 
       <div className="bg-white rounded-2xl shadow p-6">
-        <h2 className="text-2xl font-semibold text-blue-950 mb-4">
-          Wochenübersicht
-        </h2>
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-4">
+          <div>
+            <h2 className="text-2xl font-semibold text-blue-950">
+              Wochenübersicht
+            </h2>
+
+            <p className="text-gray-500 mt-1">
+              {weekStartText} bis {weekEndText}
+            </p>
+          </div>
+
+          <div className="flex flex-col md:flex-row gap-2">
+            <button
+              onClick={goToPreviousWeek}
+              className="bg-gray-200 text-blue-950 px-4 py-2 rounded-lg hover:bg-gray-300 transition"
+            >
+              Vorherige Woche
+            </button>
+
+            <button
+              onClick={goToCurrentWeek}
+              className="bg-blue-950 text-white px-4 py-2 rounded-lg hover:bg-blue-900 transition"
+            >
+              Aktuelle Woche
+            </button>
+
+            <button
+              onClick={goToNextWeek}
+              className="bg-gray-200 text-blue-950 px-4 py-2 rounded-lg hover:bg-gray-300 transition"
+            >
+              Nächste Woche
+            </button>
+          </div>
+        </div>
 
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
@@ -414,8 +498,14 @@ export default function SchedulePage() {
                 <th className="py-3 px-3">Mitarbeiter</th>
 
                 {weekDays.map((day) => (
-                  <th key={day.date} className="py-3 px-3">
-                    {day.label}
+                  <th
+                    key={day.date}
+                    className={`py-3 px-3 ${
+                      day.date === todayDate ? "bg-blue-50 text-blue-950" : ""
+                    }`}
+                  >
+                    <div>{day.label}</div>
+                    <div className="text-sm font-normal">{day.displayDate}</div>
                   </th>
                 ))}
               </tr>
@@ -436,7 +526,12 @@ export default function SchedulePage() {
                     );
 
                     return (
-                      <td key={day.date} className="py-4 px-3 text-black">
+                      <td
+                        key={day.date}
+                        className={`py-4 px-3 text-black align-top ${
+                          day.date === todayDate ? "bg-blue-50" : ""
+                        }`}
+                      >
                         {shiftForDay ? (
                           <div className="flex flex-col gap-2">
                             <span className="bg-blue-100 text-blue-950 px-3 py-2 rounded-lg inline-block">
