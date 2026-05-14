@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
+import { getBusiness } from "@/lib/getBusiness";
+import { getBusinessId } from "@/lib/getBusinessId";
 
 export default function AdminLayout({
   children,
@@ -11,15 +13,35 @@ export default function AdminLayout({
   const [menuOpen, setMenuOpen] = useState(false);
   const [checkingAuth, setCheckingAuth] = useState(true);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [businessName, setBusinessName] = useState("");
+  const [pendingRequests, setPendingRequests] = useState(0);
 
-  const navLinks = [
-    { label: "Dashboard", href: "/admin" },
-    { label: "Mitarbeiter", href: "/admin/employees" },
-    { label: "Dienstplan", href: "/admin/schedule" },
-    { label: "Abwesenheiten", href: "/admin/absences" },
-    { label: "Arbeitszeiten", href: "/admin/times" },
-    { label: "Einstellungen", href: "/admin/settings" },
-  ];
+  async function loadBusinessName() {
+    const business = await getBusiness();
+
+    if (!business) return;
+
+    setBusinessName(business.name);
+  }
+
+  async function loadPendingRequests() {
+    const businessId = await getBusinessId();
+
+    if (!businessId) return;
+
+    const { data, error } = await supabase
+      .from("absences")
+      .select("id")
+      .eq("business_id", businessId)
+      .eq("request_status", "pending");
+
+    if (error) {
+      console.error(error);
+      return;
+    }
+
+    setPendingRequests(data?.length || 0);
+  }
 
   useEffect(() => {
     async function checkUser() {
@@ -32,7 +54,29 @@ export default function AdminLayout({
         return;
       }
 
+      const { data: profile, error: profileError } = await supabase
+        .from("profiles")
+        .select("role")
+        .eq("id", user.id)
+        .single();
+
+      if (profileError || !profile) {
+        console.error(profileError);
+        await supabase.auth.signOut();
+        window.location.href = "/login";
+        return;
+      }
+
+      if (profile.role !== "admin") {
+        window.location.href = "/employee";
+        return;
+      }
+
       setIsLoggedIn(true);
+
+      await loadBusinessName();
+      await loadPendingRequests();
+
       setCheckingAuth(false);
     }
 
@@ -43,6 +87,21 @@ export default function AdminLayout({
     await supabase.auth.signOut();
     window.location.href = "/login";
   }
+
+  const navLinks = [
+    { label: "Dashboard", href: "/admin" },
+    { label: "Mitarbeiter", href: "/admin/employees" },
+    { label: "Dienstplan", href: "/admin/schedule" },
+    {
+      label:
+        pendingRequests > 0
+          ? `Abwesenheiten (${pendingRequests})`
+          : "Abwesenheiten",
+      href: "/admin/absences",
+    },
+    { label: "Arbeitszeiten", href: "/admin/times" },
+    { label: "Einstellungen", href: "/admin/settings" },
+  ];
 
   if (checkingAuth) {
     return (
@@ -61,7 +120,15 @@ export default function AdminLayout({
   return (
     <main className="min-h-screen bg-gray-100 md:flex">
       <div className="md:hidden bg-blue-950 text-white p-4 flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Shiftly</h1>
+        <div>
+          <h1 className="text-2xl font-bold">Shiftly</h1>
+
+          {businessName && (
+            <p className="text-base font-semibold text-blue-100 mt-1">
+              {businessName}
+            </p>
+          )}
+        </div>
 
         <button
           type="button"
@@ -75,8 +142,16 @@ export default function AdminLayout({
       {menuOpen && (
         <div className="fixed inset-0 z-50 bg-black/40 md:hidden">
           <div className="bg-blue-950 text-white w-72 h-full p-6 shadow-xl">
-            <div className="flex items-center justify-between mb-10">
-              <h2 className="text-3xl font-bold">Shiftly</h2>
+            <div className="flex items-start justify-between mb-10">
+              <div>
+                <h2 className="text-3xl font-bold">Shiftly</h2>
+
+                {businessName && (
+                  <p className="text-base font-semibold text-blue-100 mt-1">
+                    {businessName}
+                  </p>
+                )}
+              </div>
 
               <button
                 type="button"
@@ -113,7 +188,15 @@ export default function AdminLayout({
 
       <aside className="hidden md:flex w-64 bg-blue-950 text-white p-6 min-h-screen flex-col justify-between">
         <div>
-          <h1 className="text-3xl font-bold mb-10">Shiftly</h1>
+          <div className="mb-10">
+            <h1 className="text-3xl font-bold">Shiftly</h1>
+
+            {businessName && (
+              <p className="text-base font-semibold text-blue-100 mt-1">
+                {businessName}
+              </p>
+            )}
+          </div>
 
           <nav className="flex flex-col gap-4">
             {navLinks.map((link) => (

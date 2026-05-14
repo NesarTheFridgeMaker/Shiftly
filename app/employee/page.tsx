@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { getBusinessId } from "@/lib/getBusinessId";
+import { getBusiness } from "@/lib/getBusiness";
 
 type Employee = {
   id: string;
@@ -35,6 +36,13 @@ type Absence = {
   start_date: string;
   end_date: string;
   request_status: string;
+};
+
+type Profile = {
+  id: string;
+  role: string;
+  business_id: string;
+  employee_id: string;
 };
 
 function formatShiftDate(dateString: string) {
@@ -162,8 +170,11 @@ function calculateWorkedMinutes(entries: TimeEntry[]) {
 }
 
 export default function EmployeePage() {
-  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [checkingAuth, setCheckingAuth] = useState(true);
+  const [employee, setEmployee] = useState<Employee | null>(null);
   const [employeeId, setEmployeeId] = useState("");
+  const [businessName, setBusinessName] = useState("");
+
   const [shifts, setShifts] = useState<Shift[]>([]);
   const [timeEntries, setTimeEntries] = useState<TimeEntry[]>([]);
   const [absences, setAbsences] = useState<Absence[]>([]);
@@ -171,25 +182,85 @@ export default function EmployeePage() {
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
 
-  async function loadEmployees() {
-    const { data, error } = await supabase
-      .from("employees")
-      .select("id, name, account_status")
-      .eq("account_status", "active")
-      .order("name", { ascending: true });
+  async function loadBusinessName() {
+    const business = await getBusiness();
 
-    if (error) {
-      console.error(error);
+    if (!business) return;
+
+    setBusinessName(business.name);
+  }
+
+  async function loadEmployeeProfile() {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      window.location.href = "/login";
       return;
     }
 
-    setEmployees(data);
+    const { data: profile, error: profileError } = await supabase
+      .from("profiles")
+      .select("id, role, business_id, employee_id")
+      .eq("id", user.id)
+      .single();
+
+    if (profileError || !profile) {
+      console.error(profileError);
+      alert("Kein Profil gefunden.");
+      window.location.href = "/login";
+      return;
+    }
+
+    const typedProfile = profile as Profile;
+
+    if (typedProfile.role !== "employee") {
+      alert("Dieser Bereich ist nur für Mitarbeiter.");
+      window.location.href = "/admin";
+      return;
+    }
+
+    if (!typedProfile.employee_id) {
+      alert("Diesem Benutzer ist kein Mitarbeiter zugeordnet.");
+      window.location.href = "/login";
+      return;
+    }
+
+    const { data: employeeData, error: employeeError } = await supabase
+      .from("employees")
+      .select("id, name, account_status")
+      .eq("id", typedProfile.employee_id)
+      .eq("business_id", typedProfile.business_id)
+      .single();
+
+    if (employeeError || !employeeData) {
+      console.error(employeeError);
+      alert("Mitarbeiter konnte nicht geladen werden.");
+      window.location.href = "/login";
+      return;
+    }
+
+    setEmployee(employeeData as Employee);
+    setEmployeeId(typedProfile.employee_id);
+
+    await loadBusinessName();
+    await loadShifts(typedProfile.employee_id);
+    await loadTimeEntries(typedProfile.employee_id);
+    await loadAbsences(typedProfile.employee_id);
+
+    setCheckingAuth(false);
   }
 
   async function loadShifts(selectedEmployeeId: string) {
+    const businessId = await getBusinessId();
+
+    if (!businessId) return;
+
     const { data, error } = await supabase
       .from("shifts")
       .select("*")
+      .eq("business_id", businessId)
       .eq("employee_id", selectedEmployeeId)
       .order("shift_date", { ascending: true });
 
@@ -198,13 +269,18 @@ export default function EmployeePage() {
       return;
     }
 
-    setShifts(data);
+    setShifts(data || []);
   }
 
   async function loadTimeEntries(selectedEmployeeId: string) {
+    const businessId = await getBusinessId();
+
+    if (!businessId) return;
+
     const { data, error } = await supabase
       .from("time_entries")
       .select("*")
+      .eq("business_id", businessId)
       .eq("employee_id", selectedEmployeeId)
       .order("created_at", { ascending: true });
 
@@ -213,63 +289,56 @@ export default function EmployeePage() {
       return;
     }
 
-    setTimeEntries(data);
+    setTimeEntries(data || []);
   }
 
-async function loadAbsences(selectedEmployeeId: string) {
-  const sixtyDaysAgo = new Date();
-  sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
+  async function loadAbsences(selectedEmployeeId: string) {
+    const businessId = await getBusinessId();
 
-  const sixtyDaysAgoString = sixtyDaysAgo.toISOString().split("T")[0];
+    if (!businessId) return;
 
-  const { data, error } = await supabase
-    .from("absences")
-    .select("*")
-    .eq("employee_id", selectedEmployeeId)
-    .or(`request_status.eq.pending,start_date.gte.${sixtyDaysAgoString}`)
-    .order("start_date", { ascending: false });
+    const sixtyDaysAgo = new Date();
+    sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
 
-  if (error) {
-    console.error(error);
-    return;
-  }
+    const sixtyDaysAgoString = sixtyDaysAgo.toISOString().split("T")[0];
 
-  setAbsences(data);
-}
-  useEffect(() => {
-    loadEmployees();
-  }, []);
+    const { data, error } = await supabase
+      .from("absences")
+      .select("*")
+      .eq("business_id", businessId)
+      .eq("employee_id", selectedEmployeeId)
+      .or(`request_status.eq.pending,start_date.gte.${sixtyDaysAgoString}`)
+      .order("start_date", { ascending: false });
 
-  function handleSelectEmployee(id: string) {
-    setEmployeeId(id);
-    loadShifts(id);
-    loadTimeEntries(id);
-    loadAbsences(id);
-  }
-
-  async function handleVacationRequest() {
-    if (!employeeId || !startDate || !endDate) {
-      alert("Bitte Mitarbeiter, Von-Datum und Bis-Datum auswählen.");
+    if (error) {
+      console.error(error);
       return;
     }
 
-      const businessId = await getBusinessId();
-
-  if (!businessId) {
-    alert("Keine Business-ID gefunden.");
-    return;
+    setAbsences(data || []);
   }
 
-    const selectedEmployee = employees.find(
-      (employee) => employee.id === employeeId
-    );
+  useEffect(() => {
+    loadEmployeeProfile();
+  }, []);
 
-    if (!selectedEmployee) return;
+  async function handleVacationRequest() {
+    if (!employee || !employeeId || !startDate || !endDate) {
+      alert("Bitte Von-Datum und Bis-Datum auswählen.");
+      return;
+    }
+
+    const businessId = await getBusinessId();
+
+    if (!businessId) {
+      alert("Keine Business-ID gefunden.");
+      return;
+    }
 
     const { error } = await supabase.from("absences").insert([
       {
-        employee_id: selectedEmployee.id,
-        employee_name: selectedEmployee.name,
+        employee_id: employee.id,
+        employee_name: employee.name,
         type: "vacation",
         start_date: startDate,
         end_date: endDate,
@@ -280,6 +349,7 @@ async function loadAbsences(selectedEmployeeId: string) {
 
     if (error) {
       console.error(error);
+      alert(JSON.stringify(error, null, 2));
       return;
     }
 
@@ -319,175 +389,175 @@ async function loadAbsences(selectedEmployeeId: string) {
   const weeklyMinutes = calculateWorkedMinutes(weeklyEntries);
   const monthlyMinutes = calculateWorkedMinutes(monthlyEntries);
 
+  if (checkingAuth) {
+    return (
+      <main className="min-h-screen bg-gray-100 flex items-center justify-center">
+        <p className="text-blue-950 font-semibold">
+          Mitarbeiterbereich wird geladen...
+        </p>
+      </main>
+    );
+  }
+
   return (
     <main className="min-h-screen bg-gray-100 p-4 md:p-10">
       <div className="max-w-4xl mx-auto">
-        <h1 className="text-3xl md:text-4xl font-bold text-blue-950 mb-6">
-          Mitarbeiterbereich
-        </h1>
+        <div className="mb-6">
+          <h1 className="text-3xl md:text-4xl font-bold text-blue-950">
+            Mitarbeiterbereich
+          </h1>
+
+          {businessName && (
+            <p className="text-lg font-semibold text-blue-700 mt-2">
+              {businessName}
+            </p>
+          )}
+
+          {employee && (
+            <p className="text-gray-500 mt-1">
+              Eingeloggt als {employee.name}
+            </p>
+          )}
+        </div>
+
+        <h2 className="text-2xl font-semibold text-blue-950 mb-4">
+          Stundenkonto
+        </h2>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+          <div className="bg-white rounded-2xl shadow p-4">
+            <p className="text-gray-500 mb-1">Heute</p>
+            <p className="text-2xl font-bold text-green-700">
+              {formatMinutes(todayMinutes)}
+            </p>
+          </div>
+
+          <div className="bg-white rounded-2xl shadow p-4">
+            <p className="text-gray-500 mb-1">Diese Woche</p>
+            <p className="text-2xl font-bold text-green-700">
+              {formatMinutes(weeklyMinutes)}
+            </p>
+          </div>
+
+          <div className="bg-white rounded-2xl shadow p-4">
+            <p className="text-gray-500 mb-1">Dieser Monat</p>
+            <p className="text-2xl font-bold text-green-700">
+              {formatMinutes(monthlyMinutes)}
+            </p>
+          </div>
+        </div>
 
         <div className="bg-white rounded-2xl shadow p-4 md:p-6 mb-6">
           <h2 className="text-2xl font-semibold text-blue-950 mb-4">
-            Test-Mitarbeiter auswählen
+            Meine Schichten
           </h2>
 
-          <select
-            value={employeeId}
-            onChange={(event) => handleSelectEmployee(event.target.value)}
-            className="w-full border p-3 rounded-lg bg-white text-black"
-          >
-            <option value="">Mitarbeiter auswählen</option>
+          {shifts.length > 0 ? (
+            <div className="flex flex-col gap-3">
+              {shifts.map((shift) => (
+                <div
+                  key={shift.id}
+                  className="bg-blue-50 rounded-xl p-4 text-black flex flex-col md:flex-row md:justify-between gap-2"
+                >
+                  <span className="font-semibold">
+                    {formatShiftDate(shift.shift_date)}
+                  </span>
 
-            {employees.map((employee) => (
-              <option key={employee.id} value={employee.id}>
-                {employee.name}
-              </option>
-            ))}
-          </select>
+                  <span>
+                    {shift.start_time.slice(0, 5)} -{" "}
+                    {shift.end_time.slice(0, 5)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-gray-500">
+              Für dich sind noch keine Schichten eingetragen.
+            </p>
+          )}
         </div>
 
-        {employeeId && (
-          <>
-            <h2 className="text-2xl font-semibold text-blue-950 mb-4">
-              Stundenkonto
-            </h2>
+        <div className="bg-white rounded-2xl shadow p-4 md:p-6 mb-6">
+          <h2 className="text-2xl font-semibold text-blue-950 mb-4">
+            Meine Urlaubsanträge
+          </h2>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-              <div className="bg-white rounded-2xl shadow p-4">
-                <p className="text-gray-500 mb-1">Heute</p>
-                <p className="text-2xl font-bold text-green-700">
-                  {formatMinutes(todayMinutes)}
-                </p>
-              </div>
+          {absences.length > 0 ? (
+            <div className="flex flex-col gap-3">
+              {absences.map((absence) => (
+                <div
+                  key={absence.id}
+                  className="bg-gray-50 rounded-xl p-4 border"
+                >
+                  <div className="flex flex-col md:flex-row md:justify-between gap-2">
+                    <div>
+                      <p className="font-semibold text-blue-950">
+                        {formatAbsenceType(absence.type)}
+                      </p>
 
-              <div className="bg-white rounded-2xl shadow p-4">
-                <p className="text-gray-500 mb-1">Diese Woche</p>
-                <p className="text-2xl font-bold text-green-700">
-                  {formatMinutes(weeklyMinutes)}
-                </p>
-              </div>
-
-              <div className="bg-white rounded-2xl shadow p-4">
-                <p className="text-gray-500 mb-1">Dieser Monat</p>
-                <p className="text-2xl font-bold text-green-700">
-                  {formatMinutes(monthlyMinutes)}
-                </p>
-              </div>
-            </div>
-
-            <div className="bg-white rounded-2xl shadow p-4 md:p-6 mb-6">
-              <h2 className="text-2xl font-semibold text-blue-950 mb-4">
-                Meine Schichten
-              </h2>
-
-              {shifts.length > 0 ? (
-                <div className="flex flex-col gap-3">
-                  {shifts.map((shift) => (
-                    <div
-                      key={shift.id}
-                      className="bg-blue-50 rounded-xl p-4 text-black flex flex-col md:flex-row md:justify-between gap-2"
-                    >
-                      <span className="font-semibold">
-                        {formatShiftDate(shift.shift_date)}
-                      </span>
-
-                      <span>
-                        {shift.start_time.slice(0, 5)} -{" "}
-                        {shift.end_time.slice(0, 5)}
-                      </span>
+                      <p className="text-sm text-gray-500">
+                        {absence.start_date} bis {absence.end_date}
+                      </p>
                     </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-gray-500">
-                  Für dich sind noch keine Schichten eingetragen.
-                </p>
-              )}
-            </div>
 
-            <div className="bg-white rounded-2xl shadow p-4 md:p-6 mb-6">
-              <h2 className="text-2xl font-semibold text-blue-950 mb-4">
-                Meine Urlaubsanträge
-              </h2>
-
-              {absences.length > 0 ? (
-                <div className="flex flex-col gap-3">
-                  {absences.map((absence) => (
-                    <div
-                      key={absence.id}
-                      className="bg-gray-50 rounded-xl p-4 border"
+                    <p
+                      className={`font-bold ${getRequestStatusColor(
+                        absence.request_status
+                      )}`}
                     >
-                      <div className="flex flex-col md:flex-row md:justify-between gap-2">
-                        <div>
-                          <p className="font-semibold text-blue-950">
-                            {formatAbsenceType(absence.type)}
-                          </p>
-
-                          <p className="text-sm text-gray-500">
-                            {absence.start_date} bis {absence.end_date}
-                          </p>
-                        </div>
-
-                        <p
-                          className={`font-bold ${getRequestStatusColor(
-                            absence.request_status
-                          )}`}
-                        >
-                          {formatRequestStatus(absence.request_status)}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
+                      {formatRequestStatus(absence.request_status)}
+                    </p>
+                  </div>
                 </div>
-              ) : (
-                <p className="text-gray-500">
-                  Du hast noch keine Urlaubsanträge gestellt.
-                </p>
-              )}
+              ))}
+            </div>
+          ) : (
+            <p className="text-gray-500">
+              Du hast noch keine Urlaubsanträge gestellt.
+            </p>
+          )}
+        </div>
+
+        <div className="bg-white rounded-2xl shadow p-4 md:p-6">
+          <h2 className="text-2xl font-semibold text-blue-950 mb-4">
+            Urlaub beantragen
+          </h2>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-5">
+            <div className="flex flex-col gap-1">
+              <label className="text-sm font-semibold text-gray-600">
+                Von
+              </label>
+
+              <input
+                type="date"
+                value={startDate}
+                onChange={(event) => setStartDate(event.target.value)}
+                className="border p-3 rounded-lg bg-white text-black"
+              />
             </div>
 
-            <div className="bg-white rounded-2xl shadow p-4 md:p-6">
-              <h2 className="text-2xl font-semibold text-blue-950 mb-4">
-                Urlaub beantragen
-              </h2>
+            <div className="flex flex-col gap-1">
+              <label className="text-sm font-semibold text-gray-600">
+                Bis
+              </label>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-5">
-                <div className="flex flex-col gap-1">
-                  <label className="text-sm font-semibold text-gray-600">
-                    Von
-                  </label>
-
-                  <input
-                    type="date"
-                    value={startDate}
-                    onChange={(event) => setStartDate(event.target.value)}
-                    className="border p-3 rounded-lg bg-white text-black"
-                  />
-                </div>
-
-                <div className="flex flex-col gap-1">
-                  <label className="text-sm font-semibold text-gray-600">
-                    Bis
-                  </label>
-
-                  <input
-                    type="date"
-                    value={endDate}
-                    onChange={(event) => setEndDate(event.target.value)}
-                    className="border p-3 rounded-lg bg-white text-black"
-                  />
-                </div>
-              </div>
-
-              <button
-                onClick={handleVacationRequest}
-                className="w-full md:w-auto bg-blue-950 text-white px-5 py-3 rounded-xl hover:bg-blue-900 transition"
-              >
-                Urlaubsantrag senden
-              </button>
+              <input
+                type="date"
+                value={endDate}
+                onChange={(event) => setEndDate(event.target.value)}
+                className="border p-3 rounded-lg bg-white text-black"
+              />
             </div>
-          </>
-        )}
+          </div>
+
+          <button
+            onClick={handleVacationRequest}
+            className="w-full md:w-auto bg-blue-950 text-white px-5 py-3 rounded-xl hover:bg-blue-900 transition"
+          >
+            Urlaubsantrag senden
+          </button>
+        </div>
       </div>
     </main>
   );

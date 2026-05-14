@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
+import { getBusinessId } from "@/lib/getBusinessId";
 
 type Employee = {
   id: string;
@@ -12,6 +13,7 @@ type Employee = {
 
 type Shift = {
   id: string;
+  employee_id: string;
   employee_name: string;
   shift_date: string;
   start_time: string;
@@ -21,11 +23,42 @@ type Shift = {
 export default function AdminPage() {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [shifts, setShifts] = useState<Shift[]>([]);
+  const [myShifts, setMyShifts] = useState<Shift[]>([]);
+  const [adminEmployeeId, setAdminEmployeeId] = useState("");
+
+  async function loadAdminProfile() {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) return;
+
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("employee_id")
+      .eq("id", user.id)
+      .single();
+
+    if (error) {
+      console.error(error);
+      return;
+    }
+
+    if (data?.employee_id) {
+      setAdminEmployeeId(data.employee_id);
+      await loadMyShifts(data.employee_id);
+    }
+  }
 
   async function loadEmployees() {
+    const businessId = await getBusinessId();
+
+    if (!businessId) return;
+
     const { data, error } = await supabase
       .from("employees")
       .select("id, name, status, account_status")
+      .eq("business_id", businessId)
       .eq("account_status", "active");
 
     if (error) {
@@ -33,15 +66,20 @@ export default function AdminPage() {
       return;
     }
 
-    setEmployees(data);
+    setEmployees(data || []);
   }
 
   async function loadShifts() {
+    const businessId = await getBusinessId();
+
+    if (!businessId) return;
+
     const today = new Date().toLocaleDateString("en-CA");
 
     const { data, error } = await supabase
       .from("shifts")
       .select("*")
+      .eq("business_id", businessId)
       .eq("shift_date", today)
       .order("start_time", { ascending: true });
 
@@ -50,13 +88,48 @@ export default function AdminPage() {
       return;
     }
 
-    setShifts(data);
+    setShifts(data || []);
+  }
+
+  async function loadMyShifts(employeeId: string) {
+    const businessId = await getBusinessId();
+
+    if (!businessId) return;
+
+    const today = new Date().toLocaleDateString("en-CA");
+
+    const { data, error } = await supabase
+      .from("shifts")
+      .select("*")
+      .eq("business_id", businessId)
+      .eq("employee_id", employeeId)
+      .gte("shift_date", today)
+      .order("shift_date", { ascending: true })
+      .order("start_time", { ascending: true })
+      .limit(5);
+
+    if (error) {
+      console.error(error);
+      return;
+    }
+
+    setMyShifts(data || []);
   }
 
   useEffect(() => {
     loadEmployees();
     loadShifts();
+    loadAdminProfile();
   }, []);
+
+  function formatShiftDate(dateString: string) {
+    return new Date(dateString).toLocaleDateString("de-DE", {
+      weekday: "short",
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+    });
+  }
 
   const activeEmployees = employees.filter(
     (employee) => employee.status === "checked_in"
@@ -71,6 +144,38 @@ export default function AdminPage() {
       <h1 className="text-4xl font-bold text-blue-950 mb-8">
         Dashboard
       </h1>
+
+      {adminEmployeeId && (
+        <div className="bg-white rounded-2xl p-6 shadow mb-8">
+          <h2 className="text-2xl font-bold text-blue-950 mb-4">
+            Meine Schichten
+          </h2>
+
+          {myShifts.length > 0 ? (
+            <div className="flex flex-col gap-3">
+              {myShifts.map((shift) => (
+                <div
+                  key={shift.id}
+                  className="bg-blue-50 rounded-xl p-4 text-black flex flex-col md:flex-row md:justify-between gap-2"
+                >
+                  <span className="font-semibold">
+                    {formatShiftDate(shift.shift_date)}
+                  </span>
+
+                  <span>
+                    {shift.start_time.slice(0, 5)} -{" "}
+                    {shift.end_time.slice(0, 5)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-gray-500">
+              Für dich sind keine kommenden Schichten eingetragen.
+            </p>
+          )}
+        </div>
+      )}
 
       <div className="bg-white rounded-2xl p-6 shadow mb-8">
         <h2 className="text-2xl font-bold text-blue-950 mb-4">
