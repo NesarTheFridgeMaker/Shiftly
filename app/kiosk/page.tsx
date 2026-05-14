@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { getBusinessId } from "@/lib/getBusinessId";
+import { getBusiness } from "@/lib/getBusiness";
 
 type EmployeeStatus = "not_checked_in" | "checked_in" | "on_break";
 
@@ -14,10 +15,53 @@ type Employee = {
 };
 
 export default function KioskPage() {
+  const [checkingAuth, setCheckingAuth] = useState(true);
   const [pin, setPin] = useState("");
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [message, setMessage] = useState("");
   const [showPopup, setShowPopup] = useState(false);
+  const [businessName, setBusinessName] = useState("");
+
+  async function checkKioskAccess() {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      window.location.href = "/login";
+      return;
+    }
+
+    const { data: profile, error } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", user.id)
+      .single();
+
+    if (error || !profile) {
+      console.error(error);
+      window.location.href = "/login";
+      return;
+    }
+
+    if (profile.role !== "admin") {
+      window.location.href = "/employee";
+      return;
+    }
+
+    await loadBusinessName();
+    await loadEmployees();
+
+    setCheckingAuth(false);
+  }
+
+  async function loadBusinessName() {
+    const business = await getBusiness();
+
+    if (!business) return;
+
+    setBusinessName(business.name);
+  }
 
   async function loadEmployees() {
     const businessId = await getBusinessId();
@@ -42,7 +86,7 @@ export default function KioskPage() {
   }
 
   useEffect(() => {
-    loadEmployees();
+    checkKioskAccess();
   }, []);
 
   function showMessage(text: string) {
@@ -217,13 +261,29 @@ export default function KioskPage() {
     (employee) => employee.status === "on_break"
   );
 
+  if (checkingAuth) {
+    return (
+      <main className="min-h-screen bg-gray-100 flex items-center justify-center">
+        <p className="text-blue-950 font-semibold">
+          Kiosk wird geprüft...
+        </p>
+      </main>
+    );
+  }
+
   return (
     <main className="min-h-screen bg-gray-100 p-4 md:p-8">
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <section className="lg:col-span-2 bg-white rounded-3xl shadow-xl p-6 md:p-10">
-          <h1 className="text-4xl md:text-5xl font-bold text-blue-950 mb-4 text-center">
+          <h1 className="text-4xl md:text-5xl font-bold text-blue-950 mb-2 text-center">
             Shiftly Terminal
           </h1>
+
+          {businessName && (
+            <p className="text-center text-xl font-semibold text-blue-700 mb-4">
+              {businessName}
+            </p>
+          )}
 
           <p className="text-center text-gray-500 mb-10">
             PIN eingeben und Stempelschritt auswählen

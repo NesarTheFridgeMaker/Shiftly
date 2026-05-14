@@ -322,6 +322,11 @@ export default function EmployeePage() {
     loadEmployeeProfile();
   }, []);
 
+  async function handleLogout() {
+    await supabase.auth.signOut();
+    window.location.href = "/login";
+  }
+
   async function handleVacationRequest() {
     if (!employee || !employeeId || !startDate || !endDate) {
       alert("Bitte Von-Datum und Bis-Datum auswählen.");
@@ -402,22 +407,32 @@ export default function EmployeePage() {
   return (
     <main className="min-h-screen bg-gray-100 p-4 md:p-10">
       <div className="max-w-4xl mx-auto">
-        <div className="mb-6">
-          <h1 className="text-3xl md:text-4xl font-bold text-blue-950">
-            Mitarbeiterbereich
-          </h1>
+        <div className="mb-6 flex flex-col md:flex-row md:items-start md:justify-between gap-4">
+          <div>
+            <h1 className="text-3xl md:text-4xl font-bold text-blue-950">
+              Mitarbeiterbereich
+            </h1>
 
-          {businessName && (
-            <p className="text-lg font-semibold text-blue-700 mt-2">
-              {businessName}
-            </p>
-          )}
+            {businessName && (
+              <p className="text-lg font-semibold text-blue-700 mt-2">
+                {businessName}
+              </p>
+            )}
 
-          {employee && (
-            <p className="text-gray-500 mt-1">
-              Eingeloggt als {employee.name}
-            </p>
-          )}
+            {employee && (
+              <p className="text-gray-500 mt-1">
+                Eingeloggt als {employee.name}
+              </p>
+            )}
+          </div>
+
+          <button
+            type="button"
+            onClick={handleLogout}
+            className="bg-red-600 text-white px-4 py-2 rounded-xl hover:bg-red-700 transition self-start"
+          >
+            Ausloggen
+          </button>
         </div>
 
         <h2 className="text-2xl font-semibold text-blue-950 mb-4">

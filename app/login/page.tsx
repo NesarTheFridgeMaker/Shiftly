@@ -21,17 +21,42 @@ async function handleLogin() {
     password,
   });
 
-  console.log("LOGIN DATA:", data);
-  console.log("LOGIN ERROR:", error);
-
   if (error) {
     alert(`Login fehlgeschlagen: ${error.message}`);
     return;
   }
 
-  alert("Login erfolgreich!");
+  const user = data.user;
 
-  window.location.assign("/admin");
+  if (!user) {
+    alert("Benutzer konnte nicht geladen werden.");
+    return;
+  }
+
+  const { data: profile, error: profileError } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", user.id)
+    .single();
+
+  if (profileError || !profile) {
+    console.error(profileError);
+
+    alert("Profil konnte nicht geladen werden.");
+    return;
+  }
+
+  if (profile.role === "admin") {
+    window.location.assign("/admin");
+    return;
+  }
+
+  if (profile.role === "employee") {
+    window.location.assign("/employee");
+    return;
+  }
+
+  alert("Unbekannte Benutzerrolle.");
 }
 
   return (
