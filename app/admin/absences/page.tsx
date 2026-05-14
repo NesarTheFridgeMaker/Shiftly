@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
+import { getBusinessId } from "@/lib/getBusinessId";
 
 type Employee = {
   id: string;
@@ -55,9 +56,17 @@ export default function AbsencesPage() {
   const [endDate, setEndDate] = useState("");
 
   async function loadEmployees() {
+    const businessId = await getBusinessId();
+
+    if (!businessId) {
+      console.error("Keine Business-ID gefunden.");
+      return;
+    }
+
     const { data, error } = await supabase
       .from("employees")
       .select("id, name, account_status")
+      .eq("business_id", businessId)
       .eq("account_status", "active")
       .order("name", { ascending: true });
 
@@ -66,13 +75,21 @@ export default function AbsencesPage() {
       return;
     }
 
-    setEmployees(data);
+    setEmployees(data || []);
   }
 
   async function loadAbsences() {
+    const businessId = await getBusinessId();
+
+    if (!businessId) {
+      console.error("Keine Business-ID gefunden.");
+      return;
+    }
+
     const { data, error } = await supabase
       .from("absences")
       .select("*")
+      .eq("business_id", businessId)
       .order("start_date", { ascending: true });
 
     if (error) {
@@ -80,7 +97,7 @@ export default function AbsencesPage() {
       return;
     }
 
-    setAbsences(data);
+    setAbsences(data || []);
   }
 
   useEffect(() => {
@@ -91,6 +108,13 @@ export default function AbsencesPage() {
   async function handleAddAbsence() {
     if (!employeeId || !startDate || !endDate) {
       alert("Bitte Mitarbeiter, Startdatum und Enddatum ausfüllen.");
+      return;
+    }
+
+    const businessId = await getBusinessId();
+
+    if (!businessId) {
+      alert("Keine Business-ID gefunden.");
       return;
     }
 
@@ -108,11 +132,13 @@ export default function AbsencesPage() {
         start_date: startDate,
         end_date: endDate,
         request_status: "approved",
+        business_id: businessId,
       },
     ]);
 
     if (error) {
       console.error(error);
+      alert(JSON.stringify(error, null, 2));
       return;
     }
 
@@ -125,13 +151,22 @@ export default function AbsencesPage() {
   }
 
   async function handleUpdateRequestStatus(id: string, newStatus: string) {
+    const businessId = await getBusinessId();
+
+    if (!businessId) {
+      alert("Keine Business-ID gefunden.");
+      return;
+    }
+
     const { error } = await supabase
       .from("absences")
       .update({ request_status: newStatus })
-      .eq("id", id);
+      .eq("id", id)
+      .eq("business_id", businessId);
 
     if (error) {
       console.error(error);
+      alert(JSON.stringify(error, null, 2));
       return;
     }
 
@@ -139,13 +174,22 @@ export default function AbsencesPage() {
   }
 
   async function handleDeleteAbsence(id: string) {
+    const businessId = await getBusinessId();
+
+    if (!businessId) {
+      alert("Keine Business-ID gefunden.");
+      return;
+    }
+
     const { error } = await supabase
       .from("absences")
       .delete()
-      .eq("id", id);
+      .eq("id", id)
+      .eq("business_id", businessId);
 
     if (error) {
       console.error(error);
+      alert(JSON.stringify(error, null, 2));
       return;
     }
 
@@ -237,7 +281,6 @@ export default function AbsencesPage() {
 
         {pendingAbsences.length > 0 ? (
           <>
-            {/* Mobile Karten */}
             <div className="md:hidden flex flex-col gap-4">
               {pendingAbsences.map((absence) => (
                 <div
@@ -291,7 +334,6 @@ export default function AbsencesPage() {
               ))}
             </div>
 
-            {/* Desktop Tabelle */}
             <div className="hidden md:block overflow-x-auto">
               <table className="w-full text-left">
                 <thead>
@@ -374,7 +416,6 @@ export default function AbsencesPage() {
           Abwesenheitsübersicht
         </h2>
 
-        {/* Mobile Karten */}
         <div className="md:hidden flex flex-col gap-4">
           {otherAbsences.map((absence) => (
             <div
@@ -431,7 +472,6 @@ export default function AbsencesPage() {
           ))}
         </div>
 
-        {/* Desktop Tabelle */}
         <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-left">
             <thead>
