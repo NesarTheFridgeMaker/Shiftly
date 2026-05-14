@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
+import { getBusinessId } from "@/lib/getBusinessId";
 
 type Employee = {
   id: string;
@@ -34,9 +35,17 @@ export default function EmployeesPage() {
   const [pin, setPin] = useState("");
 
   async function loadEmployees() {
+    const businessId = await getBusinessId();
+
+    if (!businessId) {
+      console.error("Keine Business-ID gefunden.");
+      return;
+    }
+
     const { data, error } = await supabase
       .from("employees")
       .select("*")
+      .eq("business_id", businessId)
       .order("created_at", { ascending: false });
 
     if (error) {
@@ -44,7 +53,7 @@ export default function EmployeesPage() {
       return;
     }
 
-    setEmployees(data);
+    setEmployees(data || []);
   }
 
   useEffect(() => {
@@ -54,6 +63,13 @@ export default function EmployeesPage() {
   async function handleAddEmployee() {
     if (!name.trim() || !pin.trim()) return;
 
+    const businessId = await getBusinessId();
+
+    if (!businessId) {
+      alert("Keine Business-ID gefunden");
+      return;
+    }
+
     const { error } = await supabase.from("employees").insert([
       {
         name,
@@ -62,11 +78,13 @@ export default function EmployeesPage() {
         status: "not_checked_in",
         account_status: "active",
         hours: "0 h",
+        business_id: businessId,
       },
     ]);
 
     if (error) {
       console.error(error);
+      alert(JSON.stringify(error, null, 2));
       return;
     }
 
@@ -167,7 +185,6 @@ export default function EmployeesPage() {
           </div>
         )}
 
-        {/* Mobile Kartenansicht */}
         <div className="md:hidden flex flex-col gap-4">
           {employees.map((employee) => (
             <div
@@ -236,7 +253,6 @@ export default function EmployeesPage() {
           ))}
         </div>
 
-        {/* Desktop Tabellenansicht */}
         <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-left">
             <thead>

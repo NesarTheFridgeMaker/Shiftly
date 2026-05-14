@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
+import { getBusinessId } from "@/lib/getBusinessId";
 
 type Employee = {
   id: string;
@@ -31,17 +32,27 @@ export default function SchedulePage() {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [shifts, setShifts] = useState<Shift[]>([]);
   const [absences, setAbsences] = useState<Absence[]>([]);
-const [warning, setWarning] = useState("");
+  const [warning, setWarning] = useState("");
 
   const [employeeId, setEmployeeId] = useState("");
   const [date, setDate] = useState("");
   const [start, setStart] = useState("");
   const [end, setEnd] = useState("");
 
+  const [editingShiftId, setEditingShiftId] = useState<string | null>(null);
+
   async function loadEmployees() {
+    const businessId = await getBusinessId();
+
+    if (!businessId) {
+      console.error("Keine Business-ID gefunden.");
+      return;
+    }
+
     const { data, error } = await supabase
       .from("employees")
       .select("id, name, account_status")
+      .eq("business_id", businessId)
       .eq("account_status", "active")
       .order("name", { ascending: true });
 
@@ -50,13 +61,21 @@ const [warning, setWarning] = useState("");
       return;
     }
 
-    setEmployees(data);
+    setEmployees(data || []);
   }
 
   async function loadShifts() {
+    const businessId = await getBusinessId();
+
+    if (!businessId) {
+      console.error("Keine Business-ID gefunden.");
+      return;
+    }
+
     const { data, error } = await supabase
       .from("shifts")
       .select("*")
+      .eq("business_id", businessId)
       .order("shift_date", { ascending: true });
 
     if (error) {
@@ -64,93 +83,174 @@ const [warning, setWarning] = useState("");
       return;
     }
 
-    setShifts(data);
+    setShifts(data || []);
   }
 
   async function loadAbsences() {
-  const { data, error } = await supabase
-    .from("absences")
-    .select("id, employee_id, type, start_date, end_date, request_status")
-    .eq("request_status", "approved");
+    const businessId = await getBusinessId();
 
-  if (error) {
-    console.error(error);
-    return;
-  }
+    if (!businessId) {
+      console.error("Keine Business-ID gefunden.");
+      return;
+    }
 
-  setAbsences(data);
-}
-
-useEffect(() => {
-  loadEmployees();
-  loadShifts();
-  loadAbsences();
-}, []);
-
-  async function handleAddShift() {
-    if (!employeeId || !date || !start || !end) return;
-
-    const selectedEmployee = employees.find(
-      (employee) => employee.id === employeeId
-    );
-
-    if (!selectedEmployee) return;
-    const absenceForShift = findAbsenceForShift(
-  selectedEmployee.id,
-  date
-);
-
-if (absenceForShift) {
-  setWarning(
-    `Achtung: ${selectedEmployee.name} ist an diesem Tag als ${formatAbsenceType(
-      absenceForShift.type
-    )} eingetragen. Die Schicht wurde trotzdem gespeichert.`
-  );
-} else {
-  setWarning("");
-}
-
-    const { error } = await supabase.from("shifts").insert([
-      {
-        employee_id: selectedEmployee.id,
-        employee_name: selectedEmployee.name,
-        shift_date: date,
-        start_time: start,
-        end_time: end,
-      },
-    ]);
+    const { data, error } = await supabase
+      .from("absences")
+      .select("id, employee_id, type, start_date, end_date, request_status")
+      .eq("business_id", businessId)
+      .eq("request_status", "approved");
 
     if (error) {
       console.error(error);
       return;
     }
 
+    setAbsences(data || []);
+  }
+
+  useEffect(() => {
+    loadEmployees();
+    loadShifts();
+    loadAbsences();
+  }, []);
+
+  function resetForm() {
+    setEmployeeId("");
     setDate("");
     setStart("");
     setEnd("");
-    setEmployeeId("");
+    setEditingShiftId(null);
+  }
+
+  function getSelectedEmployee() {
+    return employees.find((employee) => employee.id === employeeId);
+  }
+
+  async function handleSaveShift() {
+    if (!employeeId || !date || !start || !end) {
+      alert("Bitte Mitarbeiter, Datum, Schichtbeginn und Schichtende ausfüllen.");
+      return;
+    }
+
+    const businessId = await getBusinessId();
+
+    if (!businessId) {
+      alert("Keine Business-ID gefunden.");
+      return;
+    }
+
+    const selectedEmployee = getSelectedEmployee();
+
+    if (!selectedEmployee) return;
+
+    const absenceForShift = findAbsenceForShift(selectedEmployee.id, date);
+
+    if (absenceForShift) {
+      setWarning(
+        `Achtung: ${selectedEmployee.name} ist an diesem Tag als ${formatAbsenceType(
+          absenceForShift.type
+        )} eingetragen. Die Schicht wurde trotzdem gespeichert.`
+      );
+    } else {
+      setWarning("");
+    }
+
+    if (editingShiftId) {
+      const { error } = await supabase
+        .from("shifts")
+        .update({
+          employee_id: selectedEmployee.id,
+          employee_name: selectedEmployee.name,
+          shift_date: date,
+          start_time: start,
+          end_time: end,
+        })
+        .eq("id", editingShiftId)
+        .eq("business_id", businessId);
+
+      if (error) {
+        console.error(error);
+        alert(JSON.stringify(error, null, 2));
+        return;
+      }
+    } else {
+      const { error } = await supabase.from("shifts").insert([
+        {
+          employee_id: selectedEmployee.id,
+          employee_name: selectedEmployee.name,
+          shift_date: date,
+          start_time: start,
+          end_time: end,
+          business_id: businessId,
+        },
+      ]);
+
+      if (error) {
+        console.error(error);
+        alert(JSON.stringify(error, null, 2));
+        return;
+      }
+    }
+
+    resetForm();
+    loadShifts();
+  }
+
+  function handleEditShift(shift: Shift) {
+    setEditingShiftId(shift.id);
+    setEmployeeId(shift.employee_id);
+    setDate(shift.shift_date);
+    setStart(shift.start_time.slice(0, 5));
+    setEnd(shift.end_time.slice(0, 5));
+    setWarning("");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  async function handleDeleteShift(id: string) {
+    const confirmed = confirm("Möchtest du diese Schicht wirklich löschen?");
+
+    if (!confirmed) return;
+
+    const businessId = await getBusinessId();
+
+    if (!businessId) {
+      alert("Keine Business-ID gefunden.");
+      return;
+    }
+
+    const { error } = await supabase
+      .from("shifts")
+      .delete()
+      .eq("id", id)
+      .eq("business_id", businessId);
+
+    if (error) {
+      console.error(error);
+      alert(JSON.stringify(error, null, 2));
+      return;
+    }
 
     loadShifts();
   }
 
   function getTodayDate() {
-    return new Date().toISOString().split("T")[0];
+    return new Date().toLocaleDateString("en-CA");
   }
 
   function formatAbsenceType(type: string) {
-  if (type === "vacation") return "Urlaub";
-  if (type === "sick") return "Krankheit";
-  return type;
-}
+    if (type === "vacation") return "Urlaub";
+    if (type === "sick") return "Krankheit";
+    return type;
+  }
 
-function findAbsenceForShift(employeeId: string, shiftDate: string) {
-  return absences.find(
-    (absence) =>
-      absence.employee_id === employeeId &&
-      shiftDate >= absence.start_date &&
-      shiftDate <= absence.end_date
-  );
-}
+  function findAbsenceForShift(employeeId: string, shiftDate: string) {
+    return absences.find(
+      (absence) =>
+        absence.employee_id === employeeId &&
+        shiftDate >= absence.start_date &&
+        shiftDate <= absence.end_date
+    );
+  }
 
   const todaysShifts = shifts.filter(
     (shift) => shift.shift_date === getTodayDate()
@@ -174,7 +274,7 @@ function findAbsenceForShift(employeeId: string, shiftDate: string) {
 
       <div className="bg-white rounded-2xl shadow p-6 mb-8">
         <h2 className="text-2xl font-semibold text-blue-950 mb-4">
-          Neue Schicht eintragen
+          {editingShiftId ? "Schicht bearbeiten" : "Neue Schicht eintragen"}
         </h2>
 
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -193,58 +293,69 @@ function findAbsenceForShift(employeeId: string, shiftDate: string) {
           </select>
 
           <div className="flex flex-col gap-1">
-          <label className="text-sm font-semibold text-gray-600">
-            Datum
-          </label>
+            <label className="text-sm font-semibold text-gray-600">
+              Datum
+            </label>
 
-          <input
-          type="date"
-          value={date}
-          onChange={(event) => setDate(event.target.value)}
-          className="border p-3 rounded-lg bg-white text-black"
-          />
+            <input
+              type="date"
+              value={date}
+              onChange={(event) => setDate(event.target.value)}
+              className="border p-3 rounded-lg bg-white text-black"
+            />
           </div>
 
           <div className="flex flex-col gap-1">
-          <label className="text-sm font-semibold text-gray-600">
-           Schichtbeginn
-          </label>
+            <label className="text-sm font-semibold text-gray-600">
+              Schichtbeginn
+            </label>
 
-          <input
-          type="time"
-          value={start}
-          onChange={(event) => setStart(event.target.value)}
-          className="border p-3 rounded-lg bg-white text-black"
-          />
+            <input
+              type="time"
+              value={start}
+              onChange={(event) => setStart(event.target.value)}
+              className="border p-3 rounded-lg bg-white text-black"
+            />
           </div>
 
           <div className="flex flex-col gap-1">
-          <label className="text-sm font-semibold text-gray-600">
-          Schichtende
-          </label>
+            <label className="text-sm font-semibold text-gray-600">
+              Schichtende
+            </label>
 
-          <input
-          type="time"
-          value={end}
-          onChange={(event) => setEnd(event.target.value)}
-          className="border p-3 rounded-lg bg-white text-black"
-          />
+            <input
+              type="time"
+              value={end}
+              onChange={(event) => setEnd(event.target.value)}
+              className="border p-3 rounded-lg bg-white text-black"
+            />
           </div>
         </div>
 
-        <button
-          onClick={handleAddShift}
-          className="mt-5 bg-blue-950 text-white px-5 py-3 rounded-xl cursor-pointer hover:bg-blue-900 hover:scale-105 transition"
-        >
-          Schicht speichern
-        </button>
-      </div>
+        <div className="flex flex-col md:flex-row gap-3 mt-5">
+          <button
+            onClick={handleSaveShift}
+            className="bg-blue-950 text-white px-5 py-3 rounded-xl cursor-pointer hover:bg-blue-900 hover:scale-105 transition"
+          >
+            {editingShiftId ? "Änderungen speichern" : "Schicht speichern"}
+          </button>
 
-      {warning && (
-  <div className="mt-5 bg-yellow-100 text-yellow-800 p-4 rounded-xl font-semibold">
-    {warning}
-  </div>
-)}
+          {editingShiftId && (
+            <button
+              onClick={resetForm}
+              className="bg-gray-500 text-white px-5 py-3 rounded-xl cursor-pointer hover:bg-gray-600 transition"
+            >
+              Bearbeiten abbrechen
+            </button>
+          )}
+        </div>
+
+        {warning && (
+          <div className="mt-5 bg-yellow-100 text-yellow-800 p-4 rounded-xl font-semibold">
+            {warning}
+          </div>
+        )}
+      </div>
 
       <div className="bg-white rounded-2xl shadow p-6 mb-8">
         <h2 className="text-2xl font-semibold text-blue-950 mb-4">
@@ -256,13 +367,31 @@ function findAbsenceForShift(employeeId: string, shiftDate: string) {
             {todaysShifts.map((shift) => (
               <div
                 key={shift.id}
-                className="bg-blue-50 rounded-xl p-4 text-black flex justify-between"
+                className="bg-blue-50 rounded-xl p-4 text-black flex flex-col md:flex-row md:justify-between gap-3"
               >
-                <span className="font-semibold">{shift.employee_name}</span>
-                <span>
-                  {shift.start_time.slice(0, 5)} -{" "}
-                  {shift.end_time.slice(0, 5)}
-                </span>
+                <div>
+                  <p className="font-semibold">{shift.employee_name}</p>
+                  <p>
+                    {shift.start_time.slice(0, 5)} -{" "}
+                    {shift.end_time.slice(0, 5)}
+                  </p>
+                </div>
+
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => handleEditShift(shift)}
+                    className="bg-yellow-500 text-white px-3 py-2 rounded-lg hover:bg-yellow-600 transition"
+                  >
+                    Bearbeiten
+                  </button>
+
+                  <button
+                    onClick={() => handleDeleteShift(shift.id)}
+                    className="bg-red-600 text-white px-3 py-2 rounded-lg hover:bg-red-700 transition"
+                  >
+                    Löschen
+                  </button>
+                </div>
               </div>
             ))}
           </div>
@@ -309,10 +438,30 @@ function findAbsenceForShift(employeeId: string, shiftDate: string) {
                     return (
                       <td key={day.date} className="py-4 px-3 text-black">
                         {shiftForDay ? (
-                          <span className="bg-blue-100 text-blue-950 px-3 py-2 rounded-lg inline-block">
-                            {shiftForDay.start_time.slice(0, 5)} -{" "}
-                            {shiftForDay.end_time.slice(0, 5)}
-                          </span>
+                          <div className="flex flex-col gap-2">
+                            <span className="bg-blue-100 text-blue-950 px-3 py-2 rounded-lg inline-block">
+                              {shiftForDay.start_time.slice(0, 5)} -{" "}
+                              {shiftForDay.end_time.slice(0, 5)}
+                            </span>
+
+                            <div className="flex gap-2">
+                              <button
+                                onClick={() => handleEditShift(shiftForDay)}
+                                className="bg-yellow-500 text-white px-2 py-1 rounded text-sm hover:bg-yellow-600 transition"
+                              >
+                                Bearbeiten
+                              </button>
+
+                              <button
+                                onClick={() =>
+                                  handleDeleteShift(shiftForDay.id)
+                                }
+                                className="bg-red-600 text-white px-2 py-1 rounded text-sm hover:bg-red-700 transition"
+                              >
+                                Löschen
+                              </button>
+                            </div>
+                          </div>
                         ) : (
                           <span className="text-gray-400">Frei</span>
                         )}
