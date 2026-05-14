@@ -5,16 +5,27 @@ import { supabase } from "@/lib/supabaseClient";
 import { getBusiness } from "@/lib/getBusiness";
 import { getBusinessId } from "@/lib/getBusinessId";
 
+type Notification = {
+  id: string;
+  title: string;
+  message: string;
+  type: string;
+  is_read: boolean;
+  created_at: string;
+};
+
 export default function AdminLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [checkingAuth, setCheckingAuth] = useState(true);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [businessName, setBusinessName] = useState("");
   const [pendingRequests, setPendingRequests] = useState(0);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
 
   async function loadBusinessName() {
     const business = await getBusiness();
@@ -41,6 +52,55 @@ export default function AdminLayout({
     }
 
     setPendingRequests(data?.length || 0);
+  }
+
+  async function loadNotifications() {
+    const businessId = await getBusinessId();
+
+    if (!businessId) return;
+
+    const { data, error } = await supabase
+      .from("notifications")
+      .select("id, title, message, type, is_read, created_at")
+      .eq("business_id", businessId)
+      .order("created_at", { ascending: false })
+      .limit(10);
+
+    if (error) {
+      console.error(error);
+      return;
+    }
+
+    setNotifications((data || []) as Notification[]);
+  }
+
+  async function markAllNotificationsAsRead() {
+    const businessId = await getBusinessId();
+
+    if (!businessId) return;
+
+    const { error } = await supabase
+      .from("notifications")
+      .update({ is_read: true })
+      .eq("business_id", businessId)
+      .eq("is_read", false);
+
+    if (error) {
+      console.error(error);
+      return;
+    }
+
+    await loadNotifications();
+  }
+
+  function formatNotificationDate(dateString: string) {
+    return new Date(dateString).toLocaleString("de-DE", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
   }
 
   useEffect(() => {
@@ -76,6 +136,7 @@ export default function AdminLayout({
 
       await loadBusinessName();
       await loadPendingRequests();
+      await loadNotifications();
 
       setCheckingAuth(false);
     }
@@ -87,6 +148,10 @@ export default function AdminLayout({
     await supabase.auth.signOut();
     window.location.href = "/login";
   }
+
+  const unreadNotifications = notifications.filter(
+    (notification) => !notification.is_read
+  );
 
   const navLinks = [
     { label: "Dashboard", href: "/admin" },
@@ -130,14 +195,86 @@ export default function AdminLayout({
           )}
         </div>
 
-        <button
-          type="button"
-          onClick={() => setMenuOpen(true)}
-          className="text-white text-3xl px-2 py-1"
-        >
-          ☰
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => setNotificationsOpen(!notificationsOpen)}
+            className="relative text-2xl"
+          >
+            🔔
+
+            {unreadNotifications.length > 0 && (
+              <span className="absolute -top-2 -right-2 bg-red-600 text-white text-xs rounded-full px-2 py-0.5">
+                {unreadNotifications.length}
+              </span>
+            )}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setMenuOpen(true)}
+            className="text-white text-3xl px-2 py-1"
+          >
+            ☰
+          </button>
+        </div>
       </div>
+
+      {notificationsOpen && (
+        <div className="fixed top-20 right-4 z-50 bg-white text-black rounded-2xl shadow-2xl border w-[calc(100%-2rem)] max-w-md p-4">
+          <div className="flex items-center justify-between mb-4">
+  <h2 className="font-bold text-blue-950">
+    Benachrichtigungen
+  </h2>
+
+  <div className="flex items-center gap-3">
+    <button
+      type="button"
+      onClick={markAllNotificationsAsRead}
+      className="text-sm text-blue-700 font-semibold hover:text-blue-900"
+    >
+      Alle gelesen
+    </button>
+
+    <button
+      type="button"
+      onClick={() => setNotificationsOpen(false)}
+      className="text-2xl text-gray-500 hover:text-black leading-none"
+    >
+      ×
+    </button>
+  </div>
+</div>
+          {notifications.length > 0 ? (
+            <div className="flex flex-col gap-3 max-h-96 overflow-y-auto">
+              {notifications.map((notification) => (
+                <div
+                  key={notification.id}
+                  className={`rounded-xl p-3 border ${
+                    notification.is_read ? "bg-gray-50" : "bg-blue-50"
+                  }`}
+                >
+                  <p className="font-bold text-blue-950">
+                    {notification.title}
+                  </p>
+
+                  <p className="text-sm text-gray-700 mt-1">
+                    {notification.message}
+                  </p>
+
+                  <p className="text-xs text-gray-400 mt-2">
+                    {formatNotificationDate(notification.created_at)}
+                  </p>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-gray-500">
+              Keine Benachrichtigungen vorhanden.
+            </p>
+          )}
+        </div>
+      )}
 
       {menuOpen && (
         <div className="fixed inset-0 z-50 bg-black/40 md:hidden">
@@ -196,6 +333,22 @@ export default function AdminLayout({
                 {businessName}
               </p>
             )}
+          </div>
+
+          <div className="mb-8 relative">
+            <button
+              type="button"
+              onClick={() => setNotificationsOpen(!notificationsOpen)}
+              className="w-full bg-blue-900 text-white rounded-xl p-3 flex items-center justify-between hover:bg-blue-800 transition"
+            >
+              <span>🔔 Benachrichtigungen</span>
+
+              {unreadNotifications.length > 0 && (
+                <span className="bg-red-600 text-white text-xs rounded-full px-2 py-1">
+                  {unreadNotifications.length}
+                </span>
+              )}
+            </button>
           </div>
 
           <nav className="flex flex-col gap-4">

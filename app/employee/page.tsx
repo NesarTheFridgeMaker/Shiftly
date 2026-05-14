@@ -339,24 +339,40 @@ export default function EmployeePage() {
       alert("Keine Business-ID gefunden.");
       return;
     }
+const { error } = await supabase.from("absences").insert([
+  {
+    employee_id: employee.id,
+    employee_name: employee.name,
+    type: "vacation",
+    start_date: startDate,
+    end_date: endDate,
+    request_status: "pending",
+    business_id: businessId,
+  },
+]);
 
-    const { error } = await supabase.from("absences").insert([
-      {
-        employee_id: employee.id,
-        employee_name: employee.name,
-        type: "vacation",
-        start_date: startDate,
-        end_date: endDate,
-        request_status: "pending",
-        business_id: businessId,
-      },
-    ]);
+if (error) {
+  console.error(error);
+  alert(JSON.stringify(error, null, 2));
+  return;
+}
 
-    if (error) {
-      console.error(error);
-      alert(JSON.stringify(error, null, 2));
-      return;
-    }
+const { error: notificationError } = await supabase
+  .from("notifications")
+  .insert([
+    {
+      business_id: businessId,
+      employee_id: employee.id,
+      title: "Neuer Urlaubsantrag",
+      message: `${employee.name} hat Urlaub vom ${startDate} bis ${endDate} beantragt.`,
+      type: "vacation_request",
+      is_read: false,
+    },
+  ]);
+
+if (notificationError) {
+  console.error(notificationError);
+}
 
     setStartDate("");
     setEndDate("");
