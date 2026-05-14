@@ -29,38 +29,52 @@ export default function KioskPage() {
   const [lockedUntil, setLockedUntil] = useState<number | null>(null);
   const [currentTime, setCurrentTime] = useState(Date.now());
 
-  async function checkKioskAccess() {
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+async function checkKioskAccess() {
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
-    if (!user) {
-      window.location.href = "/login";
-      return;
-    }
-
-    const { data: profile, error } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", user.id)
-      .single();
-
-    if (error || !profile) {
-      console.error(error);
-      window.location.href = "/login";
-      return;
-    }
-
-    if (profile.role !== "admin") {
-      window.location.href = "/employee";
-      return;
-    }
-
-    await loadBusinessName();
-    await loadEmployees();
-
-    setCheckingAuth(false);
+  if (!user) {
+    window.location.href = "/login";
+    return;
   }
+
+  const { data: profile, error } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", user.id)
+    .single();
+
+  if (error || !profile) {
+    console.error(error);
+    window.location.href = "/login";
+    return;
+  }
+
+  if (profile.role !== "admin") {
+    window.location.href = "/employee";
+    return;
+  }
+
+  const business = await getBusiness();
+
+  if (!business) {
+    await supabase.auth.signOut();
+    window.location.href = "/login";
+    return;
+  }
+
+  if (business.status === "suspended") {
+    window.location.href = "/account-suspended";
+    return;
+  }
+
+  setBusinessName(business.name);
+
+  await loadEmployees();
+
+  setCheckingAuth(false);
+}
 
   async function loadBusinessName() {
     const business = await getBusiness();
@@ -95,6 +109,44 @@ export default function KioskPage() {
   useEffect(() => {
     checkKioskAccess();
   }, []);
+
+  useEffect(() => {
+  let channel: ReturnType<typeof supabase.channel>;
+
+  async function setupBusinessStatusRealtime() {
+    const businessId = await getBusinessId();
+
+    if (!businessId) return;
+
+    channel = supabase
+      .channel(`kiosk-business-status-${businessId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "businesses",
+          filter: `id=eq.${businessId}`,
+        },
+        (payload) => {
+          const newBusiness = payload.new as { status?: string };
+
+          if (newBusiness.status === "suspended") {
+            window.location.href = "/account-suspended";
+          }
+        }
+      )
+      .subscribe();
+  }
+
+  setupBusinessStatusRealtime();
+
+  return () => {
+    if (channel) {
+      supabase.removeChannel(channel);
+    }
+  };
+}, []);
 
   useEffect(() => {
     const interval = setInterval(() => {

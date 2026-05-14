@@ -32,6 +32,11 @@ export default function AdminLayout({
 
     if (!business) return;
 
+    if (business.status === "suspended") {
+      window.location.href = "/account-suspended";
+      return;
+    }
+
     setBusinessName(business.name);
   }
 
@@ -150,9 +155,22 @@ export default function AdminLayout({
         return;
       }
 
+      const business = await getBusiness();
+
+      if (!business) {
+        await supabase.auth.signOut();
+        window.location.href = "/login";
+        return;
+      }
+
+      if (business.status === "suspended") {
+        window.location.href = "/account-suspended";
+        return;
+      }
+
+      setBusinessName(business.name);
       setIsLoggedIn(true);
 
-      await loadBusinessName();
       await loadPendingRequests();
       await loadNotifications();
 
@@ -162,60 +180,87 @@ export default function AdminLayout({
     checkUser();
   }, []);
 
-  useEffect(() => {
-    let channel: ReturnType<typeof supabase.channel>;
+useEffect(() => {
+  let channel: ReturnType<typeof supabase.channel>;
 
-    async function setupRealtime() {
-      const businessId = await getBusinessId();
+  async function setupRealtime() {
+    const businessId = await getBusinessId();
 
-      if (!businessId) return;
+    if (!businessId) return;
 
-      const userId = await getCurrentUserId();
+    const userId = await getCurrentUserId();
 
-      if (!userId) return;
+    if (!userId) return;
 
-      channel = supabase
-        .channel(`admin-live-${businessId}-${userId}`)
+    channel = supabase
+      .channel(`admin-live-${businessId}-${userId}`)
 
-        .on(
-          "postgres_changes",
-          {
-            event: "*",
-            schema: "public",
-            table: "notifications",
-            filter: `user_id=eq.${userId}`,
-          },
-          async () => {
-            await loadNotifications();
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "notifications",
+          filter: `user_id=eq.${userId}`,
+        },
+        async () => {
+          await loadNotifications();
+        }
+      )
+
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "absences",
+          filter: `business_id=eq.${businessId}`,
+        },
+        async () => {
+          await loadPendingRequests();
+        }
+      )
+
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "businesses",
+          filter: `id=eq.${businessId}`,
+        },
+        async () => {
+          const { data } = await supabase
+            .from("businesses")
+            .select("status")
+            .eq("id", businessId)
+            .single();
+
+          if (data?.status === "suspended") {
+            await supabase.auth.signOut();
+
+            alert(
+              "Der Zugriff auf diesen Betrieb wurde gesperrt."
+            );
+
+            window.location.href = "/login";
           }
-        )
+        }
+      )
 
-        .on(
-          "postgres_changes",
-          {
-            event: "*",
-            schema: "public",
-            table: "absences",
-            filter: `business_id=eq.${businessId}`,
-          },
-          async () => {
-            await loadPendingRequests();
-          }
-        )
+      .subscribe();
+  }
 
-        .subscribe();
+  if (isLoggedIn) {
+    setupRealtime();
+  }
+
+  return () => {
+    if (channel) {
+      supabase.removeChannel(channel);
     }
-
-    if (isLoggedIn) {
-      setupRealtime();
-    }
-
-    return () => {
-      if (channel) {
-        supabase.removeChannel(channel);
-      }
-    };
-  }, [isLoggedIn]);
+  };
+}, [isLoggedIn]);
 
   async function handleLogout() {
     await supabase.auth.signOut();

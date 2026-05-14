@@ -1,14 +1,20 @@
 import { supabase } from "./supabaseClient";
 import { getBusinessId } from "./getBusinessId";
 
-export async function getBusiness() {
+export type Business = {
+  id: string;
+  name: string;
+  status: string;
+};
+
+export async function getBusiness(): Promise<Business | null> {
   const businessId = await getBusinessId();
 
   if (!businessId) return null;
 
   const { data, error } = await supabase
     .from("businesses")
-    .select("name")
+    .select("id, name, status")
     .eq("id", businessId)
     .single();
 
@@ -17,5 +23,5 @@ export async function getBusiness() {
     return null;
   }
 
-  return data;
+  return data as Business;
 }

@@ -261,18 +261,31 @@ export default function EmployeePage() {
       return;
     }
 
-    const currentEmployeeId = typedProfile.employee_id;
+const business = await getBusiness();
 
-    setEmployee(employeeData as Employee);
-    setEmployeeId(currentEmployeeId);
+if (!business) {
+  await supabase.auth.signOut();
+  window.location.href = "/login";
+  return;
+}
 
-    await loadBusinessName();
-    await loadShifts(currentEmployeeId);
-    await loadTimeEntries(currentEmployeeId);
-    await loadAbsences(currentEmployeeId);
-    await loadNotifications(currentEmployeeId);
+if (business.status === "suspended") {
+  window.location.href = "/account-suspended";
+  return;
+}
 
-    setCheckingAuth(false);
+const currentEmployeeId = typedProfile.employee_id;
+
+setBusinessName(business.name);
+setEmployee(employeeData as Employee);
+setEmployeeId(currentEmployeeId);
+
+await loadShifts(currentEmployeeId);
+await loadTimeEntries(currentEmployeeId);
+await loadAbsences(currentEmployeeId);
+await loadNotifications(currentEmployeeId);
+
+setCheckingAuth(false);
   }
 
   async function loadShifts(selectedEmployeeId: string) {
@@ -397,11 +410,15 @@ export default function EmployeePage() {
     loadEmployeeProfile();
   }, []);
 
-  useEffect(() => {
+useEffect(() => {
   let channel: ReturnType<typeof supabase.channel>;
 
   async function setupRealtime() {
     if (!employeeId) return;
+
+    const businessId = await getBusinessId();
+
+    if (!businessId) return;
 
     channel = supabase
       .channel(`employee-live-${employeeId}`)
@@ -416,6 +433,33 @@ export default function EmployeePage() {
         },
         async () => {
           await loadNotifications(employeeId);
+        }
+      )
+
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "businesses",
+          filter: `id=eq.${businessId}`,
+        },
+        async () => {
+          const { data } = await supabase
+            .from("businesses")
+            .select("status")
+            .eq("id", businessId)
+            .single();
+
+          if (data?.status === "suspended") {
+            await supabase.auth.signOut();
+
+            alert(
+              "Der Zugriff auf diesen Betrieb wurde gesperrt."
+            );
+
+            window.location.href="/login";
+          }
         }
       )
 
