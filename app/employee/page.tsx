@@ -45,6 +45,15 @@ type Profile = {
   employee_id: string;
 };
 
+type Notification = {
+  id: string;
+  title: string;
+  message: string;
+  type: string;
+  is_read: boolean;
+  created_at: string;
+};
+
 function formatShiftDate(dateString: string) {
   return new Date(dateString).toLocaleDateString("de-DE", {
     weekday: "short",
@@ -169,6 +178,16 @@ function calculateWorkedMinutes(entries: TimeEntry[]) {
   return totalMinutes;
 }
 
+function formatNotificationDate(dateString: string) {
+  return new Date(dateString).toLocaleString("de-DE", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 export default function EmployeePage() {
   const [checkingAuth, setCheckingAuth] = useState(true);
   const [employee, setEmployee] = useState<Employee | null>(null);
@@ -178,6 +197,7 @@ export default function EmployeePage() {
   const [shifts, setShifts] = useState<Shift[]>([]);
   const [timeEntries, setTimeEntries] = useState<TimeEntry[]>([]);
   const [absences, setAbsences] = useState<Absence[]>([]);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
 
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
@@ -241,38 +261,50 @@ export default function EmployeePage() {
       return;
     }
 
-    setEmployee(employeeData as Employee);
-    setEmployeeId(typedProfile.employee_id);
+setEmployee(employeeData as Employee);
 
-    await loadBusinessName();
-    await loadShifts(typedProfile.employee_id);
-    await loadTimeEntries(typedProfile.employee_id);
-    await loadAbsences(typedProfile.employee_id);
+const currentEmployeeId = typedProfile.employee_id;
+
+if (!currentEmployeeId) {
+  alert("Keine Mitarbeiter-ID gefunden.");
+  return;
+}
+
+setEmployeeId(currentEmployeeId);
+
+await loadBusinessName();
+await loadShifts(currentEmployeeId);
+await loadTimeEntries(currentEmployeeId);
+await loadAbsences(currentEmployeeId);
+    await loadNotifications(typedProfile.employee_id);
 
     setCheckingAuth(false);
   }
 
-  async function loadShifts(selectedEmployeeId: string) {
-    const businessId = await getBusinessId();
+async function loadShifts(selectedEmployeeId: string) {
+  if (!selectedEmployeeId) return;
 
-    if (!businessId) return;
+  const businessId = await getBusinessId();
 
-    const { data, error } = await supabase
-      .from("shifts")
-      .select("*")
-      .eq("business_id", businessId)
-      .eq("employee_id", selectedEmployeeId)
-      .order("shift_date", { ascending: true });
+  if (!businessId) return;
 
-    if (error) {
-      console.error(error);
-      return;
-    }
+  const { data, error } = await supabase
+    .from("shifts")
+    .select("*")
+    .eq("business_id", businessId)
+    .eq("employee_id", selectedEmployeeId)
+    .order("shift_date", { ascending: true });
 
-    setShifts(data || []);
+  if (error) {
+    console.error(error);
+    return;
   }
 
+  setShifts(data || []);
+}
+
   async function loadTimeEntries(selectedEmployeeId: string) {
+    if (!selectedEmployeeId) return;
     const businessId = await getBusinessId();
 
     if (!businessId) return;
@@ -293,6 +325,7 @@ export default function EmployeePage() {
   }
 
   async function loadAbsences(selectedEmployeeId: string) {
+    if (!selectedEmployeeId) return;
     const businessId = await getBusinessId();
 
     if (!businessId) return;
@@ -318,6 +351,52 @@ export default function EmployeePage() {
     setAbsences(data || []);
   }
 
+async function loadNotifications(selectedEmployeeId: string) {
+  if (!selectedEmployeeId) return;
+
+  const businessId = await getBusinessId();
+
+  if (!businessId) return;
+
+  const { data, error } = await supabase
+    .from("notifications")
+    .select("id, title, message, type, is_read, created_at")
+    .eq("business_id", businessId)
+    .eq("employee_id", selectedEmployeeId)
+    .eq("is_read", false)
+    .order("created_at", { ascending: false })
+    .limit(10);
+
+  if (error) {
+    console.error(error);
+    return;
+  }
+
+  setNotifications((data || []) as Notification[]);
+}
+
+  async function markAllNotificationsAsRead() {
+    if (!employeeId) return;
+
+    const businessId = await getBusinessId();
+
+    if (!businessId) return;
+
+    const { error } = await supabase
+      .from("notifications")
+      .update({ is_read: true })
+      .eq("business_id", businessId)
+      .eq("employee_id", employeeId)
+      .eq("is_read", false);
+
+    if (error) {
+      console.error(error);
+      return;
+    }
+
+    await loadNotifications(employeeId);
+  }
+
   useEffect(() => {
     loadEmployeeProfile();
   }, []);
@@ -339,40 +418,41 @@ export default function EmployeePage() {
       alert("Keine Business-ID gefunden.");
       return;
     }
-const { error } = await supabase.from("absences").insert([
-  {
-    employee_id: employee.id,
-    employee_name: employee.name,
-    type: "vacation",
-    start_date: startDate,
-    end_date: endDate,
-    request_status: "pending",
-    business_id: businessId,
-  },
-]);
 
-if (error) {
-  console.error(error);
-  alert(JSON.stringify(error, null, 2));
-  return;
-}
+    const { error } = await supabase.from("absences").insert([
+      {
+        employee_id: employee.id,
+        employee_name: employee.name,
+        type: "vacation",
+        start_date: startDate,
+        end_date: endDate,
+        request_status: "pending",
+        business_id: businessId,
+      },
+    ]);
 
-const { error: notificationError } = await supabase
-  .from("notifications")
-  .insert([
-    {
-      business_id: businessId,
-      employee_id: employee.id,
-      title: "Neuer Urlaubsantrag",
-      message: `${employee.name} hat Urlaub vom ${startDate} bis ${endDate} beantragt.`,
-      type: "vacation_request",
-      is_read: false,
-    },
-  ]);
+    if (error) {
+      console.error(error);
+      alert(JSON.stringify(error, null, 2));
+      return;
+    }
 
-if (notificationError) {
-  console.error(notificationError);
-}
+    const { error: notificationError } = await supabase
+      .from("notifications")
+      .insert([
+        {
+          business_id: businessId,
+          employee_id: employee.id,
+          title: "Neuer Urlaubsantrag",
+          message: `${employee.name} hat Urlaub vom ${startDate} bis ${endDate} beantragt.`,
+          type: "vacation_request",
+          is_read: false,
+        },
+      ]);
+
+    if (notificationError) {
+      console.error(notificationError);
+    }
 
     setStartDate("");
     setEndDate("");
@@ -381,6 +461,10 @@ if (notificationError) {
 
     alert("Dein Urlaubsantrag wurde gesendet.");
   }
+
+  const unreadNotifications = notifications.filter(
+    (notification) => !notification.is_read
+  );
 
   const today = new Date();
 
@@ -449,6 +533,57 @@ if (notificationError) {
           >
             Ausloggen
           </button>
+        </div>
+
+        <div className="bg-white rounded-2xl shadow p-4 md:p-6 mb-6">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-4">
+            <h2 className="text-2xl font-semibold text-blue-950">
+              Benachrichtigungen
+            </h2>
+
+            {unreadNotifications.length > 0 && (
+              <button
+                type="button"
+                onClick={markAllNotificationsAsRead}
+                className="bg-blue-950 text-white px-4 py-2 rounded-xl hover:bg-blue-900 transition"
+              >
+                Alle als gelesen markieren ({unreadNotifications.length})
+              </button>
+            )}
+          </div>
+
+          {notifications.length > 0 ? (
+            <div className="flex flex-col gap-3">
+              {notifications.map((notification) => (
+                <div
+                  key={notification.id}
+                  className={`rounded-xl p-4 border ${
+                    notification.is_read ? "bg-gray-50" : "bg-blue-50"
+                  }`}
+                >
+                  <div className="flex flex-col md:flex-row md:justify-between gap-2">
+                    <div>
+                      <p className="font-bold text-blue-950">
+                        {notification.title}
+                      </p>
+
+                      <p className="text-sm text-gray-700 mt-1">
+                        {notification.message}
+                      </p>
+                    </div>
+
+                    <p className="text-xs text-gray-400">
+                      {formatNotificationDate(notification.created_at)}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-gray-500">
+              Keine Benachrichtigungen vorhanden.
+            </p>
+          )}
         </div>
 
         <h2 className="text-2xl font-semibold text-blue-950 mb-4">
