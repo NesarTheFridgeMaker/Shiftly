@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
+import { getBusinessId } from "@/lib/getBusinessId";
 
 type EmployeeStatus = "not_checked_in" | "checked_in" | "on_break";
 
@@ -19,16 +20,25 @@ export default function KioskPage() {
   const [showPopup, setShowPopup] = useState(false);
 
   async function loadEmployees() {
+    const businessId = await getBusinessId();
+
+    if (!businessId) {
+      console.error("Keine Business-ID gefunden.");
+      return;
+    }
+
     const { data, error } = await supabase
       .from("employees")
-      .select("id, name, pin, status");
+      .select("id, name, pin, status")
+      .eq("business_id", businessId)
+      .eq("account_status", "active");
 
     if (error) {
       console.error(error);
       return;
     }
 
-    setEmployees(data as Employee[]);
+    setEmployees((data || []) as Employee[]);
   }
 
   useEffect(() => {
@@ -45,36 +55,54 @@ export default function KioskPage() {
     employee: Employee,
     newStatus: EmployeeStatus
   ) {
+    const businessId = await getBusinessId();
+
+    if (!businessId) {
+      showMessage("Keine Business-ID gefunden.");
+      return false;
+    }
+
     const { error } = await supabase
       .from("employees")
       .update({ status: newStatus })
-      .eq("id", employee.id);
+      .eq("id", employee.id)
+      .eq("business_id", businessId);
 
     if (error) {
       console.error(error);
       showMessage("Fehler beim Speichern.");
-      return;
+      return false;
     }
 
     await loadEmployees();
+    return true;
   }
 
   async function createTimeEntry(employee: Employee, action: string) {
-  const { error } = await supabase
-    .from("time_entries")
-    .insert([
+    const businessId = await getBusinessId();
+
+    if (!businessId) {
+      showMessage("Keine Business-ID gefunden.");
+      return false;
+    }
+
+    const { error } = await supabase.from("time_entries").insert([
       {
         employee_id: employee.id,
         employee_name: employee.name,
-        action: action,
+        action,
+        business_id: businessId,
       },
     ]);
 
-  if (error) {
-    console.error(error);
-    showMessage("Stempelschritt konnte nicht gespeichert werden.");
+    if (error) {
+      console.error(error);
+      showMessage("Stempelschritt konnte nicht gespeichert werden.");
+      return false;
+    }
+
+    return true;
   }
-}
 
   function findEmployeeByPin() {
     return employees.find((employee) => employee.pin === pin);
@@ -98,11 +126,12 @@ export default function KioskPage() {
       return;
     }
 
-    await updateEmployeeStatus(employee, "checked_in");
-    showMessage(`${employee.name} ist jetzt eingestempelt.`);
+    const statusUpdated = await updateEmployeeStatus(employee, "checked_in");
+    if (!statusUpdated) return;
 
-    await updateEmployeeStatus(employee, "checked_in");
-    await createTimeEntry(employee, "check_in");
+    const entryCreated = await createTimeEntry(employee, "check_in");
+    if (!entryCreated) return;
+
     showMessage(`${employee.name} ist jetzt eingestempelt.`);
   }
 
@@ -124,11 +153,12 @@ export default function KioskPage() {
       return;
     }
 
-    await updateEmployeeStatus(employee, "on_break");
-    showMessage(`${employee.name} ist jetzt in der Pause.`);
+    const statusUpdated = await updateEmployeeStatus(employee, "on_break");
+    if (!statusUpdated) return;
 
-    await updateEmployeeStatus(employee, "on_break");
-    await createTimeEntry(employee, "break_start");
+    const entryCreated = await createTimeEntry(employee, "break_start");
+    if (!entryCreated) return;
+
     showMessage(`${employee.name} ist jetzt in der Pause.`);
   }
 
@@ -145,11 +175,12 @@ export default function KioskPage() {
       return;
     }
 
-    await updateEmployeeStatus(employee, "checked_in");
-    showMessage(`${employee.name} arbeitet jetzt weiter.`);
+    const statusUpdated = await updateEmployeeStatus(employee, "checked_in");
+    if (!statusUpdated) return;
 
-    await updateEmployeeStatus(employee, "checked_in");
-    await createTimeEntry(employee, "break_end");
+    const entryCreated = await createTimeEntry(employee, "break_end");
+    if (!entryCreated) return;
+
     showMessage(`${employee.name} arbeitet jetzt weiter.`);
   }
 
@@ -166,11 +197,15 @@ export default function KioskPage() {
       return;
     }
 
-    await updateEmployeeStatus(employee, "not_checked_in");
-    showMessage(`${employee.name} ist jetzt ausgestempelt.`);
+    const statusUpdated = await updateEmployeeStatus(
+      employee,
+      "not_checked_in"
+    );
+    if (!statusUpdated) return;
 
-    await updateEmployeeStatus(employee, "not_checked_in");
-    await createTimeEntry(employee, "check_out");
+    const entryCreated = await createTimeEntry(employee, "check_out");
+    if (!entryCreated) return;
+
     showMessage(`${employee.name} ist jetzt ausgestempelt.`);
   }
 
@@ -183,10 +218,10 @@ export default function KioskPage() {
   );
 
   return (
-    <main className="min-h-screen bg-gray-100 p-8">
+    <main className="min-h-screen bg-gray-100 p-4 md:p-8">
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <section className="lg:col-span-2 bg-white rounded-3xl shadow-xl p-10">
-          <h1 className="text-5xl font-bold text-blue-950 mb-4 text-center">
+        <section className="lg:col-span-2 bg-white rounded-3xl shadow-xl p-6 md:p-10">
+          <h1 className="text-4xl md:text-5xl font-bold text-blue-950 mb-4 text-center">
             Shiftly Terminal
           </h1>
 
@@ -203,25 +238,37 @@ export default function KioskPage() {
           />
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-            <button onClick={handleCheckIn} className="bg-green-600 text-white py-6 rounded-2xl text-2xl font-semibold hover:bg-green-700 transition hover:scale-105">
+            <button
+              onClick={handleCheckIn}
+              className="bg-green-600 text-white py-6 rounded-2xl text-2xl font-semibold hover:bg-green-700 transition hover:scale-105"
+            >
               Einstempeln
             </button>
 
-            <button onClick={handleStartBreak} className="bg-yellow-500 text-white py-6 rounded-2xl text-2xl font-semibold hover:bg-yellow-600 transition hover:scale-105">
+            <button
+              onClick={handleStartBreak}
+              className="bg-yellow-500 text-white py-6 rounded-2xl text-2xl font-semibold hover:bg-yellow-600 transition hover:scale-105"
+            >
               Pause starten
             </button>
 
-            <button onClick={handleEndBreak} className="bg-blue-600 text-white py-6 rounded-2xl text-2xl font-semibold hover:bg-blue-700 transition hover:scale-105">
+            <button
+              onClick={handleEndBreak}
+              className="bg-blue-600 text-white py-6 rounded-2xl text-2xl font-semibold hover:bg-blue-700 transition hover:scale-105"
+            >
               Pause beenden
             </button>
 
-            <button onClick={handleCheckOut} className="bg-red-600 text-white py-6 rounded-2xl text-2xl font-semibold hover:bg-red-700 transition hover:scale-105">
+            <button
+              onClick={handleCheckOut}
+              className="bg-red-600 text-white py-6 rounded-2xl text-2xl font-semibold hover:bg-red-700 transition hover:scale-105"
+            >
               Ausstempeln
             </button>
           </div>
         </section>
 
-        <aside className="bg-white rounded-3xl shadow-xl p-8">
+        <aside className="bg-white rounded-3xl shadow-xl p-6 md:p-8">
           <h2 className="text-3xl font-bold text-blue-950 mb-6">
             Live-Status
           </h2>
@@ -234,7 +281,10 @@ export default function KioskPage() {
             {activeEmployees.length > 0 ? (
               <div className="flex flex-col gap-3">
                 {activeEmployees.map((employee) => (
-                  <div key={employee.id} className="bg-green-100 text-green-800 rounded-xl p-4 font-medium">
+                  <div
+                    key={employee.id}
+                    className="bg-green-100 text-green-800 rounded-xl p-4 font-medium"
+                  >
                     {employee.name}
                   </div>
                 ))}
@@ -252,7 +302,10 @@ export default function KioskPage() {
             {employeesOnBreak.length > 0 ? (
               <div className="flex flex-col gap-3">
                 {employeesOnBreak.map((employee) => (
-                  <div key={employee.id} className="bg-yellow-100 text-yellow-800 rounded-xl p-4 font-medium">
+                  <div
+                    key={employee.id}
+                    className="bg-yellow-100 text-yellow-800 rounded-xl p-4 font-medium"
+                  >
                     {employee.name}
                   </div>
                 ))}
@@ -266,12 +319,15 @@ export default function KioskPage() {
 
       {showPopup && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-6">
-          <div className="bg-white rounded-3xl shadow-2xl p-10 max-w-lg w-full text-center">
-            <p className="text-3xl font-bold text-blue-950 mb-8">
+          <div className="bg-white rounded-3xl shadow-2xl p-8 md:p-10 max-w-lg w-full text-center">
+            <p className="text-2xl md:text-3xl font-bold text-blue-950 mb-8">
               {message}
             </p>
 
-            <button onClick={() => setShowPopup(false)} className="bg-blue-950 text-white px-10 py-4 rounded-2xl text-xl font-semibold hover:bg-blue-900 transition hover:scale-105">
+            <button
+              onClick={() => setShowPopup(false)}
+              className="bg-blue-950 text-white px-10 py-4 rounded-2xl text-xl font-semibold hover:bg-blue-900 transition hover:scale-105"
+            >
               OK
             </button>
           </div>

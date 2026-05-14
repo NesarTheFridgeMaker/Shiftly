@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
+import { getBusinessId } from "@/lib/getBusinessId";
 
 type Employee = {
   id: string;
@@ -252,6 +253,13 @@ async function loadAbsences(selectedEmployeeId: string) {
       return;
     }
 
+      const businessId = await getBusinessId();
+
+  if (!businessId) {
+    alert("Keine Business-ID gefunden.");
+    return;
+  }
+
     const selectedEmployee = employees.find(
       (employee) => employee.id === employeeId
     );
@@ -266,6 +274,7 @@ async function loadAbsences(selectedEmployeeId: string) {
         start_date: startDate,
         end_date: endDate,
         request_status: "pending",
+        business_id: businessId,
       },
     ]);
 

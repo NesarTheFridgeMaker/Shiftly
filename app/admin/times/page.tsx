@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
+import { getBusinessId } from "@/lib/getBusinessId";
 
 type TimeEntry = {
   id: string;
@@ -208,19 +209,28 @@ export default function TimesPage() {
   const [timeEntries, setTimeEntries] = useState<TimeEntry[]>([]);
   const [openDetails, setOpenDetails] = useState<string | null>(null);
 
-  async function loadTimeEntries() {
-    const { data, error } = await supabase
-      .from("time_entries")
-      .select("*")
-      .order("created_at", { ascending: false });
+async function loadTimeEntries() {
+  const businessId = await getBusinessId();
 
-    if (error) {
-      console.error(error);
-      return;
-    }
-
-    setTimeEntries(data);
+  if (!businessId) {
+    console.error("Keine Business-ID gefunden.");
+    return;
   }
+
+  const { data, error } = await supabase
+    .from("time_entries")
+    .select("*")
+    .eq("business_id", businessId)
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    console.error(error);
+    alert(JSON.stringify(error, null, 2));
+    return;
+  }
+
+  setTimeEntries(data || []);
+}
 
   useEffect(() => {
     loadTimeEntries();
