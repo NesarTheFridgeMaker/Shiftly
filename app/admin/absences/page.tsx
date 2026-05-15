@@ -124,6 +124,22 @@ export default function AbsencesPage() {
 
     if (!selectedEmployee) return;
 
+    const overlappingAbsence = absences.find(
+  (absence) =>
+    absence.employee_id === employeeId &&
+    absence.request_status !== "rejected" &&
+    startDate <= absence.end_date &&
+    endDate >= absence.start_date
+);
+
+if (overlappingAbsence) {
+  alert(
+    `Für diesen Mitarbeiter existiert bereits eine Abwesenheit vom ${overlappingAbsence.start_date} bis ${overlappingAbsence.end_date}.`
+  );
+
+  return;
+}
+
     const { error } = await supabase.from("absences").insert([
       {
         employee_id: selectedEmployee.id,
