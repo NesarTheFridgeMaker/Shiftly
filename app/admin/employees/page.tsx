@@ -18,6 +18,7 @@ type EmployeeTargetHour = {
   id: string;
   employee_id: string;
   weekly_hours: number;
+  monthly_hours: number;
 };
 
 type EmployeeNote = {
@@ -29,6 +30,7 @@ type EmployeeNote = {
 
 type EmployeeWithTargetHours = Employee & {
   weekly_target_hours: number;
+  monthly_target_hours: number;
   notes: EmployeeNote[];
 };
 
@@ -62,7 +64,7 @@ export default function EmployeesPage() {
   const [name, setName] = useState("");
   const [role, setRole] = useState("Mitarbeiter");
   const [pin, setPin] = useState("");
-  const [weeklyHours, setWeeklyHours] = useState("40");
+  const [monthlyHours, setMonthlyHours] = useState("173");
 
   const [noteTexts, setNoteTexts] = useState<Record<string, string>>({});
 
@@ -93,7 +95,7 @@ export default function EmployeesPage() {
     if (employeeIds.length > 0) {
       const { data: targetData, error: targetError } = await supabase
         .from("employee_target_hours")
-        .select("id, employee_id, weekly_hours")
+        .select("id, employee_id, weekly_hours, monthly_hours")
         .in("employee_id", employeeIds);
 
       if (targetError) {
@@ -128,6 +130,7 @@ export default function EmployeesPage() {
       return {
         ...employee,
         weekly_target_hours: target?.weekly_hours ?? 40,
+        monthly_target_hours: target?.monthly_hours ?? 173,
         notes: employeeNotes,
       };
     });
@@ -150,10 +153,10 @@ export default function EmployeesPage() {
         return;
       }
 
-      const parsedWeeklyHours = Number(weeklyHours);
+      const parsedMonthlyHours = Number(monthlyHours);
 
-      if (!parsedWeeklyHours || parsedWeeklyHours <= 0) {
-        alert("Bitte gültige Wochen-Sollstunden eingeben.");
+      if (!parsedMonthlyHours || parsedMonthlyHours <= 0) {
+        alert("Bitte gültige Monats-Sollstunden eingeben.");
         return;
       }
 
@@ -191,7 +194,8 @@ export default function EmployeesPage() {
         .insert([
           {
             employee_id: insertedEmployee.id,
-            weekly_hours: parsedWeeklyHours,
+            weekly_hours: Math.round(parsedMonthlyHours / 4.33),
+            monthly_hours: parsedMonthlyHours,
           },
         ]);
 
@@ -204,7 +208,7 @@ export default function EmployeesPage() {
       setName("");
       setRole("Mitarbeiter");
       setPin("");
-      setWeeklyHours("40");
+      setMonthlyHours("173");
       setShowForm(false);
 
       await loadEmployees();
@@ -267,14 +271,16 @@ export default function EmployeesPage() {
     await loadEmployees();
   }
 
-  async function handleUpdateWeeklyHours(
+  async function handleUpdateMonthlyHours(
     employeeId: string,
-    newWeeklyHours: number
+    newMonthlyHours: number
   ) {
-    if (!newWeeklyHours || newWeeklyHours <= 0) {
-      alert("Bitte gültige Wochen-Sollstunden eingeben.");
+    if (!newMonthlyHours || newMonthlyHours <= 0) {
+      alert("Bitte gültige Monats-Sollstunden eingeben.");
       return;
     }
+
+    const calculatedWeeklyHours = Math.round(newMonthlyHours / 4.33);
 
     const { data: existingTarget, error: existingError } = await supabase
       .from("employee_target_hours")
@@ -291,7 +297,10 @@ export default function EmployeesPage() {
     if (existingTarget) {
       const { error } = await supabase
         .from("employee_target_hours")
-        .update({ weekly_hours: newWeeklyHours })
+        .update({
+          monthly_hours: newMonthlyHours,
+          weekly_hours: calculatedWeeklyHours,
+        })
         .eq("id", existingTarget.id);
 
       if (error) {
@@ -303,7 +312,8 @@ export default function EmployeesPage() {
       const { error } = await supabase.from("employee_target_hours").insert([
         {
           employee_id: employeeId,
-          weekly_hours: newWeeklyHours,
+          monthly_hours: newMonthlyHours,
+          weekly_hours: calculatedWeeklyHours,
         },
       ]);
 
@@ -493,9 +503,9 @@ export default function EmployeesPage() {
               <input
                 type="number"
                 min="1"
-                placeholder="Wochen-Sollstunden"
-                value={weeklyHours}
-                onChange={(event) => setWeeklyHours(event.target.value)}
+                placeholder="Monats-Sollstunden"
+                value={monthlyHours}
+                onChange={(event) => setMonthlyHours(event.target.value)}
                 disabled={isSaving}
                 className="border p-3 rounded-lg bg-white text-black disabled:bg-gray-200"
               />
@@ -554,24 +564,24 @@ export default function EmployeesPage() {
                 </div>
 
                 <div className="bg-white rounded-xl p-3">
-                  <p className="text-gray-500 mb-1">Soll/Woche</p>
+                  <p className="text-gray-500 mb-1">Soll/Monat</p>
                   <p className="font-semibold text-black">
-                    {employee.weekly_target_hours} Std.
+                    {employee.monthly_target_hours} Std.
                   </p>
                 </div>
               </div>
 
               <div className="flex flex-col gap-2 mb-3">
                 <label className="text-sm font-semibold text-gray-600">
-                  Wochen-Sollstunden ändern
+                  Monats-Sollstunden ändern
                 </label>
 
                 <input
                   type="number"
                   min="1"
-                  defaultValue={employee.weekly_target_hours}
+                  defaultValue={employee.monthly_target_hours}
                   onBlur={(event) =>
-                    handleUpdateWeeklyHours(
+                    handleUpdateMonthlyHours(
                       employee.id,
                       Number(event.target.value)
                     )
@@ -634,9 +644,9 @@ export default function EmployeesPage() {
                   <input
                     type="number"
                     min="1"
-                    defaultValue={employee.weekly_target_hours}
+                    defaultValue={employee.monthly_target_hours}
                     onBlur={(event) =>
-                      handleUpdateWeeklyHours(
+                      handleUpdateMonthlyHours(
                         employee.id,
                         Number(event.target.value)
                       )
@@ -678,7 +688,7 @@ export default function EmployeesPage() {
                 <div>Rolle</div>
                 <div>PIN</div>
                 <div>Konto</div>
-                <div>Soll/Woche</div>
+                <div>Soll/Monat</div>
                 <div>Aktionen</div>
               </div>
 

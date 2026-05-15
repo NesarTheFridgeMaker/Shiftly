@@ -19,6 +19,13 @@ type Employee = {
   account_status: string;
 };
 
+type EmployeeTargetHour = {
+  id: string;
+  employee_id: string;
+  weekly_hours: number;
+  monthly_hours: number;
+};
+
 type WorkSummary = {
   key: string;
   employee_id: string;
@@ -225,6 +232,7 @@ function buildPeriodSummaries(
 export default function TimesPage() {
   const [timeEntries, setTimeEntries] = useState<TimeEntry[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
+  const [targetHours, setTargetHours] = useState<EmployeeTargetHour[]>([]);
   const [openDetails, setOpenDetails] = useState<string | null>(null);
 
   const [selectedEmployeeId, setSelectedEmployeeId] = useState("");
@@ -281,10 +289,28 @@ export default function TimesPage() {
     setEmployees(data || []);
   }
 
-  useEffect(() => {
-    loadTimeEntries();
-    loadEmployees();
-  }, []);
+useEffect(() => {
+  loadTimeEntries();
+  loadEmployees();
+  loadTargetHours();
+}, []);
+
+  async function loadTargetHours() {
+  const businessId = await getBusinessId();
+
+  if (!businessId) return;
+
+  const { data, error } = await supabase
+    .from("employee_target_hours")
+    .select("id, employee_id, weekly_hours, monthly_hours")
+
+  if (error) {
+    console.error(error);
+    return;
+  }
+
+  setTargetHours((data || []) as EmployeeTargetHour[]);
+}
 
   async function handleAddTimeEntry() {
     if (!selectedEmployeeId || !selectedAction || !selectedDate || !selectedTime) {
@@ -379,7 +405,7 @@ if (newEmployeeStatus) {
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
-  async function handleExportExcel() {
+async function handleExportExcel() {
   const selectedSummaries = dailySummaries.filter((summary) =>
     summary.rawDate.startsWith(exportMonth)
   );
@@ -392,20 +418,24 @@ if (newEmployeeStatus) {
   const workbook = new ExcelJS.Workbook();
   const worksheet = workbook.addWorksheet("Arbeitszeiten");
 
-  const monthLabel = new Date(`${exportMonth}-01`).toLocaleDateString(
-    "de-DE",
-    {
-      month: "long",
-      year: "numeric",
-    }
-  );
+  const monthDate = new Date(`${exportMonth}-01`);
+  const monthLabel = monthDate.toLocaleDateString("de-DE", {
+    month: "long",
+    year: "numeric",
+  });
 
-  worksheet.mergeCells("A1:F1");
+  const daysInMonth = new Date(
+    monthDate.getFullYear(),
+    monthDate.getMonth() + 1,
+    0
+  ).getDate();
+
+  worksheet.mergeCells("A1:H1");
   worksheet.getCell("A1").value = `Arbeitszeiten ${monthLabel}`;
   worksheet.getCell("A1").font = { bold: true, size: 18 };
   worksheet.getCell("A1").alignment = { horizontal: "center" };
 
-  worksheet.mergeCells("A2:F2");
+  worksheet.mergeCells("A2:H2");
   worksheet.getCell("A2").value = "Shiftly Export";
   worksheet.getCell("A2").font = { bold: true, size: 12 };
   worksheet.getCell("A2").alignment = { horizontal: "center" };
@@ -419,9 +449,12 @@ if (newEmployeeStatus) {
     "Arbeitsende",
     "Pause",
     "Arbeitszeit",
+    "Status",
+    "Hinweis",
   ]);
 
   headerRow.font = { bold: true };
+
   headerRow.eachCell((cell) => {
     cell.fill = {
       type: "pattern",
@@ -444,72 +477,109 @@ if (newEmployeeStatus) {
       summary.end,
       summary.pauseDuration,
       summary.workDuration,
+      summary.end === "Offen" ? "Offen" : "Abgeschlossen",
+      summary.end === "Offen" ? "Ausstempeln fehlt" : "",
     ]);
   });
 
-worksheet.addRow([]);
-worksheet.addRow([]);
-worksheet.addRow(["Mitarbeiter-Zusammenfassung"]);
+  worksheet.addRow([]);
+  worksheet.addRow([]);
+  worksheet.addRow(["Mitarbeiter-Zusammenfassung"]);
 
-const titleRow = worksheet.lastRow;
+  const titleRow = worksheet.lastRow;
 
-if (titleRow) {
-  titleRow.font = {
-    bold: true,
-    size: 14,
-  };
-}
+  if (titleRow) {
+    titleRow.font = {
+      bold: true,
+      size: 14,
+    };
+  }
 
 worksheet.addRow([
   "Mitarbeiter",
   "Arbeitstage",
-  "Gesamt Pause",
-  "Gesamt Arbeitszeit",
+  "Monats-Soll",
+  "Ist-Arbeitszeit",
+  "Pause gesamt",
+  "Saldo",
+  "Status",
 ]);
 
-const summaryHeader = worksheet.lastRow;
+  const summaryHeader = worksheet.lastRow;
 
-if (summaryHeader) {
-  summaryHeader.font = { bold: true };
-}
+  if (summaryHeader) {
+    summaryHeader.font = { bold: true };
 
-const employeeGroups: Record<
-  string,
-  {
-    workMinutes: number;
-    pauseMinutes: number;
-    days: number;
-  }
-> = {};
-
-selectedSummaries.forEach((summary) => {
-  if (!employeeGroups[summary.employee_name]) {
-    employeeGroups[summary.employee_name] = {
-      workMinutes: 0,
-      pauseMinutes: 0,
-      days: 0,
-    };
+    summaryHeader.eachCell((cell) => {
+      cell.fill = {
+        type: "pattern",
+        pattern: "solid",
+        fgColor: { argb: "FFE5E7EB" },
+      };
+    });
   }
 
-  employeeGroups[summary.employee_name].workMinutes +=
-    summary.workMinutes;
+  const employeeGroups: Record<
+    string,
+    {
+      employeeId: string;
+      workMinutes: number;
+      pauseMinutes: number;
+      days: number;
+    }
+  > = {};
 
-  employeeGroups[summary.employee_name].pauseMinutes +=
-    summary.pauseMinutes;
+  selectedSummaries.forEach((summary) => {
+    if (!employeeGroups[summary.employee_name]) {
+      employeeGroups[summary.employee_name] = {
+        employeeId: summary.employee_id,
+        workMinutes: 0,
+        pauseMinutes: 0,
+        days: 0,
+      };
+    }
 
-  employeeGroups[summary.employee_name].days += 1;
-});
+    employeeGroups[summary.employee_name].workMinutes += summary.workMinutes;
+    employeeGroups[summary.employee_name].pauseMinutes += summary.pauseMinutes;
+    employeeGroups[summary.employee_name].days += 1;
+  });
 
-Object.entries(employeeGroups).forEach(
-  ([employeeName, data]) => {
+  Object.entries(employeeGroups).forEach(([employeeName, data]) => {
+    const target = targetHours.find(
+      (targetHour) => targetHour.employee_id === data.employeeId
+    );
+
+const monthlyHours = target?.monthly_hours ?? 173;
+
+const monthlyTargetMinutes =
+  monthlyHours * 60;
+
+    const differenceMinutes = data.workMinutes - monthlyTargetMinutes;
+
+    let saldoText = "Ausgeglichen";
+    let statusText = "Ausgeglichen";
+
+    if (differenceMinutes > 0) {
+      saldoText = `${formatMinutes(differenceMinutes)} im Plus`;
+      statusText = "Im Plus";
+    }
+
+    if (differenceMinutes < 0) {
+      saldoText = `${formatMinutes(Math.abs(differenceMinutes))} im Minus`;
+      statusText = "Im Minus";
+    }
+
     worksheet.addRow([
       employeeName,
       data.days,
-      formatMinutes(data.pauseMinutes),
+      `${monthlyHours} Std.`,
       formatMinutes(data.workMinutes),
+      formatMinutes(data.workMinutes),
+      formatMinutes(data.pauseMinutes),
+      saldoText,
+      statusText,
     ]);
-  }
-);
+  });
 
   worksheet.columns = [
     { width: 24 },
@@ -518,6 +588,8 @@ Object.entries(employeeGroups).forEach(
     { width: 18 },
     { width: 18 },
     { width: 18 },
+    { width: 18 },
+    { width: 24 },
   ];
 
   worksheet.eachRow((row) => {
