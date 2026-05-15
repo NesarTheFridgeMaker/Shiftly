@@ -153,6 +153,11 @@ export default function EmployeesPage() {
         return;
       }
 
+      if (pin.trim().length !== 4) {
+      alert("Die PIN muss genau 4 Zahlen haben.");
+      return;
+      }
+
       const parsedMonthlyHours = Number(monthlyHours);
 
       if (!parsedMonthlyHours || parsedMonthlyHours <= 0) {
@@ -166,6 +171,24 @@ export default function EmployeesPage() {
         alert("Keine Business-ID gefunden.");
         return;
       }
+
+      const { data: existingEmployeeWithPin, error: pinCheckError } = await supabase
+  .from("employees")
+  .select("id")
+  .eq("business_id", businessId)
+  .eq("pin", pin.trim())
+  .maybeSingle();
+
+if (pinCheckError) {
+  console.error(pinCheckError);
+  alert(JSON.stringify(pinCheckError, null, 2));
+  return;
+}
+
+if (existingEmployeeWithPin) {
+  alert("Diese PIN ist bereits vergeben. Bitte eine andere PIN wählen.");
+  return;
+}
 
       const { data: insertedEmployee, error: employeeError } = await supabase
         .from("employees")
@@ -184,10 +207,20 @@ export default function EmployeesPage() {
         .single();
 
       if (employeeError || !insertedEmployee) {
-        console.error(employeeError);
-        alert(JSON.stringify(employeeError, null, 2));
-        return;
-      }
+  console.error(employeeError);
+
+  if (
+    employeeError?.message?.includes(
+      "unique_employee_pin_per_business"
+    )
+  ) {
+    alert("Diese PIN ist bereits vergeben.");
+    return;
+  }
+
+  alert("Mitarbeiter konnte nicht erstellt werden.");
+  return;
+}
 
       const { error: targetHoursError } = await supabase
         .from("employee_target_hours")
@@ -495,8 +528,13 @@ export default function EmployeesPage() {
                 type="text"
                 placeholder="4-stellige PIN"
                 value={pin}
-                onChange={(event) => setPin(event.target.value)}
+                onChange={(event) => {
+                const onlyNumbers = event.target.value.replace(/\D/g, "");
+                setPin(onlyNumbers.slice(0, 4));
+                }}
                 disabled={isSaving}
+                inputMode="numeric"
+                maxLength={4}
                 className="border p-3 rounded-lg bg-white text-black disabled:bg-gray-200"
               />
 
