@@ -257,6 +257,14 @@ export default function SchedulePage() {
       return;
     }
 
+    if (isOvernightShift(start, end)) {
+  const confirmed = confirm(
+    "Das Schichtende liegt vor oder genau auf dem Beginn. Soll diese Schicht als Nachtschicht gespeichert werden?"
+  );
+
+  if (!confirmed) return;
+}
+
     const businessId = await getBusinessId();
 
     if (!businessId) {
@@ -267,6 +275,20 @@ export default function SchedulePage() {
     const selectedEmployee = getSelectedEmployee();
 
     if (!selectedEmployee) return;
+
+    const existingShift = shifts.find(
+  (shift) =>
+    shift.employee_id === selectedEmployee.id &&
+    shift.shift_date === date &&
+    shift.start_time.slice(0, 5) === start &&
+    shift.end_time.slice(0, 5) === end &&
+    shift.id !== editingShiftId
+);
+
+if (existingShift) {
+  alert("Diese Schicht existiert für diesen Mitarbeiter bereits.");
+  return;
+}
 
     const absenceForShift = findAbsenceForShift(selectedEmployee.id, date);
 
