@@ -120,16 +120,29 @@ function buildDateTime(date: string, time: string) {
 function buildDailySummaries(entries: TimeEntry[]): WorkSummary[] {
   const groups: Record<string, TimeEntry[]> = {};
 
-  entries.forEach((entry) => {
-    const date = formatDate(entry.created_at);
-    const key = `${entry.employee_id}-${date}`;
+entries.forEach((entry) => {
+  const entryDate = new Date(entry.created_at);
 
-    if (!groups[key]) {
-      groups[key] = [];
-    }
+  // Nachts zwischen 00:00–05:59
+  // wird dem Vortag zugeordnet
+  if (entryDate.getHours() < 6) {
+    entryDate.setDate(
+      entryDate.getDate() - 1
+    );
+  }
 
-    groups[key].push(entry);
-  });
+  const date =
+    formatDateForDatabase(entryDate);
+
+  const key =
+    `${entry.employee_id}-${date}`;
+
+  if (!groups[key]) {
+    groups[key] = [];
+  }
+
+  groups[key].push(entry);
+});
 
   return Object.entries(groups).map(([key, groupEntries]) => {
     const sortedEntries = [...groupEntries].sort(
@@ -356,7 +369,34 @@ useEffect(() => {
       return;
     }
 
-    const createdAt = buildDateTime(selectedDate, selectedTime);
+    let entryDate = selectedDate;
+
+if (selectedAction === "check_out") {
+  const selectedHour = Number(selectedTime.split(":")[0]);
+
+let entryDate = selectedDate;
+
+if (selectedAction === "check_out") {
+  const selectedHour = Number(selectedTime.split(":")[0]);
+
+  if (selectedHour < 6) {
+    const confirmed = confirm(
+      "Diese Uhrzeit liegt nachts. Soll der Stempel als Folgetag gespeichert werden?"
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    const nextDay = new Date(selectedDate);
+    nextDay.setDate(nextDay.getDate() + 1);
+
+    entryDate = nextDay.toISOString().split("T")[0];
+  }
+}
+}
+
+    const createdAt = buildDateTime(entryDate, selectedTime);
 
     const { error } = await supabase.from("time_entries").insert([
       {
@@ -665,6 +705,11 @@ async function handleExportExcel() {
   const dailySummaries = buildDailySummaries(timeEntries);
   const weeklySummaries = buildPeriodSummaries(dailySummaries, "week");
   const monthlySummaries = buildPeriodSummaries(dailySummaries, "month");
+  const todayRawDate = formatDateForDatabase(new Date());
+
+  const todaysDailySummaries = dailySummaries.filter(
+  (summary) => summary.rawDate === todayRawDate
+);
 
   return (
     <div>
@@ -761,7 +806,7 @@ async function handleExportExcel() {
         </h2>
 
         <div className="xl:hidden flex flex-col gap-4">
-          {dailySummaries.map((summary) => (
+          {todaysDailySummaries.map((summary) => (
             <div
               key={summary.key}
               className="bg-gray-50 rounded-2xl p-4 border shadow-sm"
@@ -938,7 +983,7 @@ async function handleExportExcel() {
           </table>
         </div>
 
-        {dailySummaries.length === 0 && (
+        {todaysDailySummaries.length === 0 && (
           <p className="text-gray-500 mt-4">
             Noch keine Arbeitszeiten vorhanden.
           </p>
