@@ -589,11 +589,11 @@ export default function EmployeePage() {
 
   function getWeeklyDifferenceText() {
     if (weeklyDifferenceMinutes > 0) {
-      return `+${formatMinutes(weeklyDifferenceMinutes)} Überstunden`;
+      return `+${formatMinutes(weeklyDifferenceMinutes)} im Plus`;
     }
 
     if (weeklyDifferenceMinutes < 0) {
-      return `${formatMinutes(Math.abs(weeklyDifferenceMinutes))} Minusstunden`;
+      return `${formatMinutes(Math.abs(weeklyDifferenceMinutes))} im Minus`;
     }
 
     return "Ausgeglichen";
@@ -719,8 +719,8 @@ export default function EmployeePage() {
 
           <div className="bg-white rounded-2xl shadow p-4">
             <p className="text-gray-500 mb-1">Saldo</p>
-            <p className={`text-2xl font-bold ${getWeeklyDifferenceColor()}`}>
-              {getWeeklyDifferenceText()}
+            <p className={`text-lg xl:text-2xl font-bold leading-snug break-words ${getWeeklyDifferenceColor()}`}>
+                {getWeeklyDifferenceText()}
             </p>
           </div>
 

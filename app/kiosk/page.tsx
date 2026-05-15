@@ -29,59 +29,51 @@ export default function KioskPage() {
   const [lockedUntil, setLockedUntil] = useState<number | null>(null);
   const [currentTime, setCurrentTime] = useState(Date.now());
 
-async function checkKioskAccess() {
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  async function checkKioskAccess() {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
 
-  if (!user) {
-    window.location.href = "/login";
-    return;
-  }
+    if (!user) {
+      window.location.href = "/login";
+      return;
+    }
 
-  const { data: profile, error } = await supabase
-    .from("profiles")
-    .select("role")
-    .eq("id", user.id)
-    .single();
+    const { data: profile, error } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", user.id)
+      .single();
 
-  if (error || !profile) {
-    console.error(error);
-    window.location.href = "/login";
-    return;
-  }
+    if (error || !profile) {
+      console.error(error);
+      window.location.href = "/login";
+      return;
+    }
 
-  if (profile.role !== "admin") {
-    window.location.href = "/employee";
-    return;
-  }
+    if (profile.role !== "admin") {
+      window.location.href = "/employee";
+      return;
+    }
 
-  const business = await getBusiness();
-
-  if (!business) {
-    await supabase.auth.signOut();
-    window.location.href = "/login";
-    return;
-  }
-
-  if (business.status === "suspended") {
-    window.location.href = "/account-suspended";
-    return;
-  }
-
-  setBusinessName(business.name);
-
-  await loadEmployees();
-
-  setCheckingAuth(false);
-}
-
-  async function loadBusinessName() {
     const business = await getBusiness();
 
-    if (!business) return;
+    if (!business) {
+      await supabase.auth.signOut();
+      window.location.href = "/login";
+      return;
+    }
+
+    if (business.status === "suspended") {
+      window.location.href = "/account-suspended";
+      return;
+    }
 
     setBusinessName(business.name);
+
+    await loadEmployees();
+
+    setCheckingAuth(false);
   }
 
   async function loadEmployees() {
@@ -111,44 +103,6 @@ async function checkKioskAccess() {
   }, []);
 
   useEffect(() => {
-  let channel: ReturnType<typeof supabase.channel>;
-
-  async function setupBusinessStatusRealtime() {
-    const businessId = await getBusinessId();
-
-    if (!businessId) return;
-
-    channel = supabase
-      .channel(`kiosk-business-status-${businessId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "UPDATE",
-          schema: "public",
-          table: "businesses",
-          filter: `id=eq.${businessId}`,
-        },
-        (payload) => {
-          const newBusiness = payload.new as { status?: string };
-
-          if (newBusiness.status === "suspended") {
-            window.location.href = "/account-suspended";
-          }
-        }
-      )
-      .subscribe();
-  }
-
-  setupBusinessStatusRealtime();
-
-  return () => {
-    if (channel) {
-      supabase.removeChannel(channel);
-    }
-  };
-}, []);
-
-  useEffect(() => {
     const interval = setInterval(() => {
       setCurrentTime(Date.now());
     }, 1000);
@@ -162,6 +116,69 @@ async function checkKioskAccess() {
       setFailedAttempts(0);
     }
   }, [currentTime, lockedUntil]);
+
+  useEffect(() => {
+    let channel: ReturnType<typeof supabase.channel>;
+
+    async function setupRealtime() {
+      const businessId = await getBusinessId();
+
+      if (!businessId) return;
+
+      channel = supabase
+        .channel(`kiosk-live-${businessId}`)
+
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "employees",
+            filter: `business_id=eq.${businessId}`,
+          },
+          async () => {
+            await loadEmployees();
+          }
+        )
+
+        .on(
+          "postgres_changes",
+          {
+            event: "UPDATE",
+            schema: "public",
+            table: "businesses",
+            filter: `id=eq.${businessId}`,
+          },
+          async () => {
+            const { data } = await supabase
+              .from("businesses")
+              .select("status")
+              .eq("id", businessId)
+              .single();
+
+            if (data?.status === "suspended") {
+              await supabase.auth.signOut();
+
+              alert("Der Zugriff auf diesen Betrieb wurde gesperrt.");
+
+              window.location.href = "/login";
+            }
+          }
+        )
+
+        .subscribe();
+    }
+
+    if (!checkingAuth) {
+      setupRealtime();
+    }
+
+    return () => {
+      if (channel) {
+        supabase.removeChannel(channel);
+      }
+    };
+  }, [checkingAuth]);
 
   function showMessage(text: string) {
     setMessage(text);
@@ -386,98 +403,104 @@ async function checkKioskAccess() {
   if (checkingAuth) {
     return (
       <main className="min-h-screen bg-gray-100 flex items-center justify-center">
-        <p className="text-blue-950 font-semibold">
-          Kiosk wird geprüft...
-        </p>
+        <p className="text-blue-950 font-semibold">Kiosk wird geprüft...</p>
       </main>
     );
   }
 
   return (
-    <main className="min-h-screen bg-gray-100 p-4 md:p-8">
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <section className="lg:col-span-2 bg-white rounded-3xl shadow-xl p-6 md:p-10">
-          <h1 className="text-4xl md:text-5xl font-bold text-blue-950 mb-2 text-center">
-            Shiftly Terminal
-          </h1>
+    <main className="h-screen bg-gray-100 p-3 md:p-5 overflow-hidden">
+      <div className="h-full grid grid-cols-1 xl:grid-cols-3 gap-4">
+        <section className="xl:col-span-2 bg-white rounded-3xl shadow-xl p-4 md:p-6 flex flex-col justify-center min-h-0">
+          <div>
+            <h1 className="text-3xl md:text-4xl font-bold text-blue-950 mb-1 text-center">
+              Shiftly Terminal
+            </h1>
 
-          {businessName && (
-            <p className="text-center text-xl font-semibold text-blue-700 mb-4">
-              {businessName}
-            </p>
-          )}
+            {businessName && (
+              <p className="text-center text-lg md:text-xl font-semibold text-blue-700 mb-3">
+                {businessName}
+              </p>
+            )}
 
-          {locked ? (
-            <div className="bg-red-100 text-red-700 p-5 rounded-2xl text-center font-bold mb-8">
-              Terminal gesperrt. Bitte in {remainingLockSeconds} Sekunden erneut
-              versuchen.
+            {locked ? (
+              <div className="bg-red-100 text-red-700 p-3 rounded-2xl text-center font-bold mb-4">
+                Terminal gesperrt. Bitte in {remainingLockSeconds} Sekunden
+                erneut versuchen.
+              </div>
+            ) : (
+              <p className="text-center text-gray-500 mb-4">
+                PIN eingeben und Stempelschritt auswählen
+              </p>
+            )}
+
+            <input
+              type="password"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              maxLength={4}
+              placeholder="4-stellige PIN"
+              value={pin}
+              onChange={(event) => {
+                const onlyNumbers = event.target.value.replace(/\D/g, "");
+                setPin(onlyNumbers);
+              }}
+              disabled={locked}
+              className="w-full border p-3 rounded-2xl text-3xl bg-white text-black text-center mb-3 disabled:bg-gray-200 disabled:cursor-not-allowed"
+            />
+
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                onClick={handleCheckIn}
+                disabled={locked}
+                className="bg-green-600 text-white py-4 rounded-2xl text-xl md:text-2xl font-semibold hover:bg-green-700 transition hover:scale-105 disabled:bg-gray-400 disabled:hover:scale-100"
+              >
+                Einstempeln
+              </button>
+
+              <button
+                onClick={handleStartBreak}
+                disabled={locked}
+                className="bg-yellow-500 text-white py-4 rounded-2xl text-xl md:text-2xl font-semibold hover:bg-yellow-600 transition hover:scale-105 disabled:bg-gray-400 disabled:hover:scale-100"
+              >
+                Pause starten
+              </button>
+
+              <button
+                onClick={handleEndBreak}
+                disabled={locked}
+                className="bg-blue-600 text-white py-4 rounded-2xl text-xl md:text-2xl font-semibold hover:bg-blue-700 transition hover:scale-105 disabled:bg-gray-400 disabled:hover:scale-100"
+              >
+                Pause beenden
+              </button>
+
+              <button
+                onClick={handleCheckOut}
+                disabled={locked}
+                className="bg-red-600 text-white py-4 rounded-2xl text-xl md:text-2xl font-semibold hover:bg-red-700 transition hover:scale-105 disabled:bg-gray-400 disabled:hover:scale-100"
+              >
+                Ausstempeln
+              </button>
             </div>
-          ) : (
-            <p className="text-center text-gray-500 mb-10">
-              PIN eingeben und Stempelschritt auswählen
-            </p>
-          )}
-
-          <input
-            type="password"
-            placeholder="4-stellige PIN"
-            value={pin}
-            onChange={(event) => setPin(event.target.value)}
-            disabled={locked}
-            className="w-full border p-5 rounded-2xl text-3xl bg-white text-black text-center mb-8 disabled:bg-gray-200 disabled:cursor-not-allowed"
-          />
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-            <button
-              onClick={handleCheckIn}
-              disabled={locked}
-              className="bg-green-600 text-white py-6 rounded-2xl text-2xl font-semibold hover:bg-green-700 transition hover:scale-105 disabled:bg-gray-400 disabled:hover:scale-100"
-            >
-              Einstempeln
-            </button>
-
-            <button
-              onClick={handleStartBreak}
-              disabled={locked}
-              className="bg-yellow-500 text-white py-6 rounded-2xl text-2xl font-semibold hover:bg-yellow-600 transition hover:scale-105 disabled:bg-gray-400 disabled:hover:scale-100"
-            >
-              Pause starten
-            </button>
-
-            <button
-              onClick={handleEndBreak}
-              disabled={locked}
-              className="bg-blue-600 text-white py-6 rounded-2xl text-2xl font-semibold hover:bg-blue-700 transition hover:scale-105 disabled:bg-gray-400 disabled:hover:scale-100"
-            >
-              Pause beenden
-            </button>
-
-            <button
-              onClick={handleCheckOut}
-              disabled={locked}
-              className="bg-red-600 text-white py-6 rounded-2xl text-2xl font-semibold hover:bg-red-700 transition hover:scale-105 disabled:bg-gray-400 disabled:hover:scale-100"
-            >
-              Ausstempeln
-            </button>
           </div>
         </section>
 
-        <aside className="bg-white rounded-3xl shadow-xl p-6 md:p-8">
-          <h2 className="text-3xl font-bold text-blue-950 mb-6">
+        <aside className="hidden xl:block bg-white rounded-3xl shadow-xl p-4 md:p-6 min-h-0 overflow-hidden">
+          <h2 className="text-2xl font-bold text-blue-950 mb-4">
             Live-Status
           </h2>
 
-          <div className="mb-8">
-            <h3 className="text-xl font-semibold text-green-700 mb-3">
+          <div className="mb-5">
+            <h3 className="text-lg font-semibold text-green-700 mb-2">
               Aktiv arbeitend
             </h3>
 
             {activeEmployees.length > 0 ? (
-              <div className="flex flex-col gap-3">
+              <div className="flex flex-col gap-2 max-h-32 overflow-y-auto">
                 {activeEmployees.map((employee) => (
                   <div
                     key={employee.id}
-                    className="bg-green-100 text-green-800 rounded-xl p-4 font-medium"
+                    className="bg-green-100 text-green-800 rounded-xl p-3 font-medium"
                   >
                     {employee.name}
                   </div>
@@ -489,16 +512,16 @@ async function checkKioskAccess() {
           </div>
 
           <div>
-            <h3 className="text-xl font-semibold text-yellow-700 mb-3">
+            <h3 className="text-lg font-semibold text-yellow-700 mb-2">
               In Pause
             </h3>
 
             {employeesOnBreak.length > 0 ? (
-              <div className="flex flex-col gap-3">
+              <div className="flex flex-col gap-2 max-h-32 overflow-y-auto">
                 {employeesOnBreak.map((employee) => (
                   <div
                     key={employee.id}
-                    className="bg-yellow-100 text-yellow-800 rounded-xl p-4 font-medium"
+                    className="bg-yellow-100 text-yellow-800 rounded-xl p-3 font-medium"
                   >
                     {employee.name}
                   </div>
@@ -513,8 +536,8 @@ async function checkKioskAccess() {
 
       {showPopup && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-6">
-          <div className="bg-white rounded-3xl shadow-2xl p-8 md:p-10 max-w-lg w-full text-center">
-            <p className="text-2xl md:text-3xl font-bold text-blue-950 mb-8">
+          <div className="bg-white rounded-3xl shadow-2xl p-6 md:p-8 max-w-lg w-full text-center">
+            <p className="text-2xl md:text-3xl font-bold text-blue-950 mb-6">
               {message}
             </p>
 

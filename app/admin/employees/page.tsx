@@ -20,8 +20,16 @@ type EmployeeTargetHour = {
   weekly_hours: number;
 };
 
+type EmployeeNote = {
+  id: string;
+  employee_id: string;
+  note: string;
+  created_at: string;
+};
+
 type EmployeeWithTargetHours = Employee & {
   weekly_target_hours: number;
+  notes: EmployeeNote[];
 };
 
 function formatAccountStatus(status: string) {
@@ -36,6 +44,16 @@ function getAccountStatusColor(status: string) {
   return "text-black";
 }
 
+function formatNoteDate(dateString: string) {
+  return new Date(dateString).toLocaleString("de-DE", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 export default function EmployeesPage() {
   const [showForm, setShowForm] = useState(false);
   const [employees, setEmployees] = useState<EmployeeWithTargetHours[]>([]);
@@ -45,6 +63,8 @@ export default function EmployeesPage() {
   const [role, setRole] = useState("Mitarbeiter");
   const [pin, setPin] = useState("");
   const [weeklyHours, setWeeklyHours] = useState("40");
+
+  const [noteTexts, setNoteTexts] = useState<Record<string, string>>({});
 
   async function loadEmployees() {
     const businessId = await getBusinessId();
@@ -68,6 +88,7 @@ export default function EmployeesPage() {
     const employeeIds = (employeeData || []).map((employee) => employee.id);
 
     let targetHours: EmployeeTargetHour[] = [];
+    let notes: EmployeeNote[] = [];
 
     if (employeeIds.length > 0) {
       const { data: targetData, error: targetError } = await supabase
@@ -80,20 +101,38 @@ export default function EmployeesPage() {
       } else {
         targetHours = (targetData || []) as EmployeeTargetHour[];
       }
+
+      const { data: notesData, error: notesError } = await supabase
+        .from("employee_notes")
+        .select("id, employee_id, note, created_at")
+        .eq("business_id", businessId)
+        .in("employee_id", employeeIds)
+        .order("created_at", { ascending: false });
+
+      if (notesError) {
+        console.error(notesError);
+      } else {
+        notes = (notesData || []) as EmployeeNote[];
+      }
     }
 
-    const employeesWithTargetHours = (employeeData || []).map((employee) => {
+    const employeesWithData = (employeeData || []).map((employee) => {
       const target = targetHours.find(
         (targetHour) => targetHour.employee_id === employee.id
+      );
+
+      const employeeNotes = notes.filter(
+        (note) => note.employee_id === employee.id
       );
 
       return {
         ...employee,
         weekly_target_hours: target?.weekly_hours ?? 40,
+        notes: employeeNotes,
       };
     });
 
-    setEmployees(employeesWithTargetHours);
+    setEmployees(employeesWithData);
   }
 
   useEffect(() => {
@@ -278,6 +317,129 @@ export default function EmployeesPage() {
     await loadEmployees();
   }
 
+  async function handleAddNote(employeeId: string) {
+    const noteText = noteTexts[employeeId]?.trim();
+
+    if (!noteText) {
+      alert("Bitte eine Notiz eingeben.");
+      return;
+    }
+
+    const businessId = await getBusinessId();
+
+    if (!businessId) {
+      alert("Keine Business-ID gefunden.");
+      return;
+    }
+
+    const { error } = await supabase.from("employee_notes").insert([
+      {
+        employee_id: employeeId,
+        business_id: businessId,
+        note: noteText,
+      },
+    ]);
+
+    if (error) {
+      console.error(error);
+      alert(JSON.stringify(error, null, 2));
+      return;
+    }
+
+    setNoteTexts((current) => ({
+      ...current,
+      [employeeId]: "",
+    }));
+
+    await loadEmployees();
+  }
+
+  async function handleDeleteNote(noteId: string) {
+    const confirmed = confirm("Möchtest du diese Notiz wirklich löschen?");
+
+    if (!confirmed) return;
+
+    const businessId = await getBusinessId();
+
+    if (!businessId) {
+      alert("Keine Business-ID gefunden.");
+      return;
+    }
+
+    const { error } = await supabase
+      .from("employee_notes")
+      .delete()
+      .eq("id", noteId)
+      .eq("business_id", businessId);
+
+    if (error) {
+      console.error(error);
+      alert(JSON.stringify(error, null, 2));
+      return;
+    }
+
+    await loadEmployees();
+  }
+
+  function renderNotes(employee: EmployeeWithTargetHours) {
+    return (
+      <div className="mt-4 bg-white md:bg-gray-50 rounded-xl p-4 border">
+        <h4 className="font-bold text-blue-950 mb-3">Interne Notizen</h4>
+
+        <div className="flex flex-col gap-2 mb-4">
+          <textarea
+            value={noteTexts[employee.id] || ""}
+            onChange={(event) =>
+              setNoteTexts((current) => ({
+                ...current,
+                [employee.id]: event.target.value,
+              }))
+            }
+            placeholder="z. B. keine Spätschichten, montags nicht verfügbar..."
+            className="border p-3 rounded-lg bg-white text-black min-h-24"
+          />
+
+          <button
+            type="button"
+            onClick={() => handleAddNote(employee.id)}
+            className="bg-blue-950 text-white px-4 py-2 rounded-lg hover:bg-blue-900 transition"
+          >
+            Notiz speichern
+          </button>
+        </div>
+
+        {employee.notes.length > 0 ? (
+          <div className="flex flex-col gap-3">
+            {employee.notes.map((note) => (
+              <div
+                key={note.id}
+                className="bg-gray-100 rounded-xl p-3 border flex flex-col gap-2"
+              >
+                <p className="text-black whitespace-pre-wrap">{note.note}</p>
+
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-xs text-gray-500">
+                    {formatNoteDate(note.created_at)}
+                  </span>
+
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteNote(note.id)}
+                    className="bg-red-600 text-white px-3 py-1 rounded-lg hover:bg-red-700 transition text-sm"
+                  >
+                    Löschen
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-gray-500">Noch keine Notizen vorhanden.</p>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div>
       <h1 className="text-3xl md:text-4xl font-bold text-blue-950 mb-6 md:mb-8">
@@ -361,7 +523,7 @@ export default function EmployeesPage() {
           </div>
         )}
 
-        <div className="md:hidden flex flex-col gap-4">
+        <div className="xl:hidden flex flex-col gap-4">
           {employees.map((employee) => (
             <div
               key={employee.id}
@@ -442,89 +604,87 @@ export default function EmployeesPage() {
                   Löschen
                 </button>
               </div>
+
+              {renderNotes(employee)}
             </div>
           ))}
         </div>
 
-        <div className="hidden md:block overflow-x-auto">
-          <table className="w-full text-left">
-            <thead>
-              <tr className="border-b text-gray-600">
-                <th className="py-3 px-3">Name</th>
-                <th className="py-3 px-3">Rolle</th>
-                <th className="py-3 px-3">PIN</th>
-                <th className="py-3 px-3">Konto</th>
-                <th className="py-3 px-3">Soll/Woche</th>
-                <th className="py-3 px-3">Aktionen</th>
-              </tr>
-            </thead>
+        <div className="hidden xl:flex flex-col gap-4">
+          {employees.map((employee) => (
+            <div key={employee.id} className="border rounded-2xl p-4">
+              <div className="grid grid-cols-[1.2fr_1fr_0.7fr_0.8fr_1fr_1.6fr] gap-3 items-center min-w-0">
+                <div className="text-black font-semibold">
+                  {employee.name}
+                </div>
 
-            <tbody>
-              {employees.map((employee) => (
-                <tr key={employee.id} className="border-b">
-                  <td className="py-3 px-3 text-black">{employee.name}</td>
+                <div className="text-black">{employee.role}</div>
 
-                  <td className="py-3 px-3 text-black">{employee.role}</td>
+                <div className="text-black">{employee.pin}</div>
 
-                  <td className="py-3 px-3 text-black">{employee.pin}</td>
+                <div
+                  className={`font-bold ${getAccountStatusColor(
+                    employee.account_status
+                  )}`}
+                >
+                  {formatAccountStatus(employee.account_status)}
+                </div>
 
-                  <td
-                    className={`py-3 px-3 font-bold ${getAccountStatusColor(
-                      employee.account_status
-                    )}`}
+                <div className="flex items-center gap-2 text-black">
+                  <input
+                    type="number"
+                    min="1"
+                    defaultValue={employee.weekly_target_hours}
+                    onBlur={(event) =>
+                      handleUpdateWeeklyHours(
+                        employee.id,
+                        Number(event.target.value)
+                      )
+                    }
+                    className="border p-2 rounded-lg bg-white text-black w-24"
+                  />
+
+                  <span>Std.</span>
+                </div>
+
+                <div className="flex flex-wrap gap-2 justify-end">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      handleToggleAccountStatus(
+                        employee.id,
+                        employee.account_status
+                      )
+                    }
+                    className="bg-yellow-500 text-white px-3 py-2 rounded-lg hover:bg-yellow-600 transition"
                   >
-                    {formatAccountStatus(employee.account_status)}
-                  </td>
+                    {employee.account_status === "active"
+                      ? "Deaktivieren"
+                      : "Aktivieren"}
+                  </button>
 
-                  <td className="py-3 px-3 text-black">
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="number"
-                        min="1"
-                        defaultValue={employee.weekly_target_hours}
-                        onBlur={(event) =>
-                          handleUpdateWeeklyHours(
-                            employee.id,
-                            Number(event.target.value)
-                          )
-                        }
-                        className="border p-2 rounded-lg bg-white text-black w-24"
-                      />
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteEmployee(employee.id)}
+                    className="bg-red-600 text-white px-3 py-2 rounded-lg hover:bg-red-700 transition"
+                  >
+                    Löschen
+                  </button>
+                </div>
+              </div>
 
-                      <span>Std.</span>
-                    </div>
-                  </td>
+              <div className="grid grid-cols-6 gap-4 text-sm text-gray-500 mt-3 border-t pt-3">
+                <div>Name</div>
+                <div>Rolle</div>
+                <div>PIN</div>
+                <div>Konto</div>
+                <div>Soll/Woche</div>
+                <div>Aktionen</div>
+              </div>
 
-                  <td className="py-3 px-3">
-                    <div className="flex gap-3">
-                      <button
-                        type="button"
-                        onClick={() =>
-                          handleToggleAccountStatus(
-                            employee.id,
-                            employee.account_status
-                          )
-                        }
-                        className="bg-yellow-500 text-white px-3 py-2 rounded-lg hover:bg-yellow-600 transition"
-                      >
-                        {employee.account_status === "active"
-                          ? "Deaktivieren"
-                          : "Aktivieren"}
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => handleDeleteEmployee(employee.id)}
-                        className="bg-red-600 text-white px-3 py-2 rounded-lg hover:bg-red-700 transition"
-                      >
-                        Löschen
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+              {renderNotes(employee)}
+            </div>
+          ))}
         </div>
 
         {employees.length === 0 && (

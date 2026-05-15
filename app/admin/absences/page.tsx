@@ -242,7 +242,7 @@ async function handleUpdateRequestStatus(id: string, newStatus: string) {
           Abwesenheit eintragen
         </h2>
 
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 xl:grid-cols-4 gap-4">
           <select
             value={employeeId}
             onChange={(event) => setEmployeeId(event.target.value)}
@@ -295,7 +295,7 @@ async function handleUpdateRequestStatus(id: string, newStatus: string) {
 
         <button
           onClick={handleAddAbsence}
-          className="w-full md:w-auto mt-5 bg-blue-950 text-white px-5 py-3 rounded-xl cursor-pointer hover:bg-blue-900 hover:scale-105 transition"
+          className="w-full xl:w-auto mt-5 bg-blue-950 text-white px-5 py-3 rounded-xl cursor-pointer hover:bg-blue-900 hover:scale-105 transition"
         >
           Abwesenheit speichern
         </button>
@@ -308,7 +308,7 @@ async function handleUpdateRequestStatus(id: string, newStatus: string) {
 
         {pendingAbsences.length > 0 ? (
           <>
-            <div className="md:hidden flex flex-col gap-4">
+            <div className="xl:hidden flex flex-col gap-4">
               {pendingAbsences.map((absence) => (
                 <div
                   key={absence.id}
@@ -361,8 +361,8 @@ async function handleUpdateRequestStatus(id: string, newStatus: string) {
               ))}
             </div>
 
-            <div className="hidden md:block overflow-x-auto">
-              <table className="w-full text-left">
+            <div className="hidden xl:block overflow-x-auto max-w-full">
+              <table className="min-w-[800px] w-full text-left">
                 <thead>
                   <tr className="border-b text-gray-600">
                     <th className="py-3 px-4">Mitarbeiter</th>
@@ -443,7 +443,7 @@ async function handleUpdateRequestStatus(id: string, newStatus: string) {
           Abwesenheitsübersicht
         </h2>
 
-        <div className="md:hidden flex flex-col gap-4">
+        <div className="xl:hidden flex flex-col gap-4">
           {otherAbsences.map((absence) => (
             <div
               key={absence.id}
@@ -499,8 +499,8 @@ async function handleUpdateRequestStatus(id: string, newStatus: string) {
           ))}
         </div>
 
-        <div className="hidden md:block overflow-x-auto">
-          <table className="w-full text-left">
+        <div className="hidden xl:block overflow-x-auto max-w-full">
+          <table className="min-w-[800px] w-full text-left">
             <thead>
               <tr className="border-b text-gray-600">
                 <th className="py-3 px-4">Mitarbeiter</th>

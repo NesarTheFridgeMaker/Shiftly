@@ -156,7 +156,7 @@ export default function AdminPage() {
               {myShifts.map((shift) => (
                 <div
                   key={shift.id}
-                  className="bg-blue-50 rounded-xl p-4 text-black flex flex-col md:flex-row md:justify-between gap-2"
+                  className="bg-blue-50 rounded-xl p-4 text-black flex flex-col xl:flex-row xl:justify-between gap-2"
                 >
                   <span className="font-semibold">
                     {formatShiftDate(shift.shift_date)}
@@ -187,7 +187,7 @@ export default function AdminPage() {
             {shifts.map((shift) => (
               <div
                 key={shift.id}
-                className="bg-blue-50 rounded-xl p-4 text-black flex justify-between"
+                className="bg-blue-50 rounded-xl p-4 text-black flex flex-col xl:flex-row xl:justify-between gap-2"
               >
                 <span className="font-semibold">
                   {shift.employee_name}
@@ -217,7 +217,7 @@ export default function AdminPage() {
         </p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
         <div className="bg-white rounded-2xl p-6 shadow">
           <h2 className="text-2xl font-bold text-green-700 mb-4">
             Aktiv arbeitend

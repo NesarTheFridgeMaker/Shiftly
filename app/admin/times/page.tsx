@@ -395,7 +395,7 @@ if (newEmployeeStatus) {
           oder auszustempeln.
         </p>
 
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 xl:grid-cols-4 gap-4">
           <select
             value={selectedEmployeeId}
             onChange={(event) => setSelectedEmployeeId(event.target.value)}
@@ -450,7 +450,7 @@ if (newEmployeeStatus) {
           Tagesübersicht
         </h2>
 
-        <div className="md:hidden flex flex-col gap-4">
+        <div className="xl:hidden flex flex-col gap-4">
           {dailySummaries.map((summary) => (
             <div
               key={summary.key}
@@ -534,7 +534,7 @@ if (newEmployeeStatus) {
           ))}
         </div>
 
-        <div className="hidden md:block overflow-x-auto">
+        <div className="hidden xl:block overflow-x-auto max-w-full">
           <table className="w-full text-left">
             <thead>
               <tr className="border-b text-gray-600">
@@ -640,7 +640,7 @@ if (newEmployeeStatus) {
           Wochenübersicht
         </h2>
 
-        <div className="hidden md:block overflow-x-auto">
+        <div className="hidden xl:block overflow-x-auto max-w-full">
           <table className="w-full text-left">
             <thead>
               <tr className="border-b text-gray-600">
@@ -675,7 +675,7 @@ if (newEmployeeStatus) {
           </table>
         </div>
 
-        <div className="md:hidden flex flex-col gap-4">
+        <div className="xl:hidden flex flex-col gap-4">
           {weeklySummaries.map((summary) => (
             <div
               key={summary.key}
@@ -720,7 +720,7 @@ if (newEmployeeStatus) {
           Monatsübersicht
         </h2>
 
-        <div className="hidden md:block overflow-x-auto">
+        <div className="hidden xl:block overflow-x-auto max-w-full">
           <table className="w-full text-left">
             <thead>
               <tr className="border-b text-gray-600">
@@ -755,7 +755,7 @@ if (newEmployeeStatus) {
           </table>
         </div>
 
-        <div className="md:hidden flex flex-col gap-4">
+        <div className="xl:hidden flex flex-col gap-4">
           {monthlySummaries.map((summary) => (
             <div
               key={summary.key}

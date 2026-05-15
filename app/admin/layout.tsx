@@ -301,8 +301,8 @@ useEffect(() => {
   }
 
   return (
-    <main className="min-h-screen bg-gray-100 md:flex">
-      <div className="md:hidden bg-blue-950 text-white p-4 flex items-center justify-between">
+    <main className="min-h-screen bg-gray-100 lg:flex overflow-x-hidden">
+      <div className="lg:hidden bg-blue-950 text-white p-4 flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">Shiftly</h1>
 
@@ -407,7 +407,7 @@ useEffect(() => {
       )}
 
       {menuOpen && (
-        <div className="fixed inset-0 z-50 bg-black/40 md:hidden">
+        <div className="fixed inset-0 z-50 bg-black/40 lg:hidden">
           <div className="bg-blue-950 text-white w-72 h-full p-6 shadow-xl">
             <div className="flex items-start justify-between mb-10">
               <div>
@@ -453,7 +453,7 @@ useEffect(() => {
         </div>
       )}
 
-      <aside className="hidden md:flex w-64 bg-blue-950 text-white p-6 min-h-screen flex-col justify-between">
+      <aside className="hidden lg:flex w-64 shrink-0 bg-blue-950 text-white p-6 min-h-screen flex-col justify-between">
         <div>
           <div className="mb-10">
             <h1 className="text-3xl font-bold">Shiftly</h1>
@@ -503,7 +503,7 @@ useEffect(() => {
         </button>
       </aside>
 
-      <section className="flex-1 p-4 md:p-10 overflow-x-auto">
+      <section className="flex-1 min-w-0 w-full p-4 lg:p-10 overflow-x-auto">
         {children}
       </section>
     </main>

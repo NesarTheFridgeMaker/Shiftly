@@ -120,7 +120,7 @@ export default function SettingsPage() {
           fest. Diese können später im Dienstplan automatisch Zeiten ausfüllen.
         </p>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-5">
+        <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 mb-5">
           <div className="flex flex-col gap-1">
             <label className="text-sm font-semibold text-gray-600">
               Name
@@ -164,7 +164,7 @@ export default function SettingsPage() {
         <button
           type="button"
           onClick={createShiftTemplate}
-          className="w-full md:w-auto bg-blue-950 text-white px-5 py-3 rounded-xl hover:bg-blue-900 transition"
+          className="w-full xl:w-auto bg-blue-950 text-white px-5 py-3 rounded-xl hover:bg-blue-900 transition"
         >
           Schichtvorlage speichern
         </button>
@@ -180,7 +180,7 @@ export default function SettingsPage() {
             {shiftTemplates.map((template) => (
               <div
                 key={template.id}
-                className="bg-gray-50 rounded-xl p-4 border flex flex-col md:flex-row md:items-center md:justify-between gap-3"
+                className="bg-gray-50 rounded-xl p-4 border flex flex-col xl:flex-row xl:items-center xl:justify-between gap-3"
               >
                 <div>
                   <p className="font-bold text-blue-950">
@@ -196,7 +196,7 @@ export default function SettingsPage() {
                 <button
                   type="button"
                   onClick={() => deleteShiftTemplate(template.id)}
-                  className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition"
+                  className="w-full xl:w-auto bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition"
                 >
                   Löschen
                 </button>

@@ -478,7 +478,7 @@ if (existingShifts && existingShifts.length > 0) {
           {editingShiftId ? "Schicht bearbeiten" : "Neue Schicht eintragen"}
         </h2>
 
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+        <div className="grid grid-cols-1 xl:grid-cols-5 gap-4">
           <select
             value={employeeId}
             onChange={(event) => setEmployeeId(event.target.value)}
@@ -669,8 +669,8 @@ if (existingShifts && existingShifts.length > 0) {
           </div>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
+        <div className="overflow-x-auto max-w-full">
+          <table className="min-w-[900px] w-full text-left border-collapse">
             <thead>
               <tr className="border-b text-gray-600">
                 <th className="py-3 px-3">Mitarbeiter</th>
