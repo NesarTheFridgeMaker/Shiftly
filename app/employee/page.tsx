@@ -58,6 +58,7 @@ type EmployeeTargetHour = {
   id: string;
   employee_id: string;
   weekly_hours: number;
+  monthly_hours: number;
 };
 
 function formatShiftDate(dateString: string) {
@@ -199,7 +200,7 @@ export default function EmployeePage() {
   const [employee, setEmployee] = useState<Employee | null>(null);
   const [employeeId, setEmployeeId] = useState("");
   const [businessName, setBusinessName] = useState("");
-  const [weeklyTargetHours, setWeeklyTargetHours] = useState(40);
+  const [monthlyTargetHours, setMonthlyTargetHours] = useState(173);
 
   const [shifts, setShifts] = useState<Shift[]>([]);
   const [timeEntries, setTimeEntries] = useState<TimeEntry[]>([]);
@@ -283,7 +284,7 @@ export default function EmployeePage() {
     await loadTimeEntries(currentEmployeeId);
     await loadAbsences(currentEmployeeId);
     await loadNotifications(currentEmployeeId);
-    await loadWeeklyTargetHours(currentEmployeeId);
+    await loadMonthlyTargetHours(currentEmployeeId);
 
     setCheckingAuth(false);
   }
@@ -384,12 +385,12 @@ export default function EmployeePage() {
     setNotifications((data || []) as Notification[]);
   }
 
-  async function loadWeeklyTargetHours(selectedEmployeeId: string) {
+  async function loadMonthlyTargetHours(selectedEmployeeId: string) {
     if (!selectedEmployeeId) return;
 
     const { data, error } = await supabase
       .from("employee_target_hours")
-      .select("id, employee_id, weekly_hours")
+      .select("id, employee_id, weekly_hours, monthly_hours")
       .eq("employee_id", selectedEmployeeId)
       .maybeSingle();
 
@@ -400,7 +401,7 @@ export default function EmployeePage() {
 
     const target = data as EmployeeTargetHour | null;
 
-    setWeeklyTargetHours(target?.weekly_hours ?? 40);
+    setMonthlyTargetHours(target?.monthly_hours ?? 173);
   }
 
   async function markAllNotificationsAsRead() {
@@ -584,24 +585,24 @@ export default function EmployeePage() {
   const weeklyMinutes = calculateWorkedMinutes(weeklyEntries);
   const monthlyMinutes = calculateWorkedMinutes(monthlyEntries);
 
-  const weeklyTargetMinutes = weeklyTargetHours * 60;
-  const weeklyDifferenceMinutes = weeklyMinutes - weeklyTargetMinutes;
+  const monthlyTargetMinutes = monthlyTargetHours * 60;
+  const monthlyDifferenceMinutes = monthlyMinutes - monthlyTargetMinutes;
 
-  function getWeeklyDifferenceText() {
-    if (weeklyDifferenceMinutes > 0) {
-      return `+${formatMinutes(weeklyDifferenceMinutes)} im Plus`;
+  function getMonthlyDifferenceText() {
+    if (monthlyDifferenceMinutes > 0) {
+      return `+${formatMinutes(monthlyDifferenceMinutes)} im Plus`;
     }
 
-    if (weeklyDifferenceMinutes < 0) {
-      return `${formatMinutes(Math.abs(weeklyDifferenceMinutes))} im Minus`;
+    if (monthlyDifferenceMinutes < 0) {
+      return `${formatMinutes(Math.abs(monthlyDifferenceMinutes))} im Minus`;
     }
 
     return "Ausgeglichen";
   }
 
-  function getWeeklyDifferenceColor() {
-    if (weeklyDifferenceMinutes > 0) return "text-green-700";
-    if (weeklyDifferenceMinutes < 0) return "text-red-600";
+  function getMonthlyDifferenceColor() {
+    if (monthlyDifferenceMinutes > 0) return "text-green-700";
+    if (monthlyDifferenceMinutes < 0) return "text-red-600";
     return "text-blue-950";
   }
 
@@ -704,23 +705,25 @@ export default function EmployeePage() {
           </div>
 
           <div className="bg-white rounded-2xl shadow p-4">
-            <p className="text-gray-500 mb-1">Diese Woche Ist</p>
+            <p className="text-gray-500 mb-1">Diese Woche</p>
             <p className="text-2xl font-bold text-green-700">
               {formatMinutes(weeklyMinutes)}
             </p>
           </div>
 
           <div className="bg-white rounded-2xl shadow p-4">
-            <p className="text-gray-500 mb-1">Diese Woche Soll</p>
+            <p className="text-gray-500 mb-1">Monats-Soll</p>
             <p className="text-2xl font-bold text-blue-950">
-              {weeklyTargetHours} Std.
+              {monthlyTargetHours} Std.
             </p>
           </div>
 
           <div className="bg-white rounded-2xl shadow p-4">
-            <p className="text-gray-500 mb-1">Saldo</p>
-            <p className={`text-lg xl:text-2xl font-bold leading-snug break-words ${getWeeklyDifferenceColor()}`}>
-                {getWeeklyDifferenceText()}
+            <p className="text-gray-500 mb-1">Monats-Saldo</p>
+            <p
+              className={`text-lg xl:text-2xl font-bold leading-snug break-words ${getMonthlyDifferenceColor()}`}
+            >
+              {getMonthlyDifferenceText()}
             </p>
           </div>
 
