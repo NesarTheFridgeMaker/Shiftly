@@ -234,6 +234,7 @@ export default function TimesPage() {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [targetHours, setTargetHours] = useState<EmployeeTargetHour[]>([]);
   const [openDetails, setOpenDetails] = useState<string | null>(null);
+  const [businessName, setBusinessName] = useState("Shiftly");
 
   const [selectedEmployeeId, setSelectedEmployeeId] = useState("");
   const [selectedAction, setSelectedAction] = useState("check_in");
@@ -289,10 +290,31 @@ export default function TimesPage() {
     setEmployees(data || []);
   }
 
+  async function loadBusiness() {
+  const businessId = await getBusinessId();
+
+  if (!businessId) return;
+
+  const { data, error } = await supabase
+    .from("businesses")
+    .select("name")
+    .eq("id", businessId)
+    .single();
+
+  if (error) {
+    console.error(error);
+    return;
+  }
+
+  if (data?.name) {
+    setBusinessName(data.name);
+  }
+}
+
 useEffect(() => {
   loadTimeEntries();
   loadEmployees();
-  loadTargetHours();
+  loadBusiness();
 }, []);
 
   async function loadTargetHours() {
@@ -419,26 +441,38 @@ async function handleExportExcel() {
   const worksheet = workbook.addWorksheet("Arbeitszeiten");
 
   const monthDate = new Date(`${exportMonth}-01`);
+
   const monthLabel = monthDate.toLocaleDateString("de-DE", {
     month: "long",
     year: "numeric",
   });
 
-  const daysInMonth = new Date(
-    monthDate.getFullYear(),
-    monthDate.getMonth() + 1,
-    0
-  ).getDate();
-
   worksheet.mergeCells("A1:H1");
-  worksheet.getCell("A1").value = `Arbeitszeiten ${monthLabel}`;
-  worksheet.getCell("A1").font = { bold: true, size: 18 };
-  worksheet.getCell("A1").alignment = { horizontal: "center" };
+  worksheet.getCell("A1").value =
+    `${businessName} — Arbeitszeiten ${monthLabel}`;
+
+  worksheet.getCell("A1").font = {
+    bold: true,
+    size: 18,
+  };
+
+  worksheet.getCell("A1").alignment = {
+    horizontal: "center",
+  };
 
   worksheet.mergeCells("A2:H2");
-  worksheet.getCell("A2").value = "Shiftly Export";
-  worksheet.getCell("A2").font = { bold: true, size: 12 };
-  worksheet.getCell("A2").alignment = { horizontal: "center" };
+
+  worksheet.getCell("A2").value =
+    `Export erstellt am ${new Date().toLocaleDateString("de-DE")}`;
+
+  worksheet.getCell("A2").font = {
+    italic: true,
+    size: 11,
+  };
+
+  worksheet.getCell("A2").alignment = {
+    horizontal: "center",
+  };
 
   worksheet.addRow([]);
 
@@ -461,12 +495,6 @@ async function handleExportExcel() {
       pattern: "solid",
       fgColor: { argb: "FFE5E7EB" },
     };
-    cell.border = {
-      top: { style: "thin" },
-      left: { style: "thin" },
-      bottom: { style: "thin" },
-      right: { style: "thin" },
-    };
   });
 
   selectedSummaries.forEach((summary) => {
@@ -477,47 +505,41 @@ async function handleExportExcel() {
       summary.end,
       summary.pauseDuration,
       summary.workDuration,
-      summary.end === "Offen" ? "Offen" : "Abgeschlossen",
-      summary.end === "Offen" ? "Ausstempeln fehlt" : "",
+      summary.end === "Offen"
+        ? "Offen"
+        : "Abgeschlossen",
+
+      summary.end === "Offen"
+        ? "⚠ Ausstempeln fehlt"
+        : "",
     ]);
   });
 
   worksheet.addRow([]);
   worksheet.addRow([]);
-  worksheet.addRow(["Mitarbeiter-Zusammenfassung"]);
 
-  const titleRow = worksheet.lastRow;
+  const summaryTitle = worksheet.addRow([
+    "Mitarbeiter-Zusammenfassung",
+  ]);
 
-  if (titleRow) {
-    titleRow.font = {
-      bold: true,
-      size: 14,
-    };
-  }
+  summaryTitle.font = {
+    bold: true,
+    size: 14,
+  };
 
-worksheet.addRow([
-  "Mitarbeiter",
-  "Arbeitstage",
-  "Monats-Soll",
-  "Ist-Arbeitszeit",
-  "Pause gesamt",
-  "Saldo",
-  "Status",
-]);
+  const summaryHeader = worksheet.addRow([
+    "Mitarbeiter",
+    "Arbeitstage",
+    "Monats-Soll",
+    "Ist-Arbeitszeit",
+    "Pause gesamt",
+    "Saldo",
+    "Status",
+  ]);
 
-  const summaryHeader = worksheet.lastRow;
-
-  if (summaryHeader) {
-    summaryHeader.font = { bold: true };
-
-    summaryHeader.eachCell((cell) => {
-      cell.fill = {
-        type: "pattern",
-        pattern: "solid",
-        fgColor: { argb: "FFE5E7EB" },
-      };
-    });
-  }
+  summaryHeader.font = {
+    bold: true,
+  };
 
   const employeeGroups: Record<
     string,
@@ -539,81 +561,107 @@ worksheet.addRow([
       };
     }
 
-    employeeGroups[summary.employee_name].workMinutes += summary.workMinutes;
-    employeeGroups[summary.employee_name].pauseMinutes += summary.pauseMinutes;
+    employeeGroups[summary.employee_name].workMinutes +=
+      summary.workMinutes;
+
+    employeeGroups[summary.employee_name].pauseMinutes +=
+      summary.pauseMinutes;
+
     employeeGroups[summary.employee_name].days += 1;
   });
 
-  Object.entries(employeeGroups).forEach(([employeeName, data]) => {
-    const target = targetHours.find(
-      (targetHour) => targetHour.employee_id === data.employeeId
-    );
+  Object.entries(employeeGroups).forEach(
+    ([employeeName, data]) => {
 
-const monthlyHours = target?.monthly_hours ?? 173;
+      const target = targetHours.find(
+        (targetHour) =>
+          targetHour.employee_id ===
+          data.employeeId
+      );
 
-const monthlyTargetMinutes =
-  monthlyHours * 60;
+      const monthlyHours =
+        target?.monthly_hours ?? 173;
 
-    const differenceMinutes = data.workMinutes - monthlyTargetMinutes;
+      const monthlyMinutes =
+        monthlyHours * 60;
 
-    let saldoText = "Ausgeglichen";
-    let statusText = "Ausgeglichen";
+      const diff =
+        data.workMinutes -
+        monthlyMinutes;
 
-    if (differenceMinutes > 0) {
-      saldoText = `${formatMinutes(differenceMinutes)} im Plus`;
-      statusText = "Im Plus";
+      let saldo = "Ausgeglichen";
+      let status = "Ausgeglichen";
+
+      if (diff > 0) {
+        saldo =
+          `${formatMinutes(diff)} im Plus`;
+
+        status = "Im Plus";
+      }
+
+      if (diff < 0) {
+        saldo =
+          `${formatMinutes(Math.abs(diff))} im Minus`;
+
+        status = "Im Minus";
+      }
+
+      worksheet.addRow([
+        employeeName,
+        data.days,
+        `${monthlyHours} Std.`,
+        formatMinutes(
+          data.workMinutes
+        ),
+        formatMinutes(
+          data.pauseMinutes
+        ),
+        saldo,
+        status,
+      ]);
     }
-
-    if (differenceMinutes < 0) {
-      saldoText = `${formatMinutes(Math.abs(differenceMinutes))} im Minus`;
-      statusText = "Im Minus";
-    }
-
-    worksheet.addRow([
-      employeeName,
-      data.days,
-      `${monthlyHours} Std.`,
-      formatMinutes(data.workMinutes),
-      formatMinutes(data.workMinutes),
-      formatMinutes(data.pauseMinutes),
-      saldoText,
-      statusText,
-    ]);
-  });
+  );
 
   worksheet.columns = [
-    { width: 24 },
-    { width: 16 },
+    { width: 25 },
+    { width: 15 },
     { width: 18 },
     { width: 18 },
     { width: 18 },
     { width: 18 },
     { width: 18 },
-    { width: 24 },
+    { width: 28 },
   ];
 
-  worksheet.eachRow((row) => {
-    row.eachCell((cell) => {
-      cell.alignment = { vertical: "middle" };
-    });
-  });
+  const buffer =
+    await workbook.xlsx.writeBuffer();
 
-  const buffer = await workbook.xlsx.writeBuffer();
+  const blob = new Blob(
+    [buffer],
+    {
+      type:
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    }
+  );
 
-  const blob = new Blob([buffer], {
-    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-  });
+  const url =
+    window.URL.createObjectURL(blob);
 
-  const url = window.URL.createObjectURL(blob);
-  const link = document.createElement("a");
+  const link =
+    document.createElement("a");
+
+  const safeBusinessName =
+    businessName.replace(/\s+/g, "-");
 
   link.href = url;
-  link.download = `arbeitszeiten-${exportMonth}.xlsx`;
+
+  link.download =
+`${safeBusinessName}-arbeitszeiten-${exportMonth}.xlsx`;
+
   link.click();
 
   window.URL.revokeObjectURL(url);
 }
-
   const dailySummaries = buildDailySummaries(timeEntries);
   const weeklySummaries = buildPeriodSummaries(dailySummaries, "week");
   const monthlySummaries = buildPeriodSummaries(dailySummaries, "month");
