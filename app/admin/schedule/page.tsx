@@ -28,6 +28,13 @@ type Absence = {
   request_status: string;
 };
 
+type ShiftTemplate = {
+  id: string;
+  name: string;
+  start_time: string;
+  end_time: string;
+};
+
 function formatDateForDatabase(date: Date) {
   return date.toLocaleDateString("en-CA");
 }
@@ -85,14 +92,33 @@ function formatAbsenceType(type: string) {
   return type;
 }
 
+function isOvernightShift(startTime: string, endTime: string) {
+  if (!startTime || !endTime) return false;
+
+  return endTime <= startTime;
+}
+
+function formatShiftTime(startTime: string, endTime: string) {
+  const startText = startTime.slice(0, 5);
+  const endText = endTime.slice(0, 5);
+
+  if (isOvernightShift(startText, endText)) {
+    return `${startText} - ${endText} (+1 Tag)`;
+  }
+
+  return `${startText} - ${endText}`;
+}
+
 export default function SchedulePage() {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [shifts, setShifts] = useState<Shift[]>([]);
   const [absences, setAbsences] = useState<Absence[]>([]);
+  const [shiftTemplates, setShiftTemplates] = useState<ShiftTemplate[]>([]);
   const [warning, setWarning] = useState("");
 
   const [employeeId, setEmployeeId] = useState("");
   const [date, setDate] = useState("");
+  const [selectedTemplateId, setSelectedTemplateId] = useState("");
   const [start, setStart] = useState("");
   const [end, setEnd] = useState("");
 
@@ -166,15 +192,39 @@ export default function SchedulePage() {
     setAbsences(data || []);
   }
 
+  async function loadShiftTemplates() {
+    const businessId = await getBusinessId();
+
+    if (!businessId) {
+      console.error("Keine Business-ID gefunden.");
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from("shift_templates")
+      .select("id, name, start_time, end_time")
+      .eq("business_id", businessId)
+      .order("name", { ascending: true });
+
+    if (error) {
+      console.error(error);
+      return;
+    }
+
+    setShiftTemplates((data || []) as ShiftTemplate[]);
+  }
+
   useEffect(() => {
     loadEmployees();
     loadShifts();
     loadAbsences();
+    loadShiftTemplates();
   }, []);
 
   function resetForm() {
     setEmployeeId("");
     setDate("");
+    setSelectedTemplateId("");
     setStart("");
     setEnd("");
     setEditingShiftId(null);
@@ -182,6 +232,23 @@ export default function SchedulePage() {
 
   function getSelectedEmployee() {
     return employees.find((employee) => employee.id === employeeId);
+  }
+
+  function handleSelectTemplate(templateId: string) {
+    setSelectedTemplateId(templateId);
+
+    if (!templateId) {
+      return;
+    }
+
+    const selectedTemplate = shiftTemplates.find(
+      (template) => template.id === templateId
+    );
+
+    if (!selectedTemplate) return;
+
+    setStart(selectedTemplate.start_time.slice(0, 5));
+    setEnd(selectedTemplate.end_time.slice(0, 5));
   }
 
   async function handleSaveShift() {
@@ -258,6 +325,7 @@ export default function SchedulePage() {
     setEditingShiftId(shift.id);
     setEmployeeId(shift.employee_id);
     setDate(shift.shift_date);
+    setSelectedTemplateId("");
     setStart(shift.start_time.slice(0, 5));
     setEnd(shift.end_time.slice(0, 5));
     setWarning("");
@@ -330,7 +398,7 @@ export default function SchedulePage() {
           {editingShiftId ? "Schicht bearbeiten" : "Neue Schicht eintragen"}
         </h2>
 
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
           <select
             value={employeeId}
             onChange={(event) => setEmployeeId(event.target.value)}
@@ -360,6 +428,26 @@ export default function SchedulePage() {
 
           <div className="flex flex-col gap-1">
             <label className="text-sm font-semibold text-gray-600">
+              Vorlage
+            </label>
+
+            <select
+              value={selectedTemplateId}
+              onChange={(event) => handleSelectTemplate(event.target.value)}
+              className="border p-3 rounded-lg bg-white text-black"
+            >
+              <option value="">Manuell</option>
+
+              {shiftTemplates.map((template) => (
+                <option key={template.id} value={template.id}>
+                  {template.name} ({formatShiftTime(template.start_time, template.end_time)})
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="flex flex-col gap-1">
+            <label className="text-sm font-semibold text-gray-600">
               Schichtbeginn
             </label>
 
@@ -382,6 +470,12 @@ export default function SchedulePage() {
               onChange={(event) => setEnd(event.target.value)}
               className="border p-3 rounded-lg bg-white text-black"
             />
+
+            {start && end && isOvernightShift(start, end) && (
+              <p className="text-xs font-semibold text-blue-700 mt-1">
+                Endet am Folgetag
+              </p>
+            )}
           </div>
         </div>
 
@@ -424,10 +518,7 @@ export default function SchedulePage() {
               >
                 <div>
                   <p className="font-semibold">{shift.employee_name}</p>
-                  <p>
-                    {shift.start_time.slice(0, 5)} -{" "}
-                    {shift.end_time.slice(0, 5)}
-                  </p>
+                  <p>{formatShiftTime(shift.start_time, shift.end_time)}</p>
                 </div>
 
                 <div className="flex gap-2">
@@ -535,8 +626,10 @@ export default function SchedulePage() {
                         {shiftForDay ? (
                           <div className="flex flex-col gap-2">
                             <span className="bg-blue-100 text-blue-950 px-3 py-2 rounded-lg inline-block">
-                              {shiftForDay.start_time.slice(0, 5)} -{" "}
-                              {shiftForDay.end_time.slice(0, 5)}
+                              {formatShiftTime(
+                                shiftForDay.start_time,
+                                shiftForDay.end_time
+                              )}
                             </span>
 
                             <div className="flex gap-2">
