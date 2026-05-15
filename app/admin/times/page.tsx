@@ -12,11 +12,18 @@ type TimeEntry = {
   created_at: string;
 };
 
+type Employee = {
+  id: string;
+  name: string;
+  account_status: string;
+};
+
 type WorkSummary = {
   key: string;
   employee_id: string;
   employee_name: string;
   date: string;
+  rawDate: string;
   start: string;
   end: string;
   workMinutes: number;
@@ -51,6 +58,10 @@ function formatTime(dateString: string) {
 
 function formatDate(dateString: string) {
   return new Date(dateString).toLocaleDateString("de-DE");
+}
+
+function formatDateForDatabase(date: Date) {
+  return date.toLocaleDateString("en-CA");
 }
 
 function formatMonth(dateString: string) {
@@ -92,6 +103,10 @@ function formatMinutes(totalMinutes: number) {
   }
 
   return `${hours} Std. ${minutes} Min.`;
+}
+
+function buildDateTime(date: string, time: string) {
+  return new Date(`${date}T${time}:00`).toISOString();
 }
 
 function buildDailySummaries(entries: TimeEntry[]): WorkSummary[] {
@@ -160,6 +175,7 @@ function buildDailySummaries(entries: TimeEntry[]): WorkSummary[] {
       employee_id: sortedEntries[0].employee_id,
       employee_name: sortedEntries[0].employee_name,
       date: formatDate(sortedEntries[0].created_at),
+      rawDate: formatDateForDatabase(new Date(sortedEntries[0].created_at)),
       start: checkIn ? formatTime(checkIn.created_at) : "Offen",
       end: checkOut ? formatTime(checkOut.created_at) : "Offen",
       workMinutes,
@@ -207,34 +223,157 @@ function buildPeriodSummaries(
 
 export default function TimesPage() {
   const [timeEntries, setTimeEntries] = useState<TimeEntry[]>([]);
+  const [employees, setEmployees] = useState<Employee[]>([]);
   const [openDetails, setOpenDetails] = useState<string | null>(null);
 
-async function loadTimeEntries() {
-  const businessId = await getBusinessId();
+  const [selectedEmployeeId, setSelectedEmployeeId] = useState("");
+  const [selectedAction, setSelectedAction] = useState("check_in");
+  const [selectedDate, setSelectedDate] = useState("");
+  const [selectedTime, setSelectedTime] = useState("");
 
-  if (!businessId) {
-    console.error("Keine Business-ID gefunden.");
-    return;
+  async function loadTimeEntries() {
+    const businessId = await getBusinessId();
+
+    if (!businessId) {
+      console.error("Keine Business-ID gefunden.");
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from("time_entries")
+      .select("*")
+      .eq("business_id", businessId)
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      console.error(error);
+      alert(JSON.stringify(error, null, 2));
+      return;
+    }
+
+    setTimeEntries(data || []);
   }
 
-  const { data, error } = await supabase
-    .from("time_entries")
-    .select("*")
-    .eq("business_id", businessId)
-    .order("created_at", { ascending: false });
+  async function loadEmployees() {
+    const businessId = await getBusinessId();
 
-  if (error) {
-    console.error(error);
-    alert(JSON.stringify(error, null, 2));
-    return;
+    if (!businessId) {
+      console.error("Keine Business-ID gefunden.");
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from("employees")
+      .select("id, name, account_status")
+      .eq("business_id", businessId)
+      .eq("account_status", "active")
+      .order("name", { ascending: true });
+
+    if (error) {
+      console.error(error);
+      return;
+    }
+
+    setEmployees(data || []);
   }
-
-  setTimeEntries(data || []);
-}
 
   useEffect(() => {
     loadTimeEntries();
+    loadEmployees();
   }, []);
+
+  async function handleAddTimeEntry() {
+    if (!selectedEmployeeId || !selectedAction || !selectedDate || !selectedTime) {
+      alert("Bitte Mitarbeiter, Aktion, Datum und Uhrzeit auswählen.");
+      return;
+    }
+
+    const businessId = await getBusinessId();
+
+    if (!businessId) {
+      alert("Keine Business-ID gefunden.");
+      return;
+    }
+
+    const selectedEmployee = employees.find(
+      (employee) => employee.id === selectedEmployeeId
+    );
+
+    if (!selectedEmployee) {
+      alert("Mitarbeiter nicht gefunden.");
+      return;
+    }
+
+    const createdAt = buildDateTime(selectedDate, selectedTime);
+
+    const { error } = await supabase.from("time_entries").insert([
+      {
+        employee_id: selectedEmployee.id,
+        employee_name: selectedEmployee.name,
+        action: selectedAction,
+        created_at: createdAt,
+        business_id: businessId,
+      },
+    ]);
+
+    if (error) {
+      console.error(error);
+      alert(JSON.stringify(error, null, 2));
+      return;
+    }
+
+    let newEmployeeStatus = "";
+
+if (selectedAction === "check_in") {
+  newEmployeeStatus = "checked_in";
+}
+
+if (selectedAction === "break_start") {
+  newEmployeeStatus = "on_break";
+}
+
+if (selectedAction === "break_end") {
+  newEmployeeStatus = "checked_in";
+}
+
+if (selectedAction === "check_out") {
+  newEmployeeStatus = "not_checked_in";
+}
+
+if (newEmployeeStatus) {
+  const { error: statusError } = await supabase
+    .from("employees")
+    .update({ status: newEmployeeStatus })
+    .eq("id", selectedEmployee.id)
+    .eq("business_id", businessId);
+
+  if (statusError) {
+    console.error(statusError);
+    alert(JSON.stringify(statusError, null, 2));
+    return;
+  }
+}
+
+    setSelectedEmployeeId("");
+    setSelectedAction("check_in");
+    setSelectedDate("");
+    setSelectedTime("");
+
+    await loadTimeEntries();
+
+    alert("Stempel wurde hinzugefügt.");
+  }
+
+  async function handleQuickAddFromSummary(
+    summary: WorkSummary,
+    action: string
+  ) {
+    setSelectedEmployeeId(summary.employee_id);
+    setSelectedAction(action);
+    setSelectedDate(summary.rawDate);
+    setSelectedTime("");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
 
   const dailySummaries = buildDailySummaries(timeEntries);
   const weeklySummaries = buildPeriodSummaries(dailySummaries, "week");
@@ -245,6 +384,66 @@ async function loadTimeEntries() {
       <h1 className="text-3xl md:text-4xl font-bold text-blue-950 mb-6 md:mb-8">
         Arbeitszeiten
       </h1>
+
+      <div className="bg-white rounded-2xl shadow p-4 md:p-6 mb-8">
+        <h2 className="text-2xl font-semibold text-blue-950 mb-4">
+          Stempel hinzufügen
+        </h2>
+
+        <p className="text-gray-500 mb-5">
+          Nutze diese Funktion, wenn ein Mitarbeiter vergessen hat, sich ein-
+          oder auszustempeln.
+        </p>
+
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <select
+            value={selectedEmployeeId}
+            onChange={(event) => setSelectedEmployeeId(event.target.value)}
+            className="border p-3 rounded-lg bg-white text-black"
+          >
+            <option value="">Mitarbeiter auswählen</option>
+
+            {employees.map((employee) => (
+              <option key={employee.id} value={employee.id}>
+                {employee.name}
+              </option>
+            ))}
+          </select>
+
+          <select
+            value={selectedAction}
+            onChange={(event) => setSelectedAction(event.target.value)}
+            className="border p-3 rounded-lg bg-white text-black"
+          >
+            <option value="check_in">Einstempeln</option>
+            <option value="break_start">Pausenbeginn</option>
+            <option value="break_end">Pausenende</option>
+            <option value="check_out">Ausstempeln</option>
+          </select>
+
+          <input
+            type="date"
+            value={selectedDate}
+            onChange={(event) => setSelectedDate(event.target.value)}
+            className="border p-3 rounded-lg bg-white text-black"
+          />
+
+          <input
+            type="time"
+            value={selectedTime}
+            onChange={(event) => setSelectedTime(event.target.value)}
+            className="border p-3 rounded-lg bg-white text-black"
+          />
+        </div>
+
+        <button
+          type="button"
+          onClick={handleAddTimeEntry}
+          className="mt-5 w-full md:w-auto bg-blue-950 text-white px-5 py-3 rounded-xl hover:bg-blue-900 transition"
+        >
+          Stempel speichern
+        </button>
+      </div>
 
       <div className="bg-white rounded-2xl shadow p-4 md:p-6 mb-8">
         <h2 className="text-2xl font-semibold text-blue-950 mb-4">
@@ -287,16 +486,30 @@ async function loadTimeEntries() {
                 </div>
               </div>
 
-              <button
-                onClick={() =>
-                  setOpenDetails(
-                    openDetails === summary.key ? null : summary.key
-                  )
-                }
-                className="w-full bg-blue-950 text-white px-4 py-3 rounded-xl hover:bg-blue-900 transition"
-              >
-                Stempelverlauf
-              </button>
+              <div className="flex flex-col gap-2">
+                {summary.end === "Offen" && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      handleQuickAddFromSummary(summary, "check_out")
+                    }
+                    className="w-full bg-green-600 text-white px-4 py-3 rounded-xl hover:bg-green-700 transition"
+                  >
+                    Ausstempeln ergänzen
+                  </button>
+                )}
+
+                <button
+                  onClick={() =>
+                    setOpenDetails(
+                      openDetails === summary.key ? null : summary.key
+                    )
+                  }
+                  className="w-full bg-blue-950 text-white px-4 py-3 rounded-xl hover:bg-blue-900 transition"
+                >
+                  Stempelverlauf
+                </button>
+              </div>
 
               {openDetails === summary.key && (
                 <div className="mt-4 bg-white rounded-xl p-4">
@@ -330,7 +543,7 @@ async function loadTimeEntries() {
                 <th className="py-3 px-3">Arbeitszeit</th>
                 <th className="py-3 px-3">Gesamt</th>
                 <th className="py-3 px-3">Pause</th>
-                <th className="py-3 px-3">Details</th>
+                <th className="py-3 px-3">Aktionen</th>
               </tr>
             </thead>
 
@@ -359,16 +572,30 @@ async function loadTimeEntries() {
                     </td>
 
                     <td className="py-3 px-3">
-                      <button
-                        onClick={() =>
-                          setOpenDetails(
-                            openDetails === summary.key ? null : summary.key
-                          )
-                        }
-                        className="bg-blue-950 text-white px-4 py-2 rounded-lg hover:bg-blue-900 transition"
-                      >
-                        Stempelverlauf
-                      </button>
+                      <div className="flex gap-2">
+                        {summary.end === "Offen" && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              handleQuickAddFromSummary(summary, "check_out")
+                            }
+                            className="bg-green-600 text-white px-3 py-2 rounded-lg hover:bg-green-700 transition"
+                          >
+                            Ausstempeln ergänzen
+                          </button>
+                        )}
+
+                        <button
+                          onClick={() =>
+                            setOpenDetails(
+                              openDetails === summary.key ? null : summary.key
+                            )
+                          }
+                          className="bg-blue-950 text-white px-4 py-2 rounded-lg hover:bg-blue-900 transition"
+                        >
+                          Stempelverlauf
+                        </button>
+                      </div>
                     </td>
                   </tr>
 
@@ -413,39 +640,6 @@ async function loadTimeEntries() {
           Wochenübersicht
         </h2>
 
-        <div className="md:hidden flex flex-col gap-4">
-          {weeklySummaries.map((summary) => (
-            <div
-              key={summary.key}
-              className="bg-gray-50 rounded-2xl p-4 border shadow-sm"
-            >
-              <h3 className="text-lg font-bold text-blue-950">
-                {summary.employee_name}
-              </h3>
-
-              <p className="text-sm text-gray-500 mb-4">
-                {summary.period}
-              </p>
-
-              <div className="grid grid-cols-2 gap-3 text-sm">
-                <div className="bg-white rounded-xl p-3">
-                  <p className="text-gray-500 mb-1">Arbeitsstunden</p>
-                  <p className="font-bold text-green-700">
-                    {formatMinutes(summary.workMinutes)}
-                  </p>
-                </div>
-
-                <div className="bg-white rounded-xl p-3">
-                  <p className="text-gray-500 mb-1">Pausenzeit</p>
-                  <p className="font-bold text-yellow-600">
-                    {formatMinutes(summary.pauseMinutes)}
-                  </p>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-
         <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-left">
             <thead>
@@ -481,20 +675,8 @@ async function loadTimeEntries() {
           </table>
         </div>
 
-        {weeklySummaries.length === 0 && (
-          <p className="text-gray-500 mt-4">
-            Noch keine Wochenwerte vorhanden.
-          </p>
-        )}
-      </div>
-
-      <div className="bg-white rounded-2xl shadow p-4 md:p-6">
-        <h2 className="text-2xl font-semibold text-blue-950 mb-4">
-          Monatsübersicht
-        </h2>
-
         <div className="md:hidden flex flex-col gap-4">
-          {monthlySummaries.map((summary) => (
+          {weeklySummaries.map((summary) => (
             <div
               key={summary.key}
               className="bg-gray-50 rounded-2xl p-4 border shadow-sm"
@@ -525,6 +707,18 @@ async function loadTimeEntries() {
             </div>
           ))}
         </div>
+
+        {weeklySummaries.length === 0 && (
+          <p className="text-gray-500 mt-4">
+            Noch keine Wochenwerte vorhanden.
+          </p>
+        )}
+      </div>
+
+      <div className="bg-white rounded-2xl shadow p-4 md:p-6">
+        <h2 className="text-2xl font-semibold text-blue-950 mb-4">
+          Monatsübersicht
+        </h2>
 
         <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-left">
@@ -559,6 +753,39 @@ async function loadTimeEntries() {
               ))}
             </tbody>
           </table>
+        </div>
+
+        <div className="md:hidden flex flex-col gap-4">
+          {monthlySummaries.map((summary) => (
+            <div
+              key={summary.key}
+              className="bg-gray-50 rounded-2xl p-4 border shadow-sm"
+            >
+              <h3 className="text-lg font-bold text-blue-950">
+                {summary.employee_name}
+              </h3>
+
+              <p className="text-sm text-gray-500 mb-4">
+                {summary.period}
+              </p>
+
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div className="bg-white rounded-xl p-3">
+                  <p className="text-gray-500 mb-1">Arbeitsstunden</p>
+                  <p className="font-bold text-green-700">
+                    {formatMinutes(summary.workMinutes)}
+                  </p>
+                </div>
+
+                <div className="bg-white rounded-xl p-3">
+                  <p className="text-gray-500 mb-1">Pausenzeit</p>
+                  <p className="font-bold text-yellow-600">
+                    {formatMinutes(summary.pauseMinutes)}
+                  </p>
+                </div>
+              </div>
+            </div>
+          ))}
         </div>
 
         {monthlySummaries.length === 0 && (
