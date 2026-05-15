@@ -54,6 +54,12 @@ type Notification = {
   created_at: string;
 };
 
+type EmployeeTargetHour = {
+  id: string;
+  employee_id: string;
+  weekly_hours: number;
+};
+
 function formatShiftDate(dateString: string) {
   return new Date(dateString).toLocaleDateString("de-DE", {
     weekday: "short",
@@ -193,6 +199,7 @@ export default function EmployeePage() {
   const [employee, setEmployee] = useState<Employee | null>(null);
   const [employeeId, setEmployeeId] = useState("");
   const [businessName, setBusinessName] = useState("");
+  const [weeklyTargetHours, setWeeklyTargetHours] = useState(40);
 
   const [shifts, setShifts] = useState<Shift[]>([]);
   const [timeEntries, setTimeEntries] = useState<TimeEntry[]>([]);
@@ -201,14 +208,6 @@ export default function EmployeePage() {
 
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
-
-  async function loadBusinessName() {
-    const business = await getBusiness();
-
-    if (!business) return;
-
-    setBusinessName(business.name);
-  }
 
   async function loadEmployeeProfile() {
     const {
@@ -261,31 +260,32 @@ export default function EmployeePage() {
       return;
     }
 
-const business = await getBusiness();
+    const business = await getBusiness();
 
-if (!business) {
-  await supabase.auth.signOut();
-  window.location.href = "/login";
-  return;
-}
+    if (!business) {
+      await supabase.auth.signOut();
+      window.location.href = "/login";
+      return;
+    }
 
-if (business.status === "suspended") {
-  window.location.href = "/account-suspended";
-  return;
-}
+    if (business.status === "suspended") {
+      window.location.href = "/account-suspended";
+      return;
+    }
 
-const currentEmployeeId = typedProfile.employee_id;
+    const currentEmployeeId = typedProfile.employee_id;
 
-setBusinessName(business.name);
-setEmployee(employeeData as Employee);
-setEmployeeId(currentEmployeeId);
+    setBusinessName(business.name);
+    setEmployee(employeeData as Employee);
+    setEmployeeId(currentEmployeeId);
 
-await loadShifts(currentEmployeeId);
-await loadTimeEntries(currentEmployeeId);
-await loadAbsences(currentEmployeeId);
-await loadNotifications(currentEmployeeId);
+    await loadShifts(currentEmployeeId);
+    await loadTimeEntries(currentEmployeeId);
+    await loadAbsences(currentEmployeeId);
+    await loadNotifications(currentEmployeeId);
+    await loadWeeklyTargetHours(currentEmployeeId);
 
-setCheckingAuth(false);
+    setCheckingAuth(false);
   }
 
   async function loadShifts(selectedEmployeeId: string) {
@@ -384,6 +384,25 @@ setCheckingAuth(false);
     setNotifications((data || []) as Notification[]);
   }
 
+  async function loadWeeklyTargetHours(selectedEmployeeId: string) {
+    if (!selectedEmployeeId) return;
+
+    const { data, error } = await supabase
+      .from("employee_target_hours")
+      .select("id, employee_id, weekly_hours")
+      .eq("employee_id", selectedEmployeeId)
+      .maybeSingle();
+
+    if (error) {
+      console.error(error);
+      return;
+    }
+
+    const target = data as EmployeeTargetHour | null;
+
+    setWeeklyTargetHours(target?.weekly_hours ?? 40);
+  }
+
   async function markAllNotificationsAsRead() {
     if (!employeeId) return;
 
@@ -410,72 +429,70 @@ setCheckingAuth(false);
     loadEmployeeProfile();
   }, []);
 
-useEffect(() => {
-  let channel: ReturnType<typeof supabase.channel>;
+  useEffect(() => {
+    let channel: ReturnType<typeof supabase.channel>;
 
-  async function setupRealtime() {
-    if (!employeeId) return;
+    async function setupRealtime() {
+      if (!employeeId) return;
 
-    const businessId = await getBusinessId();
+      const businessId = await getBusinessId();
 
-    if (!businessId) return;
+      if (!businessId) return;
 
-    channel = supabase
-      .channel(`employee-live-${employeeId}`)
+      channel = supabase
+        .channel(`employee-live-${employeeId}`)
 
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "notifications",
-          filter: `employee_id=eq.${employeeId}`,
-        },
-        async () => {
-          await loadNotifications(employeeId);
-        }
-      )
-
-      .on(
-        "postgres_changes",
-        {
-          event: "UPDATE",
-          schema: "public",
-          table: "businesses",
-          filter: `id=eq.${businessId}`,
-        },
-        async () => {
-          const { data } = await supabase
-            .from("businesses")
-            .select("status")
-            .eq("id", businessId)
-            .single();
-
-          if (data?.status === "suspended") {
-            await supabase.auth.signOut();
-
-            alert(
-              "Der Zugriff auf diesen Betrieb wurde gesperrt."
-            );
-
-            window.location.href="/login";
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "notifications",
+            filter: `employee_id=eq.${employeeId}`,
+          },
+          async () => {
+            await loadNotifications(employeeId);
           }
-        }
-      )
+        )
 
-      .subscribe();
-  }
+        .on(
+          "postgres_changes",
+          {
+            event: "UPDATE",
+            schema: "public",
+            table: "businesses",
+            filter: `id=eq.${businessId}`,
+          },
+          async () => {
+            const { data } = await supabase
+              .from("businesses")
+              .select("status")
+              .eq("id", businessId)
+              .single();
 
-  if (employeeId) {
-    setupRealtime();
-  }
+            if (data?.status === "suspended") {
+              await supabase.auth.signOut();
 
-  return () => {
-    if (channel) {
-      supabase.removeChannel(channel);
+              alert("Der Zugriff auf diesen Betrieb wurde gesperrt.");
+
+              window.location.href = "/login";
+            }
+          }
+        )
+
+        .subscribe();
     }
-  };
-}, [employeeId]);
+
+    if (employeeId) {
+      setupRealtime();
+    }
+
+    return () => {
+      if (channel) {
+        supabase.removeChannel(channel);
+      }
+    };
+  }, [employeeId]);
 
   async function handleLogout() {
     await supabase.auth.signOut();
@@ -513,29 +530,18 @@ useEffect(() => {
       return;
     }
 
-    const { data: adminProfiles, error: adminProfilesError } =
-      await supabase
-        .from("profiles")
-        .select("id")
-        .eq("business_id", businessId)
-        .eq("role", "admin");
+    const { error: notificationError } = await supabase.rpc(
+      "create_admin_notification_for_business",
+      {
+        p_business_id: businessId,
+        p_title: "Neuer Urlaubsantrag",
+        p_message: `${employee.name} hat Urlaub vom ${startDate} bis ${endDate} beantragt.`,
+        p_type: "vacation_request",
+      }
+    );
 
-    if (adminProfilesError) {
-      console.error(adminProfilesError);
-    } else {
-const { error: notificationError } = await supabase.rpc(
-  "create_admin_notification_for_business",
-  {
-    p_business_id: businessId,
-    p_title: "Neuer Urlaubsantrag",
-    p_message: `${employee.name} hat Urlaub vom ${startDate} bis ${endDate} beantragt.`,
-    p_type: "vacation_request",
-  }
-);
-
-if (notificationError) {
-  console.error(notificationError);
-}
+    if (notificationError) {
+      console.error(notificationError);
     }
 
     setStartDate("");
@@ -577,6 +583,27 @@ if (notificationError) {
   const todayMinutes = calculateWorkedMinutes(todayEntries);
   const weeklyMinutes = calculateWorkedMinutes(weeklyEntries);
   const monthlyMinutes = calculateWorkedMinutes(monthlyEntries);
+
+  const weeklyTargetMinutes = weeklyTargetHours * 60;
+  const weeklyDifferenceMinutes = weeklyMinutes - weeklyTargetMinutes;
+
+  function getWeeklyDifferenceText() {
+    if (weeklyDifferenceMinutes > 0) {
+      return `+${formatMinutes(weeklyDifferenceMinutes)} Überstunden`;
+    }
+
+    if (weeklyDifferenceMinutes < 0) {
+      return `${formatMinutes(Math.abs(weeklyDifferenceMinutes))} Minusstunden`;
+    }
+
+    return "Ausgeglichen";
+  }
+
+  function getWeeklyDifferenceColor() {
+    if (weeklyDifferenceMinutes > 0) return "text-green-700";
+    if (weeklyDifferenceMinutes < 0) return "text-red-600";
+    return "text-blue-950";
+  }
 
   if (checkingAuth) {
     return (
@@ -668,7 +695,7 @@ if (notificationError) {
           Stundenkonto
         </h2>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
           <div className="bg-white rounded-2xl shadow p-4">
             <p className="text-gray-500 mb-1">Heute</p>
             <p className="text-2xl font-bold text-green-700">
@@ -677,9 +704,23 @@ if (notificationError) {
           </div>
 
           <div className="bg-white rounded-2xl shadow p-4">
-            <p className="text-gray-500 mb-1">Diese Woche</p>
+            <p className="text-gray-500 mb-1">Diese Woche Ist</p>
             <p className="text-2xl font-bold text-green-700">
               {formatMinutes(weeklyMinutes)}
+            </p>
+          </div>
+
+          <div className="bg-white rounded-2xl shadow p-4">
+            <p className="text-gray-500 mb-1">Diese Woche Soll</p>
+            <p className="text-2xl font-bold text-blue-950">
+              {weeklyTargetHours} Std.
+            </p>
+          </div>
+
+          <div className="bg-white rounded-2xl shadow p-4">
+            <p className="text-gray-500 mb-1">Saldo</p>
+            <p className={`text-2xl font-bold ${getWeeklyDifferenceColor()}`}>
+              {getWeeklyDifferenceText()}
             </p>
           </div>
 

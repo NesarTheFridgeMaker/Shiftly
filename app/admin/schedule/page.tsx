@@ -380,6 +380,86 @@ export default function SchedulePage() {
     setSelectedWeekStart(getMonday(new Date()));
   }
 
+  async function handleCopyWeekToNext() {
+  const businessId = await getBusinessId();
+
+  if (!businessId) {
+    alert("Keine Business-ID gefunden.");
+    return;
+  }
+
+  const currentWeekDays = getWeekDays(selectedWeekStart);
+
+  const weekDates = currentWeekDays.map((day) => day.date);
+
+  const shiftsToCopy = shifts.filter((shift) =>
+    weekDates.includes(shift.shift_date)
+  );
+
+  if (shiftsToCopy.length === 0) {
+    alert("In dieser Woche gibt es keine Schichten.");
+    return;
+  }
+
+  const copiedShifts = shiftsToCopy.map((shift) => {
+    const oldDate = new Date(shift.shift_date);
+
+    const newDate = addDays(oldDate, 7);
+
+    return {
+      employee_id: shift.employee_id,
+      employee_name: shift.employee_name,
+      shift_date: formatDateForDatabase(newDate),
+      start_time: shift.start_time,
+      end_time: shift.end_time,
+      business_id: businessId,
+    };
+  });
+
+  const targetDates = copiedShifts.map(
+  (shift) => shift.shift_date
+);
+
+const { data: existingShifts, error: existingError } =
+  await supabase
+    .from("shifts")
+    .select("id")
+    .eq("business_id", businessId)
+    .in("shift_date", targetDates);
+
+if (existingError) {
+  console.error(existingError);
+  return;
+}
+
+if (existingShifts && existingShifts.length > 0) {
+  alert(
+    "In der Zielwoche existieren bereits Schichten. Kopieren abgebrochen."
+  );
+  return;
+}
+
+  const confirmed = confirm(
+    `${copiedShifts.length} Schichten in nächste Woche kopieren?`
+  );
+
+  if (!confirmed) return;
+
+  const { error } = await supabase
+    .from("shifts")
+    .insert(copiedShifts);
+
+  if (error) {
+    console.error(error);
+    alert(JSON.stringify(error,null,2));
+    return;
+  }
+
+  await loadShifts();
+
+  alert("Woche erfolgreich kopiert.");
+}
+
   const todayDate = formatDateForDatabase(new Date());
   const todaysShifts = shifts.filter((shift) => shift.shift_date === todayDate);
 
@@ -578,6 +658,13 @@ export default function SchedulePage() {
               className="bg-gray-200 text-blue-950 px-4 py-2 rounded-lg hover:bg-gray-300 transition"
             >
               Nächste Woche
+            </button>
+
+            <button
+              onClick={handleCopyWeekToNext}
+                className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition"
+>
+                Woche → nächste kopieren
             </button>
           </div>
         </div>
