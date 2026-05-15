@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
+import ExcelJS from "exceljs";
 import { supabase } from "@/lib/supabaseClient";
 import { getBusinessId } from "@/lib/getBusinessId";
 
@@ -230,6 +231,9 @@ export default function TimesPage() {
   const [selectedAction, setSelectedAction] = useState("check_in");
   const [selectedDate, setSelectedDate] = useState("");
   const [selectedTime, setSelectedTime] = useState("");
+  const [exportMonth, setExportMonth] = useState(
+  new Date().toISOString().slice(0, 7)
+);
 
   async function loadTimeEntries() {
     const businessId = await getBusinessId();
@@ -375,6 +379,169 @@ if (newEmployeeStatus) {
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
+  async function handleExportExcel() {
+  const selectedSummaries = dailySummaries.filter((summary) =>
+    summary.rawDate.startsWith(exportMonth)
+  );
+
+  if (selectedSummaries.length === 0) {
+    alert("Für diesen Monat gibt es keine Arbeitszeiten.");
+    return;
+  }
+
+  const workbook = new ExcelJS.Workbook();
+  const worksheet = workbook.addWorksheet("Arbeitszeiten");
+
+  const monthLabel = new Date(`${exportMonth}-01`).toLocaleDateString(
+    "de-DE",
+    {
+      month: "long",
+      year: "numeric",
+    }
+  );
+
+  worksheet.mergeCells("A1:F1");
+  worksheet.getCell("A1").value = `Arbeitszeiten ${monthLabel}`;
+  worksheet.getCell("A1").font = { bold: true, size: 18 };
+  worksheet.getCell("A1").alignment = { horizontal: "center" };
+
+  worksheet.mergeCells("A2:F2");
+  worksheet.getCell("A2").value = "Shiftly Export";
+  worksheet.getCell("A2").font = { bold: true, size: 12 };
+  worksheet.getCell("A2").alignment = { horizontal: "center" };
+
+  worksheet.addRow([]);
+
+  const headerRow = worksheet.addRow([
+    "Mitarbeiter",
+    "Datum",
+    "Arbeitsbeginn",
+    "Arbeitsende",
+    "Pause",
+    "Arbeitszeit",
+  ]);
+
+  headerRow.font = { bold: true };
+  headerRow.eachCell((cell) => {
+    cell.fill = {
+      type: "pattern",
+      pattern: "solid",
+      fgColor: { argb: "FFE5E7EB" },
+    };
+    cell.border = {
+      top: { style: "thin" },
+      left: { style: "thin" },
+      bottom: { style: "thin" },
+      right: { style: "thin" },
+    };
+  });
+
+  selectedSummaries.forEach((summary) => {
+    worksheet.addRow([
+      summary.employee_name,
+      summary.date,
+      summary.start,
+      summary.end,
+      summary.pauseDuration,
+      summary.workDuration,
+    ]);
+  });
+
+worksheet.addRow([]);
+worksheet.addRow([]);
+worksheet.addRow(["Mitarbeiter-Zusammenfassung"]);
+
+const titleRow = worksheet.lastRow;
+
+if (titleRow) {
+  titleRow.font = {
+    bold: true,
+    size: 14,
+  };
+}
+
+worksheet.addRow([
+  "Mitarbeiter",
+  "Arbeitstage",
+  "Gesamt Pause",
+  "Gesamt Arbeitszeit",
+]);
+
+const summaryHeader = worksheet.lastRow;
+
+if (summaryHeader) {
+  summaryHeader.font = { bold: true };
+}
+
+const employeeGroups: Record<
+  string,
+  {
+    workMinutes: number;
+    pauseMinutes: number;
+    days: number;
+  }
+> = {};
+
+selectedSummaries.forEach((summary) => {
+  if (!employeeGroups[summary.employee_name]) {
+    employeeGroups[summary.employee_name] = {
+      workMinutes: 0,
+      pauseMinutes: 0,
+      days: 0,
+    };
+  }
+
+  employeeGroups[summary.employee_name].workMinutes +=
+    summary.workMinutes;
+
+  employeeGroups[summary.employee_name].pauseMinutes +=
+    summary.pauseMinutes;
+
+  employeeGroups[summary.employee_name].days += 1;
+});
+
+Object.entries(employeeGroups).forEach(
+  ([employeeName, data]) => {
+    worksheet.addRow([
+      employeeName,
+      data.days,
+      formatMinutes(data.pauseMinutes),
+      formatMinutes(data.workMinutes),
+    ]);
+  }
+);
+
+  worksheet.columns = [
+    { width: 24 },
+    { width: 16 },
+    { width: 18 },
+    { width: 18 },
+    { width: 18 },
+    { width: 18 },
+  ];
+
+  worksheet.eachRow((row) => {
+    row.eachCell((cell) => {
+      cell.alignment = { vertical: "middle" };
+    });
+  });
+
+  const buffer = await workbook.xlsx.writeBuffer();
+
+  const blob = new Blob([buffer], {
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  });
+
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement("a");
+
+  link.href = url;
+  link.download = `arbeitszeiten-${exportMonth}.xlsx`;
+  link.click();
+
+  window.URL.revokeObjectURL(url);
+}
+
   const dailySummaries = buildDailySummaries(timeEntries);
   const weeklySummaries = buildPeriodSummaries(dailySummaries, "week");
   const monthlySummaries = buildPeriodSummaries(dailySummaries, "month");
@@ -384,6 +551,29 @@ if (newEmployeeStatus) {
       <h1 className="text-3xl md:text-4xl font-bold text-blue-950 mb-6 md:mb-8">
         Arbeitszeiten
       </h1>
+
+      <div className="bg-white rounded-2xl shadow p-4 md:p-6 mb-8">
+  <h2 className="text-2xl font-semibold text-blue-950 mb-4">
+    Excel-Export
+  </h2>
+
+  <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+    <input
+      type="month"
+      value={exportMonth}
+      onChange={(event) => setExportMonth(event.target.value)}
+      className="border p-3 rounded-lg bg-white text-black"
+    />
+
+    <button
+      type="button"
+      onClick={handleExportExcel}
+      className="bg-green-600 text-white px-5 py-3 rounded-xl hover:bg-green-700 transition"
+    >
+      Excel exportieren
+    </button>
+  </div>
+</div>
 
       <div className="bg-white rounded-2xl shadow p-4 md:p-6 mb-8">
         <h2 className="text-2xl font-semibold text-blue-950 mb-4">
