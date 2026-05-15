@@ -111,6 +111,11 @@ export default function AbsencesPage() {
       return;
     }
 
+    if (startDate > endDate) {
+  alert("Das Startdatum darf nicht nach dem Enddatum liegen.");
+  return;
+}
+
     const businessId = await getBusinessId();
 
     if (!businessId) {
