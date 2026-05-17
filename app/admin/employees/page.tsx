@@ -28,10 +28,18 @@ type EmployeeNote = {
   created_at: string;
 };
 
+type EmployeeInvite = {
+  id: string;
+  employee_id: string;
+  invite_code: string;
+  used_at: string | null;
+};
+
 type EmployeeWithTargetHours = Employee & {
   weekly_target_hours: number;
   monthly_target_hours: number;
   notes: EmployeeNote[];
+  invite: EmployeeInvite | null;
 };
 
 function formatAccountStatus(status: string) {
@@ -54,6 +62,11 @@ function formatNoteDate(dateString: string) {
     hour: "2-digit",
     minute: "2-digit",
   });
+}
+
+function generateInviteCode() {
+  const randomPart = Math.random().toString(36).substring(2, 8).toUpperCase();
+  return `SHIFTLY-${randomPart}`;
 }
 
 export default function EmployeesPage() {
@@ -91,6 +104,7 @@ export default function EmployeesPage() {
 
     let targetHours: EmployeeTargetHour[] = [];
     let notes: EmployeeNote[] = [];
+    let invites: EmployeeInvite[] = [];
 
     if (employeeIds.length > 0) {
       const { data: targetData, error: targetError } = await supabase
@@ -116,6 +130,18 @@ export default function EmployeesPage() {
       } else {
         notes = (notesData || []) as EmployeeNote[];
       }
+
+      const { data: inviteData, error: inviteError } = await supabase
+        .from("employee_invites")
+        .select("id, employee_id, invite_code, used_at")
+        .eq("business_id", businessId)
+        .in("employee_id", employeeIds);
+
+      if (inviteError) {
+        console.error(inviteError);
+      } else {
+        invites = (inviteData || []) as EmployeeInvite[];
+      }
     }
 
     const employeesWithData = (employeeData || []).map((employee) => {
@@ -127,11 +153,16 @@ export default function EmployeesPage() {
         (note) => note.employee_id === employee.id
       );
 
+      const invite =
+        invites.find((inviteItem) => inviteItem.employee_id === employee.id) ||
+        null;
+
       return {
         ...employee,
         weekly_target_hours: target?.weekly_hours ?? 40,
         monthly_target_hours: target?.monthly_hours ?? 173,
         notes: employeeNotes,
+        invite,
       };
     });
 
@@ -154,8 +185,8 @@ export default function EmployeesPage() {
       }
 
       if (pin.trim().length !== 4) {
-      alert("Die PIN muss genau 4 Zahlen haben.");
-      return;
+        alert("Die PIN muss genau 4 Zahlen haben.");
+        return;
       }
 
       const parsedMonthlyHours = Number(monthlyHours);
@@ -172,23 +203,24 @@ export default function EmployeesPage() {
         return;
       }
 
-      const { data: existingEmployeeWithPin, error: pinCheckError } = await supabase
-  .from("employees")
-  .select("id")
-  .eq("business_id", businessId)
-  .eq("pin", pin.trim())
-  .maybeSingle();
+      const { data: existingEmployeeWithPin, error: pinCheckError } =
+        await supabase
+          .from("employees")
+          .select("id")
+          .eq("business_id", businessId)
+          .eq("pin", pin.trim())
+          .maybeSingle();
 
-if (pinCheckError) {
-  console.error(pinCheckError);
-  alert(JSON.stringify(pinCheckError, null, 2));
-  return;
-}
+      if (pinCheckError) {
+        console.error(pinCheckError);
+        alert(JSON.stringify(pinCheckError, null, 2));
+        return;
+      }
 
-if (existingEmployeeWithPin) {
-  alert("Diese PIN ist bereits vergeben. Bitte eine andere PIN wählen.");
-  return;
-}
+      if (existingEmployeeWithPin) {
+        alert("Diese PIN ist bereits vergeben. Bitte eine andere PIN wählen.");
+        return;
+      }
 
       const { data: insertedEmployee, error: employeeError } = await supabase
         .from("employees")
@@ -207,20 +239,18 @@ if (existingEmployeeWithPin) {
         .single();
 
       if (employeeError || !insertedEmployee) {
-  console.error(employeeError);
+        console.error(employeeError);
 
-  if (
-    employeeError?.message?.includes(
-      "unique_employee_pin_per_business"
-    )
-  ) {
-    alert("Diese PIN ist bereits vergeben.");
-    return;
-  }
+        if (
+          employeeError?.message?.includes("unique_employee_pin_per_business")
+        ) {
+          alert("Diese PIN ist bereits vergeben.");
+          return;
+        }
 
-  alert("Mitarbeiter konnte nicht erstellt werden.");
-  return;
-}
+        alert("Mitarbeiter konnte nicht erstellt werden.");
+        return;
+      }
 
       const { error: targetHoursError } = await supabase
         .from("employee_target_hours")
@@ -235,6 +265,22 @@ if (existingEmployeeWithPin) {
       if (targetHoursError) {
         console.error(targetHoursError);
         alert(JSON.stringify(targetHoursError, null, 2));
+        return;
+      }
+
+      const { error: inviteError } = await supabase
+        .from("employee_invites")
+        .insert([
+          {
+            business_id: businessId,
+            employee_id: insertedEmployee.id,
+            invite_code: generateInviteCode(),
+          },
+        ]);
+
+      if (inviteError) {
+        console.error(inviteError);
+        alert(JSON.stringify(inviteError, null, 2));
         return;
       }
 
@@ -424,6 +470,38 @@ if (existingEmployeeWithPin) {
     await loadEmployees();
   }
 
+  function renderInvite(employee: EmployeeWithTargetHours) {
+    return (
+      <div className="mt-4 bg-blue-50 rounded-xl p-4 border border-blue-100">
+        <h4 className="font-bold text-blue-950 mb-2">
+          Mitarbeiter-Zugang
+        </h4>
+
+        {employee.invite ? (
+          <>
+            <p className="text-sm text-gray-600 mb-2">
+              Einladungscode für das Mitarbeiter-Dashboard:
+            </p>
+
+            <div className="bg-white rounded-lg p-3 border text-black font-bold tracking-wide">
+              {employee.invite.invite_code}
+            </div>
+
+            <p className="text-xs text-gray-500 mt-2">
+              {employee.invite.used_at
+                ? "Dieser Code wurde bereits verwendet."
+                : "Diesen Code gibt der Mitarbeiter später bei der Registrierung ein."}
+            </p>
+          </>
+        ) : (
+          <p className="text-gray-500 text-sm">
+            Für diesen Mitarbeiter wurde noch kein Einladungscode erstellt.
+          </p>
+        )}
+      </div>
+    );
+  }
+
   function renderNotes(employee: EmployeeWithTargetHours) {
     return (
       <div className="mt-4 bg-white md:bg-gray-50 rounded-xl p-4 border">
@@ -529,8 +607,8 @@ if (existingEmployeeWithPin) {
                 placeholder="4-stellige PIN"
                 value={pin}
                 onChange={(event) => {
-                const onlyNumbers = event.target.value.replace(/\D/g, "");
-                setPin(onlyNumbers.slice(0, 4));
+                  const onlyNumbers = event.target.value.replace(/\D/g, "");
+                  setPin(onlyNumbers.slice(0, 4));
                 }}
                 disabled={isSaving}
                 inputMode="numeric"
@@ -653,6 +731,7 @@ if (existingEmployeeWithPin) {
                 </button>
               </div>
 
+              {renderInvite(employee)}
               {renderNotes(employee)}
             </div>
           ))}
@@ -730,6 +809,7 @@ if (existingEmployeeWithPin) {
                 <div>Aktionen</div>
               </div>
 
+              {renderInvite(employee)}
               {renderNotes(employee)}
             </div>
           ))}
