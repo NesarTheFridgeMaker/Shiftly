@@ -73,6 +73,8 @@ export default function EmployeesPage() {
   const [showForm, setShowForm] = useState(false);
   const [employees, setEmployees] = useState<EmployeeWithTargetHours[]>([]);
   const [isSaving, setIsSaving] = useState(false);
+  const [showInactiveEmployees, setShowInactiveEmployees] =
+  useState(false);
 
   const [name, setName] = useState("");
   const [role, setRole] = useState("Mitarbeiter");
@@ -316,11 +318,21 @@ export default function EmployeesPage() {
       .eq("id", id)
       .eq("business_id", businessId);
 
-    if (error) {
-      console.error(error);
-      alert(JSON.stringify(error, null, 2));
-      return;
-    }
+if (error) {
+  if (
+    error.message?.includes("profiles") ||
+    error.message?.includes("employee_id")
+  ) {
+    alert(
+      "Dieser Mitarbeiter wurde bereits registriert. Bitte deaktivieren Sie ihn stattdessen."
+    );
+    return;
+  }
+
+  console.error(error);
+  alert("Mitarbeiter konnte nicht gelöscht werden.");
+  return;
+}
 
     await loadEmployees();
   }
@@ -561,6 +573,14 @@ export default function EmployeesPage() {
     );
   }
 
+  const activeEmployees = employees.filter(
+  (employee) => employee.account_status === "active"
+);
+
+const inactiveEmployees = employees.filter(
+  (employee) => employee.account_status === "inactive"
+);
+
   return (
     <div>
       <h1 className="text-3xl md:text-4xl font-bold text-blue-950 mb-6 md:mb-8">
@@ -650,7 +670,7 @@ export default function EmployeesPage() {
         )}
 
         <div className="xl:hidden flex flex-col gap-4">
-          {employees.map((employee) => (
+          {activeEmployees.map((employee) => (
             <div
               key={employee.id}
               className="bg-gray-50 rounded-2xl p-4 border shadow-sm"
@@ -738,7 +758,7 @@ export default function EmployeesPage() {
         </div>
 
         <div className="hidden xl:flex flex-col gap-4">
-          {employees.map((employee) => (
+          {activeEmployees.map((employee) => (
             <div key={employee.id} className="border rounded-2xl p-4">
               <div className="grid grid-cols-[1.2fr_1fr_0.7fr_0.8fr_1fr_1.6fr] gap-3 items-center min-w-0">
                 <div className="text-black font-semibold">
@@ -815,7 +835,66 @@ export default function EmployeesPage() {
           ))}
         </div>
 
-        {employees.length === 0 && (
+        {inactiveEmployees.length > 0 && (
+  <div className="mt-8 border-t pt-6">
+
+    <button
+      type="button"
+      onClick={() =>
+        setShowInactiveEmployees(
+          !showInactiveEmployees
+        )
+      }
+      className="bg-gray-200 text-black px-4 py-2 rounded-lg hover:bg-gray-300 transition"
+    >
+      {showInactiveEmployees
+        ? `Deaktivierte Mitarbeiter ausblenden (${inactiveEmployees.length})`
+        : `Deaktivierte Mitarbeiter anzeigen (${inactiveEmployees.length})`}
+    </button>
+
+    {showInactiveEmployees && (
+      <div className="mt-4 flex flex-col gap-3">
+
+        {inactiveEmployees.map((employee) => (
+          <div
+            key={employee.id}
+            className="border rounded-xl p-4 bg-gray-100"
+          >
+            <div className="flex justify-between items-center">
+
+              <div>
+                <p className="font-bold text-black">
+                  {employee.name}
+                </p>
+
+                <p className="text-sm text-gray-500">
+                  {employee.role}
+                </p>
+              </div>
+
+              <button
+                onClick={() =>
+                  handleToggleAccountStatus(
+                    employee.id,
+                    employee.account_status
+                  )
+                }
+                className="bg-green-600 text-white px-4 py-2 rounded-lg"
+              >
+                Reaktivieren
+              </button>
+
+            </div>
+          </div>
+        ))}
+
+      </div>
+    )}
+
+  </div>
+)}
+
+        {activeEmployees.length === 0 && (
           <p className="text-gray-500 mt-4">
             Noch keine Mitarbeiter vorhanden.
           </p>

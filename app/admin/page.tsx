@@ -145,6 +145,44 @@ export default function AdminPage() {
         Dashboard
       </h1>
 
+      <div className="bg-gradient-to-r from-blue-950 to-blue-800 text-white rounded-2xl p-6 shadow mb-8">
+  <h2 className="text-2xl font-bold mb-3">
+    Erste Schritte mit Shiftly
+  </h2>
+
+  <p className="text-blue-100 mb-5">
+    Richte deinen Betrieb ein und starte in wenigen Minuten.
+  </p>
+
+  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+
+    <div className="bg-white/10 rounded-xl p-4">
+      ✅ Mitarbeiter anlegen
+    </div>
+
+    <div className="bg-white/10 rounded-xl p-4">
+      ✅ Schichtvorlagen erstellen
+    </div>
+
+    <div className="bg-white/10 rounded-xl p-4">
+      ✅ Dienstplan erstellen
+    </div>
+
+    <div className="bg-white/10 rounded-xl p-4">
+      ✅ Kiosk öffnen & testen
+    </div>
+
+    <div className="bg-white/10 rounded-xl p-4">
+      ✅ Arbeitszeit stempeln
+    </div>
+
+    <div className="bg-white/10 rounded-xl p-4">
+      ✅ Excel-Export testen
+    </div>
+
+  </div>
+</div>
+
       {adminEmployeeId && (
         <div className="bg-white rounded-2xl p-6 shadow mb-8">
           <h2 className="text-2xl font-bold text-blue-950 mb-4">

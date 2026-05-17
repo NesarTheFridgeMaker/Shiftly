@@ -20,6 +20,28 @@ export default function EmployeeRegisterPage() {
 
     await supabase.auth.signOut();
 
+        const cleanedInviteCode = inviteCode.trim().toUpperCase();
+
+const { data: isInviteValid, error: inviteCheckError } = await supabase.rpc(
+  "check_employee_invite",
+  {
+    p_invite_code: cleanedInviteCode,
+  }
+);
+
+if (inviteCheckError) {
+  console.error(inviteCheckError);
+  alert("Einladungscode konnte nicht geprüft werden.");
+  setIsLoading(false);
+  return;
+}
+
+if (!isInviteValid) {
+  alert("Bitte geben Sie einen gültigen Einladungscode ein.");
+  setIsLoading(false);
+  return;
+}
+
     const { error: signUpError } = await supabase.auth.signUp({
       email,
       password,
@@ -35,7 +57,7 @@ export default function EmployeeRegisterPage() {
     const { error: rpcError } = await supabase.rpc(
       "complete_employee_invite",
       {
-        p_invite_code: inviteCode.trim().toUpperCase(),
+        p_invite_code: cleanedInviteCode,
       }
     );
 

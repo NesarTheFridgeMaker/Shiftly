@@ -453,7 +453,7 @@ useEffect(() => {
         </div>
       )}
 
-      <aside className="hidden lg:flex w-64 shrink-0 bg-blue-950 text-white p-6 min-h-screen flex-col justify-between">
+      <aside className="hidden lg:flex w-64 shrink-0 bg-blue-950 text-white p-6 min-h-screen flex-col">
         <div>
           <div className="mb-10">
             <h1 className="text-3xl font-bold">Shiftly</h1>
@@ -492,15 +492,15 @@ useEffect(() => {
               </a>
             ))}
           </nav>
+          <button
+  type="button"
+  onClick={handleLogout}
+  className="mt-4 text-left text-red-300 hover:text-red-200"
+>
+  Ausloggen
+</button>
         </div>
 
-        <button
-          type="button"
-          onClick={handleLogout}
-          className="text-left text-red-300 hover:text-red-200"
-        >
-          Ausloggen
-        </button>
       </aside>
 
       <section className="flex-1 min-w-0 w-full p-4 lg:p-10 overflow-x-auto">

@@ -8,6 +8,7 @@ type Employee = {
   id: string;
   name: string;
   account_status: string;
+  note?: string;
 };
 
 type Shift = {
@@ -33,6 +34,11 @@ type ShiftTemplate = {
   name: string;
   start_time: string;
   end_time: string;
+};
+
+type EmployeeNote = {
+  employee_id: string;
+  note: string;
 };
 
 function formatDateForDatabase(date: Date) {
@@ -125,28 +131,55 @@ export default function SchedulePage() {
   const [editingShiftId, setEditingShiftId] = useState<string | null>(null);
   const [selectedWeekStart, setSelectedWeekStart] = useState(getMonday(new Date()));
 
-  async function loadEmployees() {
-    const businessId = await getBusinessId();
+async function loadEmployees() {
+  const businessId = await getBusinessId();
 
-    if (!businessId) {
-      console.error("Keine Business-ID gefunden.");
-      return;
-    }
+  if (!businessId) {
+    console.error("Keine Business-ID gefunden.");
+    return;
+  }
 
-    const { data, error } = await supabase
+  const { data: employeeData, error: employeeError } =
+    await supabase
       .from("employees")
-      .select("id, name, account_status")
+      .select("id,name,account_status")
       .eq("business_id", businessId)
       .eq("account_status", "active")
       .order("name", { ascending: true });
 
-    if (error) {
-      console.error(error);
-      return;
-    }
-
-    setEmployees(data || []);
+  if (employeeError) {
+    console.error(employeeError);
+    return;
   }
+
+  const employeeIds =
+    employeeData?.map((employee) => employee.id) || [];
+
+  const { data: notesData } = await supabase
+    .from("employee_notes")
+    .select("employee_id,note")
+    .in("employee_id", employeeIds);
+
+  const notes = (notesData || []) as EmployeeNote[];
+
+  const employeesWithNotes = (employeeData || []).map(
+    (employee) => {
+      const latestNote = notes.find(
+        (note) =>
+          note.employee_id === employee.id
+      );
+
+      return {
+        ...employee,
+        note: latestNote?.note || "",
+      };
+    }
+  );
+
+  setEmployees(
+    employeesWithNotes as Employee[]
+  );
+}
 
   async function loadShifts() {
     const businessId = await getBusinessId();
@@ -509,9 +542,12 @@ if (existingShifts && existingShifts.length > 0) {
             <option value="">Mitarbeiter auswählen</option>
 
             {employees.map((employee) => (
-              <option key={employee.id} value={employee.id}>
-                {employee.name}
-              </option>
+             <option key={employee.id} value={employee.id}>
+  {employee.name}
+  {employee.note
+    ? ` (${employee.note.slice(0,40)})`
+    : ""}
+</option>
             ))}
           </select>
 
