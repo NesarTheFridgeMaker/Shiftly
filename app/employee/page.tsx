@@ -506,6 +506,11 @@ export default function EmployeePage() {
       return;
     }
 
+    if (startDate > endDate) {
+  alert("Das Enddatum darf nicht vor dem Startdatum liegen.");
+  return;
+}
+
     const businessId = await getBusinessId();
 
     if (!businessId) {
