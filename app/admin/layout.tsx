@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { getBusiness } from "@/lib/getBusiness";
 import { getBusinessId } from "@/lib/getBusinessId";
+import Image from "next/image";
 
 type Notification = {
   id: string;
@@ -302,15 +303,14 @@ useEffect(() => {
 
   return (
     <main className="min-h-screen bg-gray-100 lg:flex overflow-x-hidden">
-      <div className="lg:hidden bg-blue-950 text-white p-4 flex items-center justify-between">
+      <div className="lg:hidden bg-blue-950 text-white px-4 py-2 flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Shiftly</h1>
+<img
+  src="/logo/dipera-logo.png"
+  alt="Dipera"
+  className="w-48 h-auto"
+/>
 
-          {businessName && (
-            <p className="text-base font-semibold text-blue-100 mt-1">
-              {businessName}
-            </p>
-          )}
         </div>
 
         <div className="flex items-center gap-3">
@@ -411,13 +411,12 @@ useEffect(() => {
           <div className="bg-blue-950 text-white w-72 h-full p-6 shadow-xl">
             <div className="flex items-start justify-between mb-10">
               <div>
-                <h2 className="text-3xl font-bold">Shiftly</h2>
+<img
+  src="/logo/dipera-logo.png"
+  alt="Dipera"
+  className="w-48 h-auto"
+/>
 
-                {businessName && (
-                  <p className="text-base font-semibold text-blue-100 mt-1">
-                    {businessName}
-                  </p>
-                )}
               </div>
 
               <button
@@ -456,13 +455,11 @@ useEffect(() => {
       <aside className="hidden lg:flex w-64 shrink-0 bg-blue-950 text-white p-6 min-h-screen flex-col">
         <div>
           <div className="mb-10">
-            <h1 className="text-3xl font-bold">Shiftly</h1>
-
-            {businessName && (
-              <p className="text-base font-semibold text-blue-100 mt-1">
-                {businessName}
-              </p>
-            )}
+<img
+  src="/logo/dipera-logo.png"
+  alt="Dipera"
+  className="w-48 h-auto"
+/>
           </div>
 
           <div className="mb-8 relative">

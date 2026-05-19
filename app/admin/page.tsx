@@ -21,6 +21,7 @@ type Shift = {
 };
 
 export default function AdminPage() {
+  const [businessName, setBusinessName] = useState("");
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [shifts, setShifts] = useState<Shift[]>([]);
   const [myShifts, setMyShifts] = useState<Shift[]>([]);
@@ -122,6 +123,26 @@ export default function AdminPage() {
     loadAdminProfile();
   }, []);
 
+  useEffect(() => {
+  async function loadBusinessName() {
+    const businessId = await getBusinessId();
+
+    if (!businessId) return;
+
+    const { data } = await supabase
+      .from("businesses")
+      .select("name")
+      .eq("id", businessId)
+      .single();
+
+    if (data) {
+      setBusinessName(data.name);
+    }
+  }
+
+  loadBusinessName();
+}, []);
+
   function formatShiftDate(dateString: string) {
     return new Date(dateString).toLocaleDateString("de-DE", {
       weekday: "short",
@@ -141,13 +162,21 @@ export default function AdminPage() {
 
   return (
     <div>
-      <h1 className="text-4xl font-bold text-blue-950 mb-8">
-        Dashboard
-      </h1>
+<div className="mb-8">
+  <h1 className="text-4xl font-bold text-blue-950">
+    Dashboard
+  </h1>
+
+  {businessName && (
+    <p className="text-blue-950 font-bold mt-1">
+      {businessName}
+    </p>
+  )}
+</div>
 
       <div className="bg-gradient-to-r from-blue-950 to-blue-800 text-white rounded-2xl p-6 shadow mb-8">
   <h2 className="text-2xl font-bold mb-3">
-    Erste Schritte mit Shiftly
+    Erste Schritte mit Dipera
   </h2>
 
   <p className="text-blue-100 mb-5">
