@@ -8,7 +8,7 @@ export default function AccountSuspendedPage() {
 
         <p className="text-gray-600 mb-6">
           Dieses Unternehmen ist aktuell nicht aktiv. Bitte wende dich an den
-          Shiftly-Support oder aktualisiere deine Zahlungsinformationen.
+          Dipera-Support oder aktualisiere deine Zahlungsinformationen.
         </p>
 
         <a
