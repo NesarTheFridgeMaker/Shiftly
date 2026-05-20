@@ -11,12 +11,19 @@ type ShiftTemplate = {
   end_time: string;
 };
 
+type WorkType = {
+  id: string;
+  name: string;
+};
+
 export default function SettingsPage() {
   const [shiftTemplates, setShiftTemplates] = useState<ShiftTemplate[]>([]);
 
   const [templateName, setTemplateName] = useState("");
   const [templateStart, setTemplateStart] = useState("");
   const [templateEnd, setTemplateEnd] = useState("");
+  const [workTypes, setWorkTypes] = useState<WorkType[]>([]);
+  const [workTypeName, setWorkTypeName] = useState(""); 
 
   async function loadShiftTemplates() {
     const businessId = await getBusinessId();
@@ -100,9 +107,72 @@ export default function SettingsPage() {
     await loadShiftTemplates();
   }
 
-  useEffect(() => {
-    loadShiftTemplates();
-  }, []);
+  async function loadWorkTypes() {
+  const businessId = await getBusinessId();
+
+  if (!businessId) return;
+
+  const { data, error } = await supabase
+    .from("work_types")
+    .select("id,name")
+    .eq("business_id", businessId)
+    .order("name");
+
+  if (error) {
+    console.error(error);
+    return;
+  }
+
+  setWorkTypes((data || []) as WorkType[]);
+}
+
+async function createWorkType() {
+  if (!workTypeName) return;
+
+  const businessId = await getBusinessId();
+
+  if (!businessId) return;
+
+  const { error } = await supabase
+    .from("work_types")
+    .insert([
+      {
+        business_id: businessId,
+        name: workTypeName,
+      },
+    ]);
+
+  if (error) {
+    console.error(error);
+    return;
+  }
+
+  setWorkTypeName("");
+
+  await loadWorkTypes();
+}
+
+async function deleteWorkType(id:string) {
+
+const confirmed=confirm(
+"Arbeitstyp löschen?"
+);
+
+if(!confirmed) return;
+
+await supabase
+.from("work_types")
+.delete()
+.eq("id",id);
+
+await loadWorkTypes();
+
+}
+
+useEffect(() => {
+  loadShiftTemplates();
+  loadWorkTypes();
+}, []);
 
   return (
     <div>
@@ -209,6 +279,96 @@ export default function SettingsPage() {
           </p>
         )}
       </div>
+      <div className="bg-white rounded-2xl shadow p-4 md:p-6 mt-8">
+
+<h2 className="text-2xl font-bold text-blue-950 mb-2">
+Arbeitstypen
+</h2>
+
+<p className="text-gray-500 mb-5">
+Lege Bereiche wie Küche, Service oder Information fest.
+</p>
+
+<div className="flex gap-3 mb-5">
+
+<input
+value={workTypeName}
+onChange={(e)=>setWorkTypeName(e.target.value)}
+placeholder="z.B. Service"
+className="
+border
+p-3
+rounded-xl
+flex-1
+
+bg-white
+text-black
+placeholder:text-gray-400
+
+focus:outline-none
+focus:ring-2
+focus:ring-blue-500
+"
+/>
+
+<button
+onClick={createWorkType}
+className="
+bg-blue-950
+text-white
+px-5
+rounded-xl
+"
+>
+Hinzufügen
+</button>
+
+</div>
+
+<div className="flex flex-col gap-3">
+
+{workTypes.map(type=>(
+
+<div
+key={type.id}
+className="
+bg-gray-50
+rounded-xl
+p-4
+border
+flex
+justify-between
+items-center
+"
+>
+
+<p className="font-bold text-blue-950">
+
+{type.name}
+
+</p>
+
+<button
+onClick={()=>deleteWorkType(type.id)}
+className="
+bg-red-600
+text-white
+px-4 py-2
+rounded-lg
+"
+>
+
+Löschen
+
+</button>
+
+</div>
+
+))}
+
+</div>
+
+</div>
     </div>
   );
 }

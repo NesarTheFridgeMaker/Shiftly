@@ -18,6 +18,9 @@ type Shift = {
   shift_date: string;
   start_time: string;
   end_time: string;
+
+  work_type_id?: string;
+  work_type_name?: string;
 };
 
 type Absence = {
@@ -34,6 +37,11 @@ type ShiftTemplate = {
   name: string;
   start_time: string;
   end_time: string;
+};
+
+type WorkType = {
+  id: string;
+  name: string;
 };
 
 type EmployeeNote = {
@@ -120,6 +128,8 @@ export default function SchedulePage() {
   const [shifts, setShifts] = useState<Shift[]>([]);
   const [absences, setAbsences] = useState<Absence[]>([]);
   const [shiftTemplates, setShiftTemplates] = useState<ShiftTemplate[]>([]);
+  const [workTypes,setWorkTypes] = useState<WorkType[]>([]);
+  const [selectedWorkType,setSelectedWorkType] = useState("");
   const [warning, setWarning] = useState("");
 
   const [employeeId, setEmployeeId] = useState("");
@@ -247,11 +257,31 @@ async function loadEmployees() {
     setShiftTemplates((data || []) as ShiftTemplate[]);
   }
 
+  async function loadWorkTypes() {
+  const businessId = await getBusinessId();
+
+  if (!businessId) return;
+
+  const { data,error } = await supabase
+    .from("work_types")
+    .select("id,name")
+    .eq("business_id",businessId)
+    .order("name");
+
+  if(error){
+    console.error(error);
+    return;
+  }
+
+  setWorkTypes((data || []) as WorkType[]);
+}
+
   useEffect(() => {
     loadEmployees();
     loadShifts();
     loadAbsences();
     loadShiftTemplates();
+    loadWorkTypes();
   }, []);
 
   function resetForm() {
@@ -261,6 +291,7 @@ async function loadEmployees() {
     setStart("");
     setEnd("");
     setEditingShiftId(null);
+    setSelectedWorkType("");
   }
 
   function getSelectedEmployee() {
@@ -344,6 +375,12 @@ if (existingShift) {
           shift_date: date,
           start_time: start,
           end_time: end,
+          business_id: businessId,
+          work_type_id:selectedWorkType,
+          work_type_name:
+          workTypes.find(
+          (type)=>type.id===selectedWorkType
+          )?.name || null
         })
         .eq("id", editingShiftId)
         .eq("business_id", businessId);
@@ -362,6 +399,13 @@ if (existingShift) {
           start_time: start,
           end_time: end,
           business_id: businessId,
+
+          work_type_id:selectedWorkType,
+
+          work_type_name:
+          workTypes.find(
+          (type)=>type.id===selectedWorkType
+          )?.name || null
         },
       ]);
 
@@ -384,6 +428,9 @@ if (existingShift) {
     setStart(shift.start_time.slice(0, 5));
     setEnd(shift.end_time.slice(0, 5));
     setWarning("");
+    setSelectedWorkType(
+    shift.work_type_id || ""
+    );
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
@@ -569,6 +616,45 @@ if (existingShifts && existingShifts.length > 0) {
               Vorlage
             </label>
 
+            <div className="flex flex-col gap-1">
+
+<label className="text-sm font-semibold text-gray-600">
+Arbeitstyp
+</label>
+
+<select
+value={selectedWorkType}
+onChange={(e)=>setSelectedWorkType(e.target.value)}
+className="border p-3 rounded-lg bg-white text-black"
+>
+
+<option value="">
+Auswählen
+</option>
+
+{workTypes.map(type=>(
+
+<option
+key={type.id}
+value={type.id}
+>
+
+{type.name}
+
+</option>
+
+))}
+
+</select>
+
+<div className="flex flex-col gap-1">
+  <label className="text-sm font-semibold text-gray-600">
+    Schichtvorlage
+  </label>
+</div>
+
+</div>
+
             <select
               value={selectedTemplateId}
               onChange={(event) => handleSelectTemplate(event.target.value)}
@@ -656,7 +742,13 @@ if (existingShifts && existingShifts.length > 0) {
               >
                 <div>
                   <p className="font-semibold">{shift.employee_name}</p>
-                  <p>{formatShiftTime(shift.start_time, shift.end_time)}</p>
+                  {shift.work_type_name && (
+  <span className="bg-blue-950 text-white text-xs px-2 py-1 rounded-full w-fit mb-1 inline-block">
+    {shift.work_type_name}
+  </span>
+)}
+
+<p>{formatShiftTime(shift.start_time, shift.end_time)}</p>
                 </div>
 
                 <div className="flex gap-2">
@@ -770,12 +862,38 @@ if (existingShifts && existingShifts.length > 0) {
                       >
                         {shiftForDay ? (
                           <div className="flex flex-col gap-2">
-                            <span className="bg-blue-100 text-blue-950 px-3 py-2 rounded-lg inline-block">
-                              {formatShiftTime(
-                                shiftForDay.start_time,
-                                shiftForDay.end_time
-                              )}
-                            </span>
+<div className="flex flex-col gap-1">
+
+{shiftForDay.work_type_name && (
+<div className="mb-1">
+  <span
+    className="
+    inline-flex
+    items-center
+    bg-blue-950
+    text-white
+    text-xs
+    font-semibold
+    px-3
+    py-1
+    rounded-full
+    "
+  >
+    {shiftForDay.work_type_name}
+  </span>
+</div>
+)}
+
+<span className="bg-blue-100 text-blue-950 px-3 py-2 rounded-lg inline-block">
+
+{formatShiftTime(
+shiftForDay.start_time,
+shiftForDay.end_time
+)}
+
+</span>
+
+</div>
 
                             <div className="flex gap-2">
                               <button
