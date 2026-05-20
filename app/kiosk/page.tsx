@@ -409,9 +409,28 @@ export default function KioskPage() {
   }
 
   return (
-    <main className="h-screen bg-gray-100 p-3 md:p-5 overflow-hidden">
+    <main
+  className="
+  h-screen p-3 md:p-5 overflow-hidden text-white
+  bg-[#081220]
+  bg-[radial-gradient(circle_at_top_left,_rgba(13,71,161,0.25),transparent_35%),radial-gradient(circle_at_bottom_right,_rgba(13,71,161,0.2),transparent_40%)]
+"
+>
       <div className="h-full grid grid-cols-1 xl:grid-cols-3 gap-4">
-        <section className="xl:col-span-2 bg-white rounded-3xl shadow-xl p-4 md:p-6 flex flex-col justify-center min-h-0">
+        <section
+className="
+xl:col-span-2
+rounded-3xl
+border border-white/10
+bg-white/5
+backdrop-blur-xl
+shadow-2xl
+p-6 md:p-8
+flex flex-col
+justify-center
+min-h-0
+"
+>
           <div>
 <div className="flex justify-center mb-6">
   <img
@@ -427,7 +446,7 @@ export default function KioskPage() {
                 erneut versuchen.
               </div>
             ) : (
-              <p className="text-center text-gray-500 mb-4">
+              <p className="text-center text-gray-300 text-lg mb-5">
                 PIN eingeben und Stempelschritt auswählen
               </p>
             )}
@@ -444,14 +463,44 @@ export default function KioskPage() {
                 setPin(onlyNumbers);
               }}
               disabled={locked}
-              className="w-full border p-3 rounded-2xl text-3xl bg-white text-black text-center mb-3 disabled:bg-gray-200 disabled:cursor-not-allowed"
+              className="
+w-full
+p-5
+rounded-3xl
+text-4xl
+text-center
+mb-5
+
+bg-white/5
+border border-white/10
+backdrop-blur-lg
+
+text-white
+placeholder:text-gray-500
+
+focus:outline-none
+focus:ring-2
+focus:ring-blue-500
+
+disabled:bg-gray-700
+"
             />
 
             <div className="grid grid-cols-2 gap-3">
               <button
                 onClick={handleCheckIn}
                 disabled={locked}
-                className="bg-green-600 text-white py-4 rounded-2xl text-xl md:text-2xl font-semibold hover:bg-green-700 transition hover:scale-105 disabled:bg-gray-400 disabled:hover:scale-100"
+                className="
+bg-gradient-to-r from-green-600 to-green-500
+text-white
+py-6
+rounded-3xl
+text-2xl
+font-bold
+shadow-xl
+hover:scale-105
+transition
+"
               >
                 Einstempeln
               </button>
@@ -459,7 +508,17 @@ export default function KioskPage() {
               <button
                 onClick={handleStartBreak}
                 disabled={locked}
-                className="bg-yellow-500 text-white py-4 rounded-2xl text-xl md:text-2xl font-semibold hover:bg-yellow-600 transition hover:scale-105 disabled:bg-gray-400 disabled:hover:scale-100"
+                className="
+bg-gradient-to-r from-yellow-500 to-orange-500
+text-white
+py-6
+rounded-3xl
+text-2xl
+font-bold
+shadow-xl
+hover:scale-105
+transition
+"
               >
                 Pause starten
               </button>
@@ -467,7 +526,17 @@ export default function KioskPage() {
               <button
                 onClick={handleEndBreak}
                 disabled={locked}
-                className="bg-blue-600 text-white py-4 rounded-2xl text-xl md:text-2xl font-semibold hover:bg-blue-700 transition hover:scale-105 disabled:bg-gray-400 disabled:hover:scale-100"
+                className="
+bg-gradient-to-r from-blue-600 to-blue-500
+text-white
+py-6
+rounded-3xl
+text-2xl
+font-bold
+shadow-xl
+hover:scale-105
+transition
+"
               >
                 Pause beenden
               </button>
@@ -475,7 +544,17 @@ export default function KioskPage() {
               <button
                 onClick={handleCheckOut}
                 disabled={locked}
-                className="bg-red-600 text-white py-4 rounded-2xl text-xl md:text-2xl font-semibold hover:bg-red-700 transition hover:scale-105 disabled:bg-gray-400 disabled:hover:scale-100"
+                className="
+bg-gradient-to-r from-red-600 to-red-500
+text-white
+py-6
+rounded-3xl
+text-2xl
+font-bold
+shadow-xl
+hover:scale-105
+transition
+"
               >
                 Ausstempeln
               </button>
@@ -483,8 +562,18 @@ export default function KioskPage() {
           </div>
         </section>
 
-        <aside className="hidden xl:block bg-white rounded-3xl shadow-xl p-4 md:p-6 min-h-0 overflow-hidden">
-          <h2 className="text-2xl font-bold text-blue-950 mb-4">
+        <aside
+className="
+hidden xl:block
+rounded-3xl
+border border-white/10
+bg-white/5
+backdrop-blur-xl
+shadow-2xl
+p-6
+"
+>
+          <h2 className="text-2xl font-bold text-white mb-4">
             Live-Status
           </h2>
 
@@ -532,22 +621,40 @@ export default function KioskPage() {
         </aside>
       </div>
 
-      {showPopup && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-6">
-          <div className="bg-white rounded-3xl shadow-2xl p-6 md:p-8 max-w-lg w-full text-center">
-            <p className="text-2xl md:text-3xl font-bold text-blue-950 mb-6">
-              {message}
-            </p>
+{showPopup && (
+  <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-6">
+    <div
+      className="
+        max-w-lg w-full text-center
+        rounded-3xl
+        border border-white/10
+        bg-[#0B1220]/95
+        shadow-2xl
+        p-8 md:p-10
+      "
+    >
+      <p className="text-2xl md:text-3xl font-bold text-white mb-8 leading-snug">
+        {message}
+      </p>
 
-            <button
-              onClick={() => setShowPopup(false)}
-              className="bg-blue-950 text-white px-10 py-4 rounded-2xl text-xl font-semibold hover:bg-blue-900 transition hover:scale-105"
-            >
-              OK
-            </button>
-          </div>
-        </div>
-      )}
+      <button
+        onClick={() => setShowPopup(false)}
+        className="
+          bg-gradient-to-r from-blue-700 to-blue-500
+          text-white
+          px-12 py-4
+          rounded-2xl
+          text-xl font-bold
+          shadow-xl
+          hover:scale-105
+          transition
+        "
+      >
+        OK
+      </button>
+    </div>
+  </div>
+)}
     </main>
   );
 }
