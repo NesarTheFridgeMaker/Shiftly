@@ -413,15 +413,13 @@ export default function KioskPage() {
       <div className="h-full grid grid-cols-1 xl:grid-cols-3 gap-4">
         <section className="xl:col-span-2 bg-white rounded-3xl shadow-xl p-4 md:p-6 flex flex-col justify-center min-h-0">
           <div>
-            <h1 className="text-3xl md:text-4xl font-bold text-blue-950 mb-1 text-center">
-              Shiftly Terminal
-            </h1>
-
-            {businessName && (
-              <p className="text-center text-lg md:text-xl font-semibold text-blue-700 mb-3">
-                {businessName}
-              </p>
-            )}
+<div className="flex justify-center mb-6">
+  <img
+    src="/logo/dipera-logo.png"
+    alt="Dipera"
+    className="w-56 h-auto"
+  />
+</div>
 
             {locked ? (
               <div className="bg-red-100 text-red-700 p-3 rounded-2xl text-center font-bold mb-4">

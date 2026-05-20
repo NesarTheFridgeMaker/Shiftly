@@ -247,7 +247,7 @@ export default function TimesPage() {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [targetHours, setTargetHours] = useState<EmployeeTargetHour[]>([]);
   const [openDetails, setOpenDetails] = useState<string | null>(null);
-  const [businessName, setBusinessName] = useState("Shiftly");
+  const [businessName, setBusinessName] = useState("Dipera");
 
   const [selectedEmployeeId, setSelectedEmployeeId] = useState("");
   const [selectedAction, setSelectedAction] = useState("check_in");

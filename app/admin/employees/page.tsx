@@ -66,7 +66,7 @@ function formatNoteDate(dateString: string) {
 
 function generateInviteCode() {
   const randomPart = Math.random().toString(36).substring(2, 8).toUpperCase();
-  return `SHIFTLY-${randomPart}`;
+  return `DIPERA-${randomPart}`;
 }
 
 export default function EmployeesPage() {

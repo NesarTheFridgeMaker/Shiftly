@@ -62,9 +62,11 @@ async function handleLogin() {
   return (
     <main className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
       <div className="bg-white rounded-3xl shadow-xl p-8 w-full max-w-md">
-        <h1 className="text-4xl font-bold text-blue-950 mb-2 text-center">
-          Shiftly
-        </h1>
+<img
+  src="/logo/dipera-logo.png"
+  alt="Dipera"
+  className="w-56 h-auto mx-auto"
+ />
 
         <p className="text-gray-500 text-center mb-8">
           Login zum Dashboard

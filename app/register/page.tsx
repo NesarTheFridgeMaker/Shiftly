@@ -62,7 +62,7 @@ export default function RegisterPage() {
     <main className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow p-6 md:p-8 w-full max-w-xl">
         <h1 className="text-3xl font-bold text-blue-950 mb-2">
-          Shiftly registrieren
+          Bei Dipera registrieren
         </h1>
 
         <p className="text-gray-500 mb-6">

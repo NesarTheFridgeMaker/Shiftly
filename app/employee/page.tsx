@@ -630,12 +630,6 @@ export default function EmployeePage() {
               Mitarbeiterbereich
             </h1>
 
-            {businessName && (
-              <p className="text-lg font-semibold text-blue-700 mt-2">
-                {businessName}
-              </p>
-            )}
-
             {employee && (
               <p className="text-gray-500 mt-1">
                 Eingeloggt als {employee.name}
