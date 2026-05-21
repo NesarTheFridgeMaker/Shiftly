@@ -411,12 +411,12 @@ export default function KioskPage() {
   return (
     <main
   className="
-  h-screen p-3 md:p-5 overflow-hidden text-white
+  min-h-screen p-2 sm:p-3 overflow-y-auto text-white
   bg-[#081220]
   bg-[radial-gradient(circle_at_top_left,_rgba(13,71,161,0.25),transparent_35%),radial-gradient(circle_at_bottom_right,_rgba(13,71,161,0.2),transparent_40%)]
 "
 >
-      <div className="h-full grid grid-cols-1 xl:grid-cols-3 gap-4">
+      <div className="min-h-full grid grid-cols-1 xl:grid-cols-3 gap-4">
         <section
 className="
 xl:col-span-2
@@ -425,7 +425,7 @@ border border-white/10
 bg-white/5
 backdrop-blur-xl
 shadow-2xl
-p-6 md:p-8
+p-4 sm:p-5 md:p-8
 flex flex-col
 justify-center
 min-h-0
@@ -436,7 +436,7 @@ min-h-0
   <img
     src="/logo/dipera-logo.png"
     alt="Dipera"
-    className="w-56 h-auto"
+    className="w-40 sm:w-48 md:w-56 h-auto"
   />
 </div>
 
@@ -465,11 +465,11 @@ min-h-0
               disabled={locked}
               className="
 w-full
-p-5
-rounded-3xl
-text-4xl
+p-3 sm:p-4 md:p-5
+rounded-2xl md:rounded-3xl
+text-3xl md:text-4xl
 text-center
-mb-5
+mb-3 md:mb-5
 
 bg-white/5
 border border-white/10
@@ -493,9 +493,9 @@ disabled:bg-gray-700
                 className="
 bg-gradient-to-r from-green-600 to-green-500
 text-white
-py-6
-rounded-3xl
-text-2xl
+py-4 md:py-6
+rounded-2xl md:rounded-3xl
+text-xl md:text-2xl
 font-bold
 shadow-xl
 hover:scale-105
@@ -511,9 +511,9 @@ transition
                 className="
 bg-gradient-to-r from-yellow-500 to-orange-500
 text-white
-py-6
-rounded-3xl
-text-2xl
+py-4 md:py-6
+rounded-2xl md:rounded-3xl
+text-xl md:text-2xl
 font-bold
 shadow-xl
 hover:scale-105
@@ -529,9 +529,9 @@ transition
                 className="
 bg-gradient-to-r from-blue-600 to-blue-500
 text-white
-py-6
-rounded-3xl
-text-2xl
+py-4 md:py-6
+rounded-2xl md:rounded-3xl
+text-xl md:text-2xl
 font-bold
 shadow-xl
 hover:scale-105
@@ -547,9 +547,9 @@ transition
                 className="
 bg-gradient-to-r from-red-600 to-red-500
 text-white
-py-6
-rounded-3xl
-text-2xl
+py-4 md:py-6
+rounded-2xl md:rounded-3xl
+text-xl md:text-2xl
 font-bold
 shadow-xl
 hover:scale-105

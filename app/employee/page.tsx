@@ -18,6 +18,7 @@ type Shift = {
   shift_date: string;
   start_time: string;
   end_time: string;
+  work_type_name?: string;
 };
 
 type TimeEntry = {
@@ -195,6 +196,49 @@ function formatNotificationDate(dateString: string) {
   });
 }
 
+function formatDateForDatabase(date: Date) {
+  return date.toLocaleDateString("en-CA");
+}
+
+function getMonday(date: Date) {
+  const copiedDate = new Date(date);
+  const day = copiedDate.getDay();
+  const difference = copiedDate.getDate() - day + (day === 0 ? -6 : 1);
+
+  copiedDate.setDate(difference);
+  copiedDate.setHours(0, 0, 0, 0);
+
+  return copiedDate;
+}
+
+function addDays(date: Date, days: number) {
+  const copiedDate = new Date(date);
+  copiedDate.setDate(copiedDate.getDate() + days);
+  return copiedDate;
+}
+
+function getWeekDays(weekStart: Date) {
+  const labels = [
+    "Montag",
+    "Dienstag",
+    "Mittwoch",
+    "Donnerstag",
+    "Freitag",
+    "Samstag",
+    "Sonntag",
+  ];
+
+  return labels.map((label, index) => {
+    const date = addDays(weekStart, index);
+
+    return {
+      label,
+      date: formatDateForDatabase(date),
+      displayDate: formatShiftDate(formatDateForDatabase(date)),
+    };
+  });
+}
+
 export default function EmployeePage() {
   const [checkingAuth, setCheckingAuth] = useState(true);
   const [employee, setEmployee] = useState<Employee | null>(null);
@@ -203,6 +247,10 @@ export default function EmployeePage() {
   const [monthlyTargetHours, setMonthlyTargetHours] = useState(173);
 
   const [shifts, setShifts] = useState<Shift[]>([]);
+  const [teamShifts,setTeamShifts] = useState<Shift[]>([]);
+  const [selectedWeekStart, setSelectedWeekStart] = useState(
+  getMonday(new Date())
+  );
   const [timeEntries, setTimeEntries] = useState<TimeEntry[]>([]);
   const [absences, setAbsences] = useState<Absence[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
@@ -281,6 +329,7 @@ export default function EmployeePage() {
     setEmployeeId(currentEmployeeId);
 
     await loadShifts(currentEmployeeId);
+    await loadTeamShifts();
     await loadTimeEntries(currentEmployeeId);
     await loadAbsences(currentEmployeeId);
     await loadNotifications(currentEmployeeId);
@@ -310,6 +359,32 @@ export default function EmployeePage() {
 
     setShifts(data || []);
   }
+
+async function loadTeamShifts(weekStartDate = selectedWeekStart) {
+  const businessId = await getBusinessId();
+
+  if (!businessId) return;
+
+  const weekDays = getWeekDays(weekStartDate);
+
+  const start = weekDays[0].date;
+  const end = weekDays[6].date;
+
+  const { data, error } = await supabase
+    .from("shifts")
+    .select("id, employee_id, employee_name, shift_date, start_time, end_time, work_type_name")
+    .eq("business_id", businessId)
+    .gte("shift_date", start)
+    .lte("shift_date", end)
+    .order("shift_date", { ascending: true });
+
+  if (error) {
+    console.error(error);
+    return;
+  }
+
+  setTeamShifts((data || []) as Shift[]);
+}
 
   async function loadTimeEntries(selectedEmployeeId: string) {
     if (!selectedEmployeeId) return;
@@ -611,6 +686,96 @@ export default function EmployeePage() {
     return "text-blue-950";
   }
 
+  function goToPreviousWeek() {
+  const newWeekStart = addDays(
+    selectedWeekStart,
+    -7
+  );
+
+  setSelectedWeekStart(
+    newWeekStart
+  );
+
+  loadTeamShifts(
+    newWeekStart
+  );
+}
+
+function goToNextWeek() {
+  const newWeekStart =
+    addDays(
+      selectedWeekStart,
+      7
+    );
+
+  setSelectedWeekStart(
+    newWeekStart
+  );
+
+  loadTeamShifts(
+    newWeekStart
+  );
+}
+
+function goToCurrentWeek() {
+  const newWeekStart =
+    getMonday(
+      new Date()
+    );
+
+  setSelectedWeekStart(
+    newWeekStart
+  );
+
+  loadTeamShifts(
+    newWeekStart
+  );
+}
+
+const teamEmployees =
+Array.from(
+
+new Map(
+
+teamShifts.map(
+(shift)=>[
+shift.employee_id,
+
+{
+id:
+shift.employee_id,
+
+name:
+shift.employee_name,
+}
+]
+
+)
+
+).values()
+
+);
+
+const weekDays =
+getWeekDays(
+selectedWeekStart
+);
+
+const todayDate =
+formatDateForDatabase(
+new Date()
+);
+
+const weekStartText =
+formatShiftDate(
+weekDays[0].date
+);
+
+const weekEndText =
+formatShiftDate(
+weekDays[6].date
+);
+
   if (checkingAuth) {
     return (
       <main className="min-h-screen bg-gray-100 flex items-center justify-center">
@@ -763,6 +928,119 @@ export default function EmployeePage() {
             </p>
           )}
         </div>
+
+<div className="bg-white rounded-2xl shadow p-4 md:p-6 mb-6">
+  <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-4">
+    <div>
+      <h2 className="text-2xl font-semibold text-blue-950">
+        Wochenplan
+      </h2>
+
+      <p className="text-gray-500 mt-1">
+        {weekStartText} bis {weekEndText}
+      </p>
+    </div>
+
+    <div className="flex flex-col md:flex-row gap-2">
+      <button
+        onClick={goToPreviousWeek}
+        className="bg-gray-200 text-blue-950 px-4 py-2 rounded-lg hover:bg-gray-300 transition"
+      >
+        Vorherige Woche
+      </button>
+
+      <button
+        onClick={goToCurrentWeek}
+        className="bg-blue-950 text-white px-4 py-2 rounded-lg hover:bg-blue-900 transition"
+      >
+        Aktuelle Woche
+      </button>
+
+      <button
+        onClick={goToNextWeek}
+        className="bg-gray-200 text-blue-950 px-4 py-2 rounded-lg hover:bg-gray-300 transition"
+      >
+        Nächste Woche
+      </button>
+    </div>
+  </div>
+
+  {teamEmployees.length > 0 ? (
+    <div className="overflow-x-auto max-w-full">
+      <table className="min-w-[900px] w-full text-left border-collapse">
+        <thead>
+          <tr className="border-b text-gray-600">
+            <th className="py-3 px-3">Mitarbeiter</th>
+
+            {weekDays.map((day) => (
+              <th
+                key={day.date}
+                className={`py-3 px-3 ${
+                  day.date === todayDate ? "bg-blue-50 text-blue-950" : ""
+                }`}
+              >
+                <div>{day.label}</div>
+                <div className="text-sm font-normal">{day.displayDate}</div>
+              </th>
+            ))}
+          </tr>
+        </thead>
+
+        <tbody>
+          {teamEmployees.map((teamEmployee) => (
+            <tr key={teamEmployee.id} className="border-b">
+              <td className="py-4 px-3 font-semibold text-black">
+                {teamEmployee.name}
+              </td>
+
+              {weekDays.map((day) => {
+                const shiftForDay = teamShifts.find(
+                  (shift) =>
+                    shift.employee_id === teamEmployee.id &&
+                    shift.shift_date === day.date
+                );
+
+                return (
+                  <td
+                    key={day.date}
+                    className={`py-4 px-3 text-black align-top ${
+                      day.date === todayDate ? "bg-blue-50" : ""
+                    }`}
+                  >
+{shiftForDay ? (
+  <div className="flex flex-col gap-1">
+    {shiftForDay.work_type_name ? (
+      <span className="inline-flex items-center bg-blue-950 text-white text-xs font-semibold px-3 py-1 rounded-full w-fit">
+        {shiftForDay.work_type_name}
+      </span>
+    ) : (
+      <span className="inline-flex items-center bg-gray-200 text-gray-600 text-xs font-semibold px-3 py-1 rounded-full w-fit">
+        Ohne Arbeitstyp
+      </span>
+    )}
+
+    <span className="bg-blue-100 text-blue-950 px-3 py-2 rounded-lg inline-block">
+      {shiftForDay.start_time.slice(0, 5)} -{" "}
+      {shiftForDay.end_time.slice(0, 5)}
+    </span>
+  </div>
+) : (
+                      <span className="text-gray-400">Frei</span>
+                    )}
+                  </td>
+                );
+              })}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  ) : (
+    <p className="text-gray-500">
+      Für diese Woche sind keine Team-Schichten eingetragen.
+    </p>
+  )}
+</div>
 
         <div className="bg-white rounded-2xl shadow p-4 md:p-6 mb-6">
           <h2 className="text-2xl font-semibold text-blue-950 mb-4">

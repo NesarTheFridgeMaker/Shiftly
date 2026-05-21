@@ -140,6 +140,8 @@ export default function SchedulePage() {
 
   const [editingShiftId, setEditingShiftId] = useState<string | null>(null);
   const [selectedWeekStart, setSelectedWeekStart] = useState(getMonday(new Date()));
+  const [successMessage, setSuccessMessage] = useState("");
+  const [showSuccessPopup, setShowSuccessPopup] = useState(false);
 
 async function loadEmployees() {
   const businessId = await getBusinessId();
@@ -315,6 +317,11 @@ async function loadEmployees() {
     setEnd(selectedTemplate.end_time.slice(0, 5));
   }
 
+  function showSuccess(text: string) {
+  setSuccessMessage(text);
+  setShowSuccessPopup(true);
+}
+
   async function handleSaveShift() {
     if (!employeeId || !date || !start || !end) {
       alert("Bitte Mitarbeiter, Datum, Schichtbeginn und Schichtende ausfüllen.");
@@ -416,8 +423,16 @@ if (existingShift) {
       }
     }
 
-    resetForm();
-    loadShifts();
+const wasEditing = Boolean(editingShiftId);
+
+resetForm();
+loadShifts();
+
+showSuccess(
+  wasEditing
+    ? "Die Schicht wurde erfolgreich aktualisiert."
+    : "Die Schicht wurde erfolgreich angelegt."
+);
   }
 
   function handleEditShift(shift: Shift) {
@@ -925,6 +940,23 @@ shiftForDay.end_time
           </table>
         </div>
       </div>
+      {showSuccessPopup && (
+  <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-6 z-50">
+    <div className="max-w-lg w-full text-center rounded-3xl border border-white/10 bg-[#0B1220]/95 shadow-2xl p-8 md:p-10">
+      <p className="text-2xl md:text-3xl font-bold text-white mb-8 leading-snug">
+        {successMessage}
+      </p>
+
+      <button
+        type="button"
+        onClick={() => setShowSuccessPopup(false)}
+        className="bg-gradient-to-r from-blue-700 to-blue-500 text-white px-12 py-4 rounded-2xl text-xl font-bold shadow-xl hover:scale-105 transition"
+      >
+        OK
+      </button>
+    </div>
+  </div>
+)}
     </div>
   );
 }
