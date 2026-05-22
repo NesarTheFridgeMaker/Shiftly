@@ -596,22 +596,28 @@ if (existingShifts && existingShifts.length > 0) {
         </h2>
 
         <div className="grid grid-cols-1 xl:grid-cols-5 gap-4">
-          <select
-            value={employeeId}
-            onChange={(event) => setEmployeeId(event.target.value)}
-            className="border p-3 rounded-lg bg-white text-black"
-          >
-            <option value="">Mitarbeiter auswählen</option>
+<div className="flex flex-col gap-1">
+  <label className="text-sm font-semibold text-gray-600">
+    Mitarbeiter
+  </label>
 
-            {employees.map((employee) => (
-             <option key={employee.id} value={employee.id}>
-  {employee.name}
-  {employee.note
-    ? ` (${employee.note.slice(0,40)})`
-    : ""}
-</option>
-            ))}
-          </select>
+  <select
+    value={employeeId}
+    onChange={(event) => setEmployeeId(event.target.value)}
+    className="border p-3 rounded-lg bg-white text-black h-[50px]"
+  >
+    <option value="">Mitarbeiter auswählen</option>
+
+    {employees.map((employee) => (
+      <option key={employee.id} value={employee.id}>
+        {employee.name}
+        {employee.note
+          ? ` (${employee.note.slice(0, 40)})`
+          : ""}
+      </option>
+    ))}
+  </select>
+</div>
 
           <div className="flex flex-col gap-1">
             <label className="text-sm font-semibold text-gray-600">
