@@ -28,6 +28,8 @@ export default function KioskPage() {
   const [failedAttempts, setFailedAttempts] = useState(0);
   const [lockedUntil, setLockedUntil] = useState<number | null>(null);
   const [currentTime, setCurrentTime] = useState(Date.now());
+  const [showAdminPopup, setShowAdminPopup] = useState(false);
+  const [adminPin, setAdminPin] = useState("");
 
   async function checkKioskAccess() {
     const {
@@ -179,6 +181,44 @@ export default function KioskPage() {
       }
     };
   }, [checkingAuth]);
+
+async function handleReturnToAdmin() {
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    alert("Kein Admin angemeldet.");
+    window.location.href = "/login";
+    return;
+  }
+
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("admin_pin")
+    .eq("id", user.id)
+    .single();
+
+  if (error || !data) {
+    console.error(error);
+    alert("Admin-PIN konnte nicht geladen werden.");
+    return;
+  }
+
+  if (!data.admin_pin) {
+    alert("Für diesen Admin wurde noch kein PIN festgelegt.");
+    return;
+  }
+
+  if (adminPin !== data.admin_pin) {
+    alert("Falsche PIN.");
+    return;
+  }
+
+  setAdminPin("");
+  setShowAdminPopup(false);
+  window.location.href = "/admin";
+}
 
   function showMessage(text: string) {
     setMessage(text);
@@ -621,6 +661,23 @@ p-6
         </aside>
       </div>
 
+      <div className="fixed bottom-4 right-4">
+  <button
+    onClick={() => setShowAdminPopup(true)}
+    className="
+      bg-white/10
+      border border-white/10
+      px-5 py-3
+      rounded-xl
+      text-white
+      hover:bg-white/20
+      transition
+    "
+  >
+    Zum Adminbereich
+  </button>
+</div>
+
 {showPopup && (
   <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-6">
     <div
@@ -654,6 +711,80 @@ p-6
       </button>
     </div>
   </div>
+)}
+
+{showAdminPopup && (
+<div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-6">
+
+<div className="
+max-w-md
+w-full
+bg-[#0B1220]
+rounded-3xl
+p-8
+text-center
+">
+
+<h2 className="text-2xl font-bold text-white mb-6">
+Admin-PIN eingeben
+</h2>
+
+<input
+type="password"
+value={adminPin}
+onChange={(e)=>setAdminPin(e.target.value)}
+placeholder="Admin-PIN"
+
+className="
+w-full
+p-4
+rounded-2xl
+text-center
+
+bg-white/5
+border border-white/10
+backdrop-blur-lg
+
+text-white
+placeholder:text-gray-500
+
+focus:outline-none
+focus:ring-2
+focus:ring-blue-500
+
+mb-5
+"
+/>
+
+<div className="flex gap-3">
+
+<button
+onClick={()=>setShowAdminPopup(false)}
+className="
+flex-1
+bg-gray-600
+py-3
+rounded-xl
+"
+>
+Abbrechen
+</button>
+
+<button
+onClick={handleReturnToAdmin}
+className="
+flex-1
+bg-blue-600
+py-3
+rounded-xl
+"
+>
+Weiter
+</button>
+
+</div>
+</div>
+</div>
 )}
     </main>
   );

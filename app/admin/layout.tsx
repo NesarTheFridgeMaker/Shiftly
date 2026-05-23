@@ -5,6 +5,17 @@ import { supabase } from "@/lib/supabaseClient";
 import { getBusiness } from "@/lib/getBusiness";
 import { getBusinessId } from "@/lib/getBusinessId";
 import Image from "next/image";
+import {
+  LayoutDashboard,
+  Users,
+  CalendarDays,
+  CalendarX,
+  Clock3,
+  Settings,
+  Bell,
+  LogOut,
+  ArrowUpRight,
+} from "lucide-react";
 
 type Notification = {
   id: string;
@@ -272,20 +283,41 @@ useEffect(() => {
     (notification) => !notification.is_read
   );
 
-  const navLinks = [
-    { label: "Dashboard", href: "/admin" },
-    { label: "Mitarbeiter", href: "/admin/employees" },
-    { label: "Dienstplan", href: "/admin/schedule" },
-    {
-      label:
-        pendingRequests > 0
-          ? `Abwesenheiten (${pendingRequests})`
-          : "Abwesenheiten",
-      href: "/admin/absences",
-    },
-    { label: "Arbeitszeiten", href: "/admin/times" },
-    { label: "Einstellungen", href: "/admin/settings" },
-  ];
+const navLinks = [
+  {
+    label: "Dashboard",
+    href: "/admin",
+    icon: LayoutDashboard,
+  },
+  {
+    label: "Mitarbeiter",
+    href: "/admin/employees",
+    icon: Users,
+  },
+  {
+    label: "Dienstplan",
+    href: "/admin/schedule",
+    icon: CalendarDays,
+  },
+  {
+    label:
+      pendingRequests > 0
+        ? `Abwesenheiten (${pendingRequests})`
+        : "Abwesenheiten",
+    href: "/admin/absences",
+    icon: CalendarX,
+  },
+  {
+    label: "Arbeitszeiten",
+    href: "/admin/times",
+    icon: Clock3,
+  },
+  {
+    label: "Einstellungen",
+    href: "/admin/settings",
+    icon: Settings,
+  },
+];
 
   if (checkingAuth) {
     return (
@@ -429,24 +461,56 @@ useEffect(() => {
             </div>
 
             <nav className="flex flex-col gap-5">
-              {navLinks.map((link) => (
-                <a
-                  key={link.href}
-                  href={link.href}
-                  onClick={() => setMenuOpen(false)}
-                  className="text-lg hover:text-blue-300"
-                >
-                  {link.label}
-                </a>
-              ))}
+{navLinks.map((link) => {
+  const Icon = link.icon;
 
-              <button
-                type="button"
-                onClick={handleLogout}
-                className="text-left text-lg text-red-300 hover:text-red-200 mt-4"
-              >
-                Ausloggen
-              </button>
+  return (
+    <a
+      key={link.href}
+      href={link.href}
+      onClick={() => setMenuOpen(false)}
+      className="flex items-center gap-3 text-lg hover:text-blue-300"
+    >
+      <Icon size={22} />
+      <span>{link.label}</span>
+    </a>
+  );
+})}
+
+<button
+  type="button"
+  onClick={handleLogout}
+  className="flex items-center gap-3 text-left text-lg text-red-300 hover:text-red-200 mt-4"
+>
+  <LogOut size={22} />
+  <span>Ausloggen</span>
+</button>
+
+              <a
+  href="/kiosk"
+  onClick={() => setMenuOpen(false)}
+  className="
+    mt-10
+    flex
+    items-center
+    justify-between
+    gap-3
+    rounded-2xl
+    bg-white/10
+    border
+    border-white/10
+    px-4
+    py-4
+    text-white
+    text-lg
+    font-bold
+    hover:bg-white/20
+    transition
+  "
+>
+  <span>Stempelterminal öffnen</span>
+  <ArrowUpRight size={24} />
+</a>
             </nav>
           </div>
         </div>
@@ -479,23 +543,53 @@ useEffect(() => {
           </div>
 
           <nav className="flex flex-col gap-4">
-            {navLinks.map((link) => (
-              <a
-                key={link.href}
-                href={link.href}
-                className="hover:text-blue-300"
-              >
-                {link.label}
-              </a>
-            ))}
+{navLinks.map((link) => {
+  const Icon = link.icon;
+
+  return (
+    <a
+      key={link.href}
+      href={link.href}
+      className="flex items-center gap-3 hover:text-blue-300"
+    >
+      <Icon size={20} />
+      <span>{link.label}</span>
+    </a>
+  );
+})}
           </nav>
-          <button
+<button
   type="button"
   onClick={handleLogout}
-  className="mt-4 text-left text-red-300 hover:text-red-200"
+  className="flex items-center gap-3 text-left text-lg text-red-300 hover:text-red-200 mt-4"
 >
-  Ausloggen
+  <LogOut size={22} />
+  <span>Ausloggen</span>
 </button>
+
+<a
+  href="/kiosk"
+  className="
+    mt-10
+    flex
+    items-center
+    justify-between
+    gap-3
+    rounded-2xl
+    bg-white/10
+    border
+    border-white/10
+    px-4
+    py-4
+    text-white
+    font-bold
+    hover:bg-white/20
+    transition
+  "
+>
+  <span>Stempelterminal öffnen</span>
+  <ArrowUpRight size={22} />
+</a>
         </div>
 
       </aside>

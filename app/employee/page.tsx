@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { getBusinessId } from "@/lib/getBusinessId";
 import { getBusiness } from "@/lib/getBusiness";
+import { LogOut } from "lucide-react";
 
 type Employee = {
   id: string;
@@ -802,13 +803,14 @@ weekDays[6].date
             )}
           </div>
 
-          <button
-            type="button"
-            onClick={handleLogout}
-            className="bg-red-600 text-white px-4 py-2 rounded-xl hover:bg-red-700 transition self-start"
-          >
-            Ausloggen
-          </button>
+<button
+  type="button"
+  onClick={handleLogout}
+  className="bg-red-600 text-white px-4 py-2 rounded-xl hover:bg-red-700 transition self-start flex items-center gap-2"
+>
+  <LogOut size={18} />
+  <span>Ausloggen</span>
+</button>
         </div>
 
         {notifications.length > 0 && (

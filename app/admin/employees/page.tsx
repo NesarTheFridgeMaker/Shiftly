@@ -12,6 +12,7 @@ type Employee = {
   status: string;
   account_status: string;
   hours: string;
+  vacation_days_per_year: number;
 };
 
 type EmployeeTargetHour = {
@@ -80,6 +81,9 @@ export default function EmployeesPage() {
   const [role, setRole] = useState("Mitarbeiter");
   const [pin, setPin] = useState("");
   const [monthlyHours, setMonthlyHours] = useState("173");
+  const [vacationDays, setVacationDays] = useState("");
+  const [popupMessage, setPopupMessage] = useState("");
+  const [showPopup, setShowPopup] = useState(false);
 
   const [noteTexts, setNoteTexts] = useState<Record<string, string>>({});
 
@@ -93,7 +97,7 @@ export default function EmployeesPage() {
 
     const { data: employeeData, error: employeeError } = await supabase
       .from("employees")
-      .select("id, name, role, pin, status, account_status, hours")
+      .select("id, name, role, pin, status, account_status, hours, vacation_days_per_year")
       .eq("business_id", businessId)
       .order("created_at", { ascending: false });
 
@@ -175,6 +179,11 @@ export default function EmployeesPage() {
     loadEmployees();
   }, []);
 
+  function showDiperaPopup(message: string) {
+  setPopupMessage(message);
+  setShowPopup(true);
+}
+
   async function handleAddEmployee() {
     if (isSaving) return;
 
@@ -198,12 +207,54 @@ export default function EmployeesPage() {
         return;
       }
 
+      const parsedVacationDays = vacationDays ? Number(vacationDays) : 24;
+
+if (parsedVacationDays < 0) {
+  alert("Bitte gültige Urlaubstage eingeben.");
+  return;
+}
+
       const businessId = await getBusinessId();
 
       if (!businessId) {
         alert("Keine Business-ID gefunden.");
         return;
       }
+
+      const { data: businessData, error: businessError } =
+  await supabase
+    .from("businesses")
+    .select("employee_limit")
+    .eq("id", businessId)
+    .single();
+
+if (businessError || !businessData) {
+  alert("Betriebsdaten konnten nicht geladen werden.");
+  return;
+}
+
+const { count, error: countError } =
+  await supabase
+    .from("employees")
+    .select("*", {
+      count: "exact",
+      head: true,
+    })
+    .eq("business_id", businessId)
+    .eq("account_status", "active");
+
+if (countError) {
+  alert("Mitarbeiteranzahl konnte nicht geprüft werden.");
+  return;
+}
+
+if ((count || 0) >= businessData.employee_limit) {
+showDiperaPopup(
+  `Dein Tarif erlaubt maximal ${businessData.employee_limit} aktive Mitarbeiter.`
+);
+
+  return;
+}
 
       const { data: existingEmployeeWithPin, error: pinCheckError } =
         await supabase
@@ -235,6 +286,7 @@ export default function EmployeesPage() {
             account_status: "active",
             hours: "0 h",
             business_id: businessId,
+            vacation_days_per_year: parsedVacationDays,
           },
         ])
         .select("id")
@@ -290,6 +342,7 @@ export default function EmployeesPage() {
       setRole("Mitarbeiter");
       setPin("");
       setMonthlyHours("173");
+      setVacationDays("");
       setShowForm(false);
 
       await loadEmployees();
@@ -602,7 +655,7 @@ const inactiveEmployees = employees.filter(
               Neuer Mitarbeiter
             </h2>
 
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
               <input
                 type="text"
                 placeholder="Name"
@@ -646,6 +699,22 @@ const inactiveEmployees = employees.filter(
                 className="border p-3 rounded-lg bg-white text-black disabled:bg-gray-200"
               />
             </div>
+
+<div className="flex flex-col gap-1 max-w-[180px]">
+  <label className="text-sm font-semibold text-gray-600">
+    Urlaubstage/Jahr
+  </label>
+
+  <input
+    type="number"
+    min="0"
+    placeholder="z. B. 24"
+    value={vacationDays}
+    onChange={(event) => setVacationDays(event.target.value)}
+    disabled={isSaving}
+    className="border p-3 rounded-lg bg-white text-black disabled:bg-gray-200"
+  />
+</div>
 
             <div className="flex flex-col md:flex-row gap-3 mt-5">
               <button
@@ -900,6 +969,24 @@ const inactiveEmployees = employees.filter(
           </p>
         )}
       </div>
+
+      {showPopup && (
+  <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-6 z-50">
+    <div className="max-w-lg w-full text-center rounded-3xl border border-white/10 bg-[#0B1220]/95 shadow-2xl p-8 md:p-10">
+      <p className="text-2xl md:text-3xl font-bold text-white mb-8 leading-snug">
+        {popupMessage}
+      </p>
+
+      <button
+        type="button"
+        onClick={() => setShowPopup(false)}
+        className="bg-gradient-to-r from-blue-700 to-blue-500 text-white px-12 py-4 rounded-2xl text-xl font-bold shadow-xl hover:scale-105 transition"
+      >
+        OK
+      </button>
+    </div>
+  </div>
+)}
     </div>
   );
 }
