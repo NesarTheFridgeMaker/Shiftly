@@ -289,40 +289,40 @@ Arbeitstypen
 Lege Bereiche wie Küche, Service oder Information fest.
 </p>
 
-<div className="flex gap-3 mb-5">
+<div className="flex flex-col md:flex-row gap-3">
+  <input
+    type="text"
+    placeholder="z.B. Service"
+    value={workTypeName}
+    onChange={(e) => setWorkTypeName(e.target.value)}
+    className="
+      flex-1
+      border
+      p-3
+      rounded-xl
+      bg-white
+      text-black
+      min-w-0
+    "
+  />
 
-<input
-value={workTypeName}
-onChange={(e)=>setWorkTypeName(e.target.value)}
-placeholder="z.B. Service"
-className="
-border
-p-3
-rounded-xl
-flex-1
-
-bg-white
-text-black
-placeholder:text-gray-400
-
-focus:outline-none
-focus:ring-2
-focus:ring-blue-500
-"
-/>
-
-<button
-onClick={createWorkType}
-className="
-bg-blue-950
-text-white
-px-5
-rounded-xl
-"
->
-Hinzufügen
-</button>
-
+  <button
+    type="button"
+    onClick={createWorkType}
+    className="
+      w-full
+      md:w-auto
+      bg-blue-950
+      text-white
+      px-6
+      py-3
+      rounded-xl
+      hover:bg-blue-900
+      transition
+    "
+  >
+    Hinzufügen
+  </button>
 </div>
 
 <div className="flex flex-col gap-3">
