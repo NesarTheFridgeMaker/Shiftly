@@ -3,11 +3,14 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { getBusinessId } from "@/lib/getBusinessId";
+import DiperaPopup from "@/components/DiperaPopup";
 
 type Employee = {
   id: string;
   name: string;
   account_status: string;
+  vacation_days_per_year: number;
+  work_days_per_week: number;
 };
 
 type Absence = {
@@ -46,6 +49,50 @@ function getTypeBadgeClasses(type: string) {
   return "bg-gray-100 text-gray-700";
 }
 
+function calculateVacationDays(
+  start: string,
+  end: string,
+  workDaysPerWeek: number
+) {
+  const startDate = new Date(start);
+  const endDate = new Date(end);
+
+  const totalDays =
+    Math.floor(
+      (endDate.getTime() - startDate.getTime()) /
+        (1000 * 60 * 60 * 24)
+    ) + 1;
+
+  const weeks = totalDays / 7;
+
+  return Math.round(weeks * workDaysPerWeek);
+}
+
+function getApprovedVacationDaysForEmployee(
+  employeeId: string,
+  absences: Absence[],
+  workDaysPerWeek: number
+) {
+  return absences
+    .filter(
+      (absence) =>
+        absence.employee_id === employeeId &&
+        absence.type === "vacation" &&
+        absence.request_status === "approved"
+    )
+    .reduce((total, absence) => {
+      return (
+        total +
+        calculateVacationDays(
+          absence.start_date,
+          absence.end_date,
+          workDaysPerWeek
+        )
+      );
+    }, 0);
+}
+
+
 export default function AbsencesPage() {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [absences, setAbsences] = useState<Absence[]>([]);
@@ -54,6 +101,13 @@ export default function AbsencesPage() {
   const [type, setType] = useState("vacation");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
+  const [popupMessage, setPopupMessage] = useState("");
+  const [showPopup, setShowPopup] = useState(false);
+  const [absenceToDelete, setAbsenceToDelete] = useState<string | null>(null);
+  function showDiperaPopup(message: string) {
+  setPopupMessage(message);
+  setShowPopup(true);
+}
 
   async function loadEmployees() {
     const businessId = await getBusinessId();
@@ -65,7 +119,9 @@ export default function AbsencesPage() {
 
     const { data, error } = await supabase
       .from("employees")
-      .select("id, name, account_status")
+      .select(
+"id,name,account_status,vacation_days_per_year,work_days_per_week"
+)
       .eq("business_id", businessId)
       .eq("account_status", "active")
       .order("name", { ascending: true });
@@ -107,12 +163,12 @@ export default function AbsencesPage() {
 
   async function handleAddAbsence() {
     if (!employeeId || !startDate || !endDate) {
-      alert("Bitte Mitarbeiter, Startdatum und Enddatum ausfüllen.");
+      showDiperaPopup("Bitte Mitarbeiter, Startdatum und Enddatum ausfüllen.");
       return;
     }
 
     if (startDate > endDate) {
-  alert("Das Startdatum darf nicht nach dem Enddatum liegen.");
+  showDiperaPopup("Das Startdatum darf nicht nach dem Enddatum liegen.");
   return;
 }
 
@@ -138,11 +194,36 @@ export default function AbsencesPage() {
 );
 
 if (overlappingAbsence) {
-  alert(
-    `Für diesen Mitarbeiter existiert bereits eine Abwesenheit vom ${overlappingAbsence.start_date} bis ${overlappingAbsence.end_date}.`
-  );
+showDiperaPopup(
+  `Für diesen Mitarbeiter existiert bereits eine Abwesenheit vom ${overlappingAbsence.start_date} bis ${overlappingAbsence.end_date}.`
+);
 
   return;
+}
+
+if (type === "vacation") {
+  const requestedVacationDays = calculateVacationDays(
+    startDate,
+    endDate,
+    selectedEmployee.work_days_per_week ?? 5
+  );
+
+  const approvedVacationDays = getApprovedVacationDaysForEmployee(
+    selectedEmployee.id,
+    absences,
+    selectedEmployee.work_days_per_week ?? 5
+  );
+
+  const remainingVacationDays =
+    (selectedEmployee.vacation_days_per_year ?? 24) -
+    approvedVacationDays;
+
+  if (requestedVacationDays > remainingVacationDays) {
+showDiperaPopup(
+  `${selectedEmployee.name} hat nur noch ${remainingVacationDays} Urlaubstage verfügbar. Diese Abwesenheit umfasst ${requestedVacationDays} Tage.`
+);
+    return;
+  }
 }
 
     const { error } = await supabase.from("absences").insert([
@@ -169,6 +250,8 @@ if (overlappingAbsence) {
     setEndDate("");
 
     loadAbsences();
+
+    showDiperaPopup("Abwesenheit wurde erfolgreich gespeichert.");
   }
 
 async function handleUpdateRequestStatus(id: string, newStatus: string) {
@@ -219,6 +302,12 @@ async function handleUpdateRequestStatus(id: string, newStatus: string) {
   }
 
   loadAbsences();
+
+showDiperaPopup(
+  newStatus === "approved"
+    ? "Der Antrag wurde genehmigt."
+    : "Der Antrag wurde abgelehnt."
+);
 }
 
   async function handleDeleteAbsence(id: string) {
@@ -242,6 +331,8 @@ async function handleUpdateRequestStatus(id: string, newStatus: string) {
     }
 
     loadAbsences();
+
+showDiperaPopup("Die Abwesenheit wurde gelöscht.");
   }
 
   const pendingAbsences = absences.filter(
@@ -511,7 +602,7 @@ async function handleUpdateRequestStatus(id: string, newStatus: string) {
               </div>
 
               <button
-                onClick={() => handleDeleteAbsence(absence.id)}
+                onClick={() => setAbsenceToDelete(absence.id)}
                 className="w-full bg-red-600 text-white px-3 py-3 rounded-lg hover:bg-red-700 transition"
               >
                 Löschen
@@ -568,7 +659,7 @@ async function handleUpdateRequestStatus(id: string, newStatus: string) {
 
                   <td className="py-3 px-4">
                     <button
-                      onClick={() => handleDeleteAbsence(absence.id)}
+                      onClick={() => setAbsenceToDelete(absence.id)}
                       className="bg-red-600 text-white px-3 py-2 rounded-lg hover:bg-red-700 transition"
                     >
                       Löschen
@@ -586,6 +677,31 @@ async function handleUpdateRequestStatus(id: string, newStatus: string) {
           </p>
         )}
       </div>
+
+      <DiperaPopup
+  open={showPopup}
+  message={popupMessage}
+  onClose={() => setShowPopup(false)}
+
+  
+  
+/>
+
+<DiperaPopup
+  open={Boolean(absenceToDelete)}
+  message="Möchtest du diese Abwesenheit wirklich löschen?"
+  onClose={() => setAbsenceToDelete(null)}
+  onConfirm={() => {
+    if (!absenceToDelete) return;
+
+    handleDeleteAbsence(absenceToDelete);
+    setAbsenceToDelete(null);
+  }}
+  confirmText="Löschen"
+  cancelText="Abbrechen"
+/>
     </div>
+
+    
   );
 }

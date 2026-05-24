@@ -5,11 +5,14 @@ import { supabase } from "@/lib/supabaseClient";
 import { getBusinessId } from "@/lib/getBusinessId";
 import { getBusiness } from "@/lib/getBusiness";
 import { LogOut } from "lucide-react";
+import DiperaPopup from "@/components/DiperaPopup";
 
 type Employee = {
   id: string;
   name: string;
   account_status: string;
+  vacation_days_per_year: number;
+  work_days_per_week: number;
 };
 
 type Shift = {
@@ -258,6 +261,8 @@ export default function EmployeePage() {
 
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
+  const [popupMessage, setPopupMessage] = useState("");
+  const [showPopup, setShowPopup] = useState(false);
 
   async function loadEmployeeProfile() {
     const {
@@ -298,7 +303,9 @@ export default function EmployeePage() {
 
     const { data: employeeData, error: employeeError } = await supabase
       .from("employees")
-      .select("id, name, account_status")
+      .select(
+"id,name,account_status,vacation_days_per_year,work_days_per_week"
+)
       .eq("id", typedProfile.employee_id)
       .eq("business_id", typedProfile.business_id)
       .single();
@@ -576,11 +583,58 @@ async function loadTeamShifts(weekStartDate = selectedWeekStart) {
     window.location.href = "/login";
   }
 
+function calculateVacationDays(
+start:string,
+end:string
+){
+
+const startDate=
+new Date(start);
+
+const endDate=
+new Date(end);
+
+const totalDays=
+Math.floor(
+(
+endDate.getTime()-
+startDate.getTime()
+)
+/
+(1000*60*60*24)
+)+1;
+
+const weeks=
+totalDays/7;
+
+const workDaysPerWeek=
+employee?.work_days_per_week ?? 5;
+
+return Math.round(
+weeks*
+workDaysPerWeek
+);
+}
+
+function showDiperaPopup(message: string) {
+  setPopupMessage(message);
+  setShowPopup(true);
+}
+
   async function handleVacationRequest() {
     if (!employee || !employeeId || !startDate || !endDate) {
       alert("Bitte Von-Datum und Bis-Datum auswählen.");
       return;
     }
+
+    const requestedVacationDays = calculateVacationDays(startDate, endDate);
+
+if (requestedVacationDays > remainingVacationDays) {
+showDiperaPopup(
+  `Du hast nur noch ${remainingVacationDays} Urlaubstage verfügbar. Dein Antrag umfasst ${requestedVacationDays} Tage.`
+);
+  return;
+}
 
     if (startDate > endDate) {
   alert("Das Enddatum darf nicht vor dem Startdatum liegen.");
@@ -631,7 +685,7 @@ async function loadTeamShifts(weekStartDate = selectedWeekStart) {
 
     await loadAbsences(employeeId);
 
-    alert("Dein Urlaubsantrag wurde gesendet.");
+    showDiperaPopup("Dein Urlaubsantrag wurde erfolgreich gesendet.");
   }
 
   const unreadNotifications = notifications.filter(
@@ -776,6 +830,28 @@ const weekEndText =
 formatShiftDate(
 weekDays[6].date
 );
+
+const approvedVacationDays =
+  absences
+    .filter(
+      (absence) =>
+        absence.type === "vacation" &&
+        absence.request_status === "approved"
+    )
+    .reduce((total, absence) => {
+      return (
+        total +
+        calculateVacationDays(
+          absence.start_date,
+          absence.end_date
+        )
+      );
+    }, 0);
+
+const remainingVacationDays=
+(employee?.vacation_days_per_year ?? 24)
+-
+approvedVacationDays;
 
   if (checkingAuth) {
     return (
@@ -1085,6 +1161,40 @@ weekDays[6].date
           )}
         </div>
 
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+
+<div className="bg-white rounded-2xl shadow p-4">
+<p className="text-gray-500 mb-1">
+Urlaub/Jahr
+</p>
+
+<p className="text-2xl font-bold text-blue-950">
+{employee?.vacation_days_per_year ?? 24}
+</p>
+</div>
+
+<div className="bg-white rounded-2xl shadow p-4">
+<p className="text-gray-500 mb-1">
+Genehmigt
+</p>
+
+<p className="text-2xl font-bold text-green-700">
+{approvedVacationDays}
+</p>
+</div>
+
+<div className="bg-white rounded-2xl shadow p-4">
+<p className="text-gray-500 mb-1">
+Resturlaub
+</p>
+
+<p className="text-2xl font-bold text-blue-950">
+{remainingVacationDays}
+</p>
+</div>
+
+</div>
+
         <div className="bg-white rounded-2xl shadow p-4 md:p-6">
           <h2 className="text-2xl font-semibold text-blue-950 mb-4">
             Urlaub beantragen
@@ -1126,6 +1236,12 @@ weekDays[6].date
           </button>
         </div>
       </div>
+
+<DiperaPopup
+  open={showPopup}
+  message={popupMessage}
+  onClose={() => setShowPopup(false)}
+/>
     </main>
   );
 }

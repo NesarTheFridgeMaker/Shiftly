@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { getBusinessId } from "@/lib/getBusinessId";
+import DiperaPopup from "@/components/DiperaPopup";
 
 type Employee = {
   id: string;
@@ -13,6 +14,7 @@ type Employee = {
   account_status: string;
   hours: string;
   vacation_days_per_year: number;
+  work_days_per_week: number;
 };
 
 type EmployeeTargetHour = {
@@ -82,8 +84,14 @@ export default function EmployeesPage() {
   const [pin, setPin] = useState("");
   const [monthlyHours, setMonthlyHours] = useState("173");
   const [vacationDays, setVacationDays] = useState("");
+  const [workDaysPerWeek, setWorkDaysPerWeek] = useState("5");
   const [popupMessage, setPopupMessage] = useState("");
   const [showPopup, setShowPopup] = useState(false);
+  const [employeeToDelete, setEmployeeToDelete] =
+  useState<string | null>(null);
+
+const [noteToDelete, setNoteToDelete] =
+  useState<string | null>(null);
 
   const [noteTexts, setNoteTexts] = useState<Record<string, string>>({});
 
@@ -97,7 +105,7 @@ export default function EmployeesPage() {
 
     const { data: employeeData, error: employeeError } = await supabase
       .from("employees")
-      .select("id, name, role, pin, status, account_status, hours, vacation_days_per_year")
+      .select("id, name, role, pin, status, account_status, hours, vacation_days_per_year, work_days_per_week")
       .eq("business_id", businessId)
       .order("created_at", { ascending: false });
 
@@ -209,6 +217,20 @@ export default function EmployeesPage() {
 
       const parsedVacationDays = vacationDays ? Number(vacationDays) : 24;
 
+      const parsedWorkDays =
+Number(workDaysPerWeek);
+
+if (
+parsedWorkDays < 1 ||
+parsedWorkDays > 7
+) {
+alert(
+"Arbeitstage pro Woche müssen zwischen 1–7 liegen."
+);
+
+return;
+}
+
 if (parsedVacationDays < 0) {
   alert("Bitte gültige Urlaubstage eingeben.");
   return;
@@ -287,6 +309,8 @@ showDiperaPopup(
             hours: "0 h",
             business_id: businessId,
             vacation_days_per_year: parsedVacationDays,
+            work_days_per_week:
+            parsedWorkDays,
           },
         ])
         .select("id")
@@ -343,6 +367,7 @@ showDiperaPopup(
       setPin("");
       setMonthlyHours("173");
       setVacationDays("");
+      setWorkDaysPerWeek("5");
       setShowForm(false);
 
       await loadEmployees();
@@ -352,11 +377,6 @@ showDiperaPopup(
   }
 
   async function handleDeleteEmployee(id: string) {
-    const confirmed = confirm(
-      "Möchtest du diesen Mitarbeiter wirklich löschen?"
-    );
-
-    if (!confirmed) return;
 
     const businessId = await getBusinessId();
 
@@ -509,9 +529,6 @@ if (error) {
   }
 
   async function handleDeleteNote(noteId: string) {
-    const confirmed = confirm("Möchtest du diese Notiz wirklich löschen?");
-
-    if (!confirmed) return;
 
     const businessId = await getBusinessId();
 
@@ -610,7 +627,7 @@ if (error) {
 
                   <button
                     type="button"
-                    onClick={() => handleDeleteNote(note.id)}
+                    onClick={() => setNoteToDelete(note.id)}
                     className="bg-red-600 text-white px-3 py-1 rounded-lg hover:bg-red-700 transition text-sm"
                   >
                     Löschen
@@ -704,6 +721,27 @@ const inactiveEmployees = employees.filter(
   <label className="text-sm font-semibold text-gray-600">
     Urlaubstage/Jahr
   </label>
+
+  <div className="flex flex-col gap-1 max-w-[180px]">
+  <label className="text-sm font-semibold text-gray-600">
+    Arbeitstage/Woche
+  </label>
+
+  <input
+    type="number"
+    min="1"
+    max="7"
+    placeholder="z. B. 5"
+    value={workDaysPerWeek}
+    onChange={(event) =>
+      setWorkDaysPerWeek(
+        event.target.value
+      )
+    }
+    disabled={isSaving}
+    className="border p-3 rounded-lg bg-white text-black disabled:bg-gray-200"
+  />
+</div>
 
   <input
     type="number"
@@ -813,7 +851,7 @@ const inactiveEmployees = employees.filter(
 
                 <button
                   type="button"
-                  onClick={() => handleDeleteEmployee(employee.id)}
+                  onClick={() => setEmployeeToDelete(employee.id)}
                   className="w-full bg-red-600 text-white px-3 py-3 rounded-lg hover:bg-red-700 transition"
                 >
                   Löschen
@@ -881,7 +919,7 @@ const inactiveEmployees = employees.filter(
 
                   <button
                     type="button"
-                    onClick={() => handleDeleteEmployee(employee.id)}
+                    onClick={() => setEmployeeToDelete(employee.id)}
                     className="bg-red-600 text-white px-3 py-2 rounded-lg hover:bg-red-700 transition"
                   >
                     Löschen
@@ -970,23 +1008,37 @@ const inactiveEmployees = employees.filter(
         )}
       </div>
 
-      {showPopup && (
-  <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-6 z-50">
-    <div className="max-w-lg w-full text-center rounded-3xl border border-white/10 bg-[#0B1220]/95 shadow-2xl p-8 md:p-10">
-      <p className="text-2xl md:text-3xl font-bold text-white mb-8 leading-snug">
-        {popupMessage}
-      </p>
+<DiperaPopup
+  open={showPopup}
+  message={popupMessage}
+  onClose={() => setShowPopup(false)}
+/>
 
-      <button
-        type="button"
-        onClick={() => setShowPopup(false)}
-        className="bg-gradient-to-r from-blue-700 to-blue-500 text-white px-12 py-4 rounded-2xl text-xl font-bold shadow-xl hover:scale-105 transition"
-      >
-        OK
-      </button>
-    </div>
-  </div>
-)}
+<DiperaPopup
+  open={Boolean(employeeToDelete)}
+  message="Möchtest du diesen Mitarbeiter wirklich löschen?"
+  onClose={() => setEmployeeToDelete(null)}
+  onConfirm={() => {
+    if (!employeeToDelete) return;
+    handleDeleteEmployee(employeeToDelete);
+    setEmployeeToDelete(null);
+  }}
+  confirmText="Löschen"
+  cancelText="Abbrechen"
+/>
+
+<DiperaPopup
+  open={Boolean(noteToDelete)}
+  message="Möchtest du diese Notiz wirklich löschen?"
+  onClose={() => setNoteToDelete(null)}
+  onConfirm={() => {
+    if (!noteToDelete) return;
+    handleDeleteNote(noteToDelete);
+    setNoteToDelete(null);
+  }}
+  confirmText="Löschen"
+  cancelText="Abbrechen"
+/>
     </div>
   );
 }
