@@ -9,10 +9,17 @@ export default function LoginPage() {
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [popupMessage, setPopupMessage] = useState("");
+  const [showPopup, setShowPopup] = useState(false);
+
+function showDiperaPopup(text: string) {
+  setPopupMessage(text);
+  setShowPopup(true);
+}
 
 async function handleLogin() {
   if (!email || !password) {
-    alert("Bitte E-Mail und Passwort eingeben.");
+    showDiperaPopup("Bitte E-Mail und Passwort eingeben.");
     return;
   }
 
@@ -22,14 +29,14 @@ async function handleLogin() {
   });
 
   if (error) {
-    alert(`Login fehlgeschlagen: ${error.message}`);
+    showDiperaPopup(`Login fehlgeschlagen: ${error.message}`);
     return;
   }
 
   const user = data.user;
 
   if (!user) {
-    alert("Benutzer konnte nicht geladen werden.");
+    showDiperaPopup("Benutzer konnte nicht geladen werden.");
     return;
   }
 
@@ -42,7 +49,7 @@ async function handleLogin() {
   if (profileError || !profile) {
     console.error(profileError);
 
-    alert("Profil konnte nicht geladen werden.");
+    showDiperaPopup("Profil konnte nicht geladen werden.");
     return;
   }
 
@@ -56,7 +63,7 @@ async function handleLogin() {
     return;
   }
 
-  alert("Unbekannte Benutzerrolle.");
+  showDiperaPopup("Unbekannte Benutzerrolle.");
 }
 
   return (
@@ -97,6 +104,26 @@ async function handleLogin() {
           </button>
         </div>
       </div>
+      {showPopup && (
+  <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-6 z-50">
+
+    <div className="max-w-lg w-full text-center rounded-3xl bg-[#0B1220]/95 p-8">
+
+      <p className="text-2xl font-bold text-white mb-8">
+        {popupMessage}
+      </p>
+
+      <button
+        onClick={() => setShowPopup(false)}
+        className="bg-blue-600 text-white px-10 py-4 rounded-2xl"
+      >
+        OK
+      </button>
+
+    </div>
+
+  </div>
+)}
     </main>
   );
 }

@@ -282,7 +282,7 @@ export default function EmployeePage() {
 
     if (profileError || !profile) {
       console.error(profileError);
-      alert("Kein Profil gefunden.");
+      showDiperaPopup("Kein Profil gefunden.");
       window.location.href = "/login";
       return;
     }
@@ -290,13 +290,13 @@ export default function EmployeePage() {
     const typedProfile = profile as Profile;
 
     if (typedProfile.role !== "employee") {
-      alert("Dieser Bereich ist nur für Mitarbeiter.");
+      showDiperaPopup("Dieser Bereich ist nur für Mitarbeiter.");
       window.location.href = "/admin";
       return;
     }
 
     if (!typedProfile.employee_id) {
-      alert("Diesem Benutzer ist kein Mitarbeiter zugeordnet.");
+      showDiperaPopup("Diesem Benutzer ist kein Mitarbeiter zugeordnet.");
       window.location.href = "/login";
       return;
     }
@@ -312,7 +312,7 @@ export default function EmployeePage() {
 
     if (employeeError || !employeeData) {
       console.error(employeeError);
-      alert("Mitarbeiter konnte nicht geladen werden.");
+      showDiperaPopup("Mitarbeiter konnte nicht geladen werden.");
       window.location.href = "/login";
       return;
     }
@@ -557,7 +557,7 @@ async function loadTeamShifts(weekStartDate = selectedWeekStart) {
             if (data?.status === "suspended") {
               await supabase.auth.signOut();
 
-              alert("Der Zugriff auf diesen Betrieb wurde gesperrt.");
+              showDiperaPopup("Der Zugriff auf diesen Betrieb wurde gesperrt.");
 
               window.location.href = "/login";
             }
@@ -623,7 +623,7 @@ function showDiperaPopup(message: string) {
 
   async function handleVacationRequest() {
     if (!employee || !employeeId || !startDate || !endDate) {
-      alert("Bitte Von-Datum und Bis-Datum auswählen.");
+      showDiperaPopup("Bitte Von-Datum und Bis-Datum auswählen.");
       return;
     }
 
@@ -637,14 +637,14 @@ showDiperaPopup(
 }
 
     if (startDate > endDate) {
-  alert("Das Enddatum darf nicht vor dem Startdatum liegen.");
+  showDiperaPopup("Das Enddatum darf nicht vor dem Startdatum liegen.");
   return;
 }
 
     const businessId = await getBusinessId();
 
     if (!businessId) {
-      alert("Keine Business-ID gefunden.");
+      showDiperaPopup("Keine Business-ID gefunden.");
       return;
     }
 
@@ -662,7 +662,9 @@ showDiperaPopup(
 
     if (error) {
       console.error(error);
-      alert(JSON.stringify(error, null, 2));
+      showDiperaPopup(
+"Es ist ein Fehler aufgetreten."
+);
       return;
     }
 

@@ -199,19 +199,19 @@ const [noteToDelete, setNoteToDelete] =
 
     try {
       if (!name.trim() || !pin.trim()) {
-        alert("Bitte Name und PIN eingeben.");
+        showDiperaPopup("Bitte Name und PIN eingeben.");
         return;
       }
 
       if (pin.trim().length !== 4) {
-        alert("Die PIN muss genau 4 Zahlen haben.");
+        showDiperaPopup("Die PIN muss genau 4 Zahlen haben.");
         return;
       }
 
       const parsedMonthlyHours = Number(monthlyHours);
 
       if (!parsedMonthlyHours || parsedMonthlyHours <= 0) {
-        alert("Bitte gültige Monats-Sollstunden eingeben.");
+        showDiperaPopup("Bitte gültige Monats-Sollstunden eingeben.");
         return;
       }
 
@@ -224,7 +224,7 @@ if (
 parsedWorkDays < 1 ||
 parsedWorkDays > 7
 ) {
-alert(
+showDiperaPopup(
 "Arbeitstage pro Woche müssen zwischen 1–7 liegen."
 );
 
@@ -232,14 +232,14 @@ return;
 }
 
 if (parsedVacationDays < 0) {
-  alert("Bitte gültige Urlaubstage eingeben.");
+  showDiperaPopup("Bitte gültige Urlaubstage eingeben.");
   return;
 }
 
       const businessId = await getBusinessId();
 
       if (!businessId) {
-        alert("Keine Business-ID gefunden.");
+        showDiperaPopup("Keine Business-ID gefunden.");
         return;
       }
 
@@ -251,7 +251,7 @@ if (parsedVacationDays < 0) {
     .single();
 
 if (businessError || !businessData) {
-  alert("Betriebsdaten konnten nicht geladen werden.");
+  showDiperaPopup("Betriebsdaten konnten nicht geladen werden.");
   return;
 }
 
@@ -266,7 +266,7 @@ const { count, error: countError } =
     .eq("account_status", "active");
 
 if (countError) {
-  alert("Mitarbeiteranzahl konnte nicht geprüft werden.");
+  showDiperaPopup("Mitarbeiteranzahl konnte nicht geprüft werden.");
   return;
 }
 
@@ -288,12 +288,14 @@ showDiperaPopup(
 
       if (pinCheckError) {
         console.error(pinCheckError);
-        alert(JSON.stringify(pinCheckError, null, 2));
+        showDiperaPopup(
+"Es ist ein Fehler aufgetreten."
+);
         return;
       }
 
       if (existingEmployeeWithPin) {
-        alert("Diese PIN ist bereits vergeben. Bitte eine andere PIN wählen.");
+        showDiperaPopup("Diese PIN ist bereits vergeben. Bitte eine andere PIN wählen.");
         return;
       }
 
@@ -322,11 +324,11 @@ showDiperaPopup(
         if (
           employeeError?.message?.includes("unique_employee_pin_per_business")
         ) {
-          alert("Diese PIN ist bereits vergeben.");
+          showDiperaPopup("Diese PIN ist bereits vergeben.");
           return;
         }
 
-        alert("Mitarbeiter konnte nicht erstellt werden.");
+        showDiperaPopup("Mitarbeiter konnte nicht erstellt werden.");
         return;
       }
 
@@ -342,7 +344,9 @@ showDiperaPopup(
 
       if (targetHoursError) {
         console.error(targetHoursError);
-        alert(JSON.stringify(targetHoursError, null, 2));
+        showDiperaPopup(
+"Es ist ein Fehler aufgetreten."
+);
         return;
       }
 
@@ -358,7 +362,9 @@ showDiperaPopup(
 
       if (inviteError) {
         console.error(inviteError);
-        alert(JSON.stringify(inviteError, null, 2));
+        showDiperaPopup(
+"Es ist ein Fehler aufgetreten."
+);
         return;
       }
 
@@ -381,7 +387,7 @@ showDiperaPopup(
     const businessId = await getBusinessId();
 
     if (!businessId) {
-      alert("Keine Business-ID gefunden.");
+      showDiperaPopup("Keine Business-ID gefunden.");
       return;
     }
 
@@ -396,14 +402,14 @@ if (error) {
     error.message?.includes("profiles") ||
     error.message?.includes("employee_id")
   ) {
-    alert(
-      "Dieser Mitarbeiter wurde bereits registriert. Bitte deaktivieren Sie ihn stattdessen."
-    );
+showDiperaPopup(
+  "Dieser Mitarbeiter wurde bereits registriert. Bitte deaktiviere ihn stattdessen."
+);
     return;
   }
 
   console.error(error);
-  alert("Mitarbeiter konnte nicht gelöscht werden.");
+  showDiperaPopup("Mitarbeiter konnte nicht gelöscht werden.");
   return;
 }
 
@@ -414,7 +420,7 @@ if (error) {
     const businessId = await getBusinessId();
 
     if (!businessId) {
-      alert("Keine Business-ID gefunden.");
+      showDiperaPopup("Keine Business-ID gefunden.");
       return;
     }
 
@@ -428,7 +434,9 @@ if (error) {
 
     if (error) {
       console.error(error);
-      alert(JSON.stringify(error, null, 2));
+      showDiperaPopup(
+"Es ist ein Fehler aufgetreten."
+);
       return;
     }
 
@@ -440,7 +448,7 @@ if (error) {
     newMonthlyHours: number
   ) {
     if (!newMonthlyHours || newMonthlyHours <= 0) {
-      alert("Bitte gültige Monats-Sollstunden eingeben.");
+      showDiperaPopup("Bitte gültige Monats-Sollstunden eingeben.");
       return;
     }
 
@@ -454,7 +462,9 @@ if (error) {
 
     if (existingError) {
       console.error(existingError);
-      alert(JSON.stringify(existingError, null, 2));
+      showDiperaPopup(
+"Es ist ein Fehler aufgetreten."
+);
       return;
     }
 
@@ -469,7 +479,9 @@ if (error) {
 
       if (error) {
         console.error(error);
-        alert(JSON.stringify(error, null, 2));
+        showDiperaPopup(
+"Es ist ein Fehler aufgetreten."
+);
         return;
       }
     } else {
@@ -483,7 +495,9 @@ if (error) {
 
       if (error) {
         console.error(error);
-        alert(JSON.stringify(error, null, 2));
+        showDiperaPopup(
+"Es ist ein Fehler aufgetreten."
+);
         return;
       }
     }
@@ -495,14 +509,14 @@ if (error) {
     const noteText = noteTexts[employeeId]?.trim();
 
     if (!noteText) {
-      alert("Bitte eine Notiz eingeben.");
+      showDiperaPopup("Bitte eine Notiz eingeben.");
       return;
     }
 
     const businessId = await getBusinessId();
 
     if (!businessId) {
-      alert("Keine Business-ID gefunden.");
+      showDiperaPopup("Keine Business-ID gefunden.");
       return;
     }
 
@@ -516,7 +530,9 @@ if (error) {
 
     if (error) {
       console.error(error);
-      alert(JSON.stringify(error, null, 2));
+      showDiperaPopup(
+"Es ist ein Fehler aufgetreten."
+);
       return;
     }
 
@@ -533,7 +549,7 @@ if (error) {
     const businessId = await getBusinessId();
 
     if (!businessId) {
-      alert("Keine Business-ID gefunden.");
+      showDiperaPopup("Keine Business-ID gefunden.");
       return;
     }
 
@@ -545,7 +561,9 @@ if (error) {
 
     if (error) {
       console.error(error);
-      alert(JSON.stringify(error, null, 2));
+      showDiperaPopup(
+"Es ist ein Fehler aufgetreten."
+);
       return;
     }
 

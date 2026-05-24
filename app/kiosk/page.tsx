@@ -30,6 +30,12 @@ export default function KioskPage() {
   const [currentTime, setCurrentTime] = useState(Date.now());
   const [showAdminPopup, setShowAdminPopup] = useState(false);
   const [adminPin, setAdminPin] = useState("");
+  const [popupMessage, setPopupMessage] = useState("");
+
+  function showDiperaPopup(text: string) {
+  setPopupMessage(text);
+  setShowPopup(true);
+}
 
   async function checkKioskAccess() {
     const {
@@ -161,7 +167,7 @@ export default function KioskPage() {
             if (data?.status === "suspended") {
               await supabase.auth.signOut();
 
-              alert("Der Zugriff auf diesen Betrieb wurde gesperrt.");
+              showDiperaPopup("Der Zugriff auf diesen Betrieb wurde gesperrt.");
 
               window.location.href = "/login";
             }
@@ -188,7 +194,7 @@ async function handleReturnToAdmin() {
   } = await supabase.auth.getUser();
 
   if (!user) {
-    alert("Kein Admin angemeldet.");
+    showDiperaPopup("Kein Admin angemeldet.");
     window.location.href = "/login";
     return;
   }
@@ -201,17 +207,17 @@ async function handleReturnToAdmin() {
 
   if (error || !data) {
     console.error(error);
-    alert("Admin-PIN konnte nicht geladen werden.");
+    showDiperaPopup("Admin-PIN konnte nicht geladen werden.");
     return;
   }
 
   if (!data.admin_pin) {
-    alert("Für diesen Admin wurde noch kein PIN festgelegt.");
+    showDiperaPopup("Für diesen Admin wurde noch kein PIN festgelegt.");
     return;
   }
 
   if (adminPin !== data.admin_pin) {
-    alert("Falsche PIN.");
+    showDiperaPopup("Falsche PIN.");
     return;
   }
 
@@ -785,6 +791,26 @@ Weiter
 </div>
 </div>
 </div>
+)}
+{showPopup && (
+  <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-6 z-50">
+
+    <div className="max-w-lg w-full text-center rounded-3xl bg-[#0B1220]/95 p-8">
+
+      <p className="text-2xl font-bold text-white mb-8">
+        {popupMessage}
+      </p>
+
+      <button
+        onClick={() => setShowPopup(false)}
+        className="bg-blue-600 text-white px-10 py-4 rounded-2xl"
+      >
+        OK
+      </button>
+
+    </div>
+
+  </div>
 )}
     </main>
   );

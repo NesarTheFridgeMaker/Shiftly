@@ -175,7 +175,7 @@ export default function AbsencesPage() {
     const businessId = await getBusinessId();
 
     if (!businessId) {
-      alert("Keine Business-ID gefunden.");
+      showDiperaPopup("Keine Business-ID gefunden.");
       return;
     }
 
@@ -240,7 +240,9 @@ showDiperaPopup(
 
     if (error) {
       console.error(error);
-      alert(JSON.stringify(error, null, 2));
+      showDiperaPopup(
+"Es ist ein Fehler aufgetreten."
+);
       return;
     }
 
@@ -258,14 +260,14 @@ async function handleUpdateRequestStatus(id: string, newStatus: string) {
   const businessId = await getBusinessId();
 
   if (!businessId) {
-    alert("Keine Business-ID gefunden.");
+    showDiperaPopup("Keine Business-ID gefunden.");
     return;
   }
 
   const selectedAbsence = absences.find((absence) => absence.id === id);
 
   if (!selectedAbsence) {
-    alert("Antrag wurde nicht gefunden.");
+    showDiperaPopup("Antrag wurde nicht gefunden.");
     return;
   }
 
@@ -277,7 +279,9 @@ async function handleUpdateRequestStatus(id: string, newStatus: string) {
 
   if (error) {
     console.error(error);
-    alert(JSON.stringify(error, null, 2));
+    showDiperaPopup(
+"Es ist ein Fehler aufgetreten."
+);
     return;
   }
 
@@ -314,7 +318,7 @@ showDiperaPopup(
     const businessId = await getBusinessId();
 
     if (!businessId) {
-      alert("Keine Business-ID gefunden.");
+      showDiperaPopup("Keine Business-ID gefunden.");
       return;
     }
 
@@ -326,7 +330,9 @@ showDiperaPopup(
 
     if (error) {
       console.error(error);
-      alert(JSON.stringify(error, null, 2));
+      showDiperaPopup(
+"Es ist ein Fehler aufgetreten."
+);
       return;
     }
 

@@ -142,6 +142,17 @@ export default function SchedulePage() {
   const [selectedWeekStart, setSelectedWeekStart] = useState(getMonday(new Date()));
   const [successMessage, setSuccessMessage] = useState("");
   const [showSuccessPopup, setShowSuccessPopup] = useState(false);
+  const [confirmMessage, setConfirmMessage] = useState("");
+  const [showConfirmPopup, setShowConfirmPopup] = useState(false);
+  const [confirmAction, setConfirmAction] = useState<(() => void) | null>(null);
+  const [skipOvernightConfirm, setSkipOvernightConfirm] = useState(false);
+  const [popupMessage, setPopupMessage] = useState("");
+  const [showPopup, setShowPopup] = useState(false);
+
+function showDiperaPopup(text: string) {
+  setPopupMessage(text);
+  setShowPopup(true);
+}
 
 async function loadEmployees() {
   const businessId = await getBusinessId();
@@ -294,6 +305,7 @@ async function loadEmployees() {
     setEnd("");
     setEditingShiftId(null);
     setSelectedWorkType("");
+    setSkipOvernightConfirm(false);
   }
 
   function getSelectedEmployee() {
@@ -322,24 +334,41 @@ async function loadEmployees() {
   setShowSuccessPopup(true);
 }
 
+function showInfo(text: string) {
+  setSuccessMessage(text);
+  setShowSuccessPopup(true);
+}
+
+function showConfirm(text: string, action: () => void) {
+  setConfirmMessage(text);
+  setConfirmAction(() => action);
+  setShowConfirmPopup(true);
+}
+
   async function handleSaveShift() {
     if (!employeeId || !date || !start || !end) {
-      alert("Bitte Mitarbeiter, Datum, Schichtbeginn und Schichtende ausfüllen.");
+      showInfo("Bitte Mitarbeiter, Datum, Schichtbeginn und Schichtende ausfüllen.");
       return;
     }
 
-    if (isOvernightShift(start, end)) {
-  const confirmed = confirm(
-    "Das Schichtende liegt vor oder genau auf dem Beginn. Soll diese Schicht als Nachtschicht gespeichert werden?"
+if (isOvernightShift(start, end) && !skipOvernightConfirm) {
+  showConfirm(
+    "Das Schichtende liegt vor oder genau auf dem Beginn. Soll diese Schicht als Nachtschicht gespeichert werden?",
+    () => {
+      setSkipOvernightConfirm(true);
+      setTimeout(() => {
+        handleSaveShift();
+      }, 0);
+    }
   );
 
-  if (!confirmed) return;
+  return;
 }
 
     const businessId = await getBusinessId();
 
     if (!businessId) {
-      alert("Keine Business-ID gefunden.");
+      showInfo("Keine Business-ID gefunden.");
       return;
     }
 
@@ -357,7 +386,7 @@ async function loadEmployees() {
 );
 
 if (existingShift) {
-  alert("Diese Schicht existiert für diesen Mitarbeiter bereits.");
+  showInfo("Diese Schicht existiert für diesen Mitarbeiter bereits.");
   return;
 }
 
@@ -394,7 +423,9 @@ if (existingShift) {
 
       if (error) {
         console.error(error);
-        alert(JSON.stringify(error, null, 2));
+        showDiperaPopup(
+"Es ist ein Fehler aufgetreten."
+);
         return;
       }
     } else {
@@ -418,7 +449,9 @@ if (existingShift) {
 
       if (error) {
         console.error(error);
-        alert(JSON.stringify(error, null, 2));
+        showDiperaPopup(
+"Es ist ein Fehler aufgetreten."
+);
         return;
       }
     }
@@ -427,6 +460,7 @@ const wasEditing = Boolean(editingShiftId);
 
 resetForm();
 loadShifts();
+setSkipOvernightConfirm(false);
 
 showSuccess(
   wasEditing
@@ -450,14 +484,11 @@ showSuccess(
   }
 
   async function handleDeleteShift(id: string) {
-    const confirmed = confirm("Möchtest du diese Schicht wirklich löschen?");
-
-    if (!confirmed) return;
 
     const businessId = await getBusinessId();
 
     if (!businessId) {
-      alert("Keine Business-ID gefunden.");
+      showInfo("Keine Business-ID gefunden.");
       return;
     }
 
@@ -469,7 +500,9 @@ showSuccess(
 
     if (error) {
       console.error(error);
-      alert(JSON.stringify(error, null, 2));
+      showDiperaPopup(
+"Es ist ein Fehler aufgetreten."
+);
       return;
     }
 
@@ -501,7 +534,7 @@ showSuccess(
   const businessId = await getBusinessId();
 
   if (!businessId) {
-    alert("Keine Business-ID gefunden.");
+    showInfo("Keine Business-ID gefunden.");
     return;
   }
 
@@ -514,7 +547,7 @@ showSuccess(
   );
 
   if (shiftsToCopy.length === 0) {
-    alert("In dieser Woche gibt es keine Schichten.");
+    showInfo("In dieser Woche gibt es keine Schichten.");
     return;
   }
 
@@ -550,31 +583,31 @@ if (existingError) {
 }
 
 if (existingShifts && existingShifts.length > 0) {
-  alert(
+  showInfo(
     "In der Zielwoche existieren bereits Schichten. Kopieren abgebrochen."
   );
   return;
 }
 
-  const confirmed = confirm(
-    `${copiedShifts.length} Schichten in nächste Woche kopieren?`
-  );
+showConfirm(
+  `${copiedShifts.length} Schichten in nächste Woche kopieren?`,
+  async () => {
+    const { error } = await supabase
+      .from("shifts")
+      .insert(copiedShifts);
 
-  if (!confirmed) return;
+    if (error) {
+      console.error(error);
+      showInfo("Woche konnte nicht kopiert werden.");
+      return;
+    }
 
-  const { error } = await supabase
-    .from("shifts")
-    .insert(copiedShifts);
-
-  if (error) {
-    console.error(error);
-    alert(JSON.stringify(error,null,2));
-    return;
+    await loadShifts();
+    showSuccess("Woche erfolgreich kopiert.");
   }
+);
 
-  await loadShifts();
-
-  alert("Woche erfolgreich kopiert.");
+return;
 }
 
   const todayDate = formatDateForDatabase(new Date());
@@ -781,7 +814,12 @@ value={type.id}
                   </button>
 
                   <button
-                    onClick={() => handleDeleteShift(shift.id)}
+                    onClick={() =>
+  showConfirm(
+    "Möchtest du diese Schicht wirklich löschen?",
+    () => handleDeleteShift(shift.id)
+  )
+}
                     className="bg-red-600 text-white px-3 py-2 rounded-lg hover:bg-red-700 transition"
                   >
                     Löschen
@@ -926,8 +964,11 @@ shiftForDay.end_time
 
                               <button
                                 onClick={() =>
-                                  handleDeleteShift(shiftForDay.id)
-                                }
+  showConfirm(
+    "Möchtest du diese Schicht wirklich löschen?",
+    () => handleDeleteShift(shiftForDay.id)
+  )
+}
                                 className="bg-red-600 text-white px-2 py-1 rounded text-sm hover:bg-red-700 transition"
                               >
                                 Löschen
@@ -961,6 +1002,58 @@ shiftForDay.end_time
         OK
       </button>
     </div>
+  </div>
+)}
+
+{showConfirmPopup && (
+  <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-6 z-50">
+    <div className="max-w-lg w-full text-center rounded-3xl border border-white/10 bg-[#0B1220]/95 shadow-2xl p-8 md:p-10">
+      <p className="text-2xl md:text-3xl font-bold text-white mb-8 leading-snug">
+        {confirmMessage}
+      </p>
+
+      <div className="flex flex-col md:flex-row gap-4 justify-center">
+        <button
+          type="button"
+          onClick={() => setShowConfirmPopup(false)}
+          className="bg-gray-600 text-white px-8 py-4 rounded-2xl text-lg font-bold hover:bg-gray-700 transition"
+        >
+          Abbrechen
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            confirmAction?.();
+            setShowConfirmPopup(false);
+            setConfirmAction(null);
+          }}
+          className="bg-red-600 text-white px-8 py-4 rounded-2xl text-lg font-bold hover:bg-red-700 transition"
+        >
+          Bestätigen
+        </button>
+      </div>
+    </div>
+  </div>
+)}
+{showPopup && (
+  <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-6 z-50">
+
+    <div className="max-w-lg w-full text-center rounded-3xl bg-[#0B1220]/95 p-8">
+
+      <p className="text-2xl font-bold text-white mb-8">
+        {popupMessage}
+      </p>
+
+      <button
+        onClick={() => setShowPopup(false)}
+        className="bg-blue-600 text-white px-10 py-4 rounded-2xl"
+      >
+        OK
+      </button>
+
+    </div>
+
   </div>
 )}
     </div>

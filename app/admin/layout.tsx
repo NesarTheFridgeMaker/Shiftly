@@ -38,6 +38,13 @@ export default function AdminLayout({
   const [businessName, setBusinessName] = useState("");
   const [pendingRequests, setPendingRequests] = useState(0);
   const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [popupMessage, setPopupMessage] = useState("");
+  const [showPopup, setShowPopup] = useState(false);
+
+  function showDiperaPopup(text: string) {
+  setPopupMessage(text);
+  setShowPopup(true);
+}
 
   async function loadBusinessName() {
     const business = await getBusiness();
@@ -251,7 +258,7 @@ useEffect(() => {
           if (data?.status === "suspended") {
             await supabase.auth.signOut();
 
-            alert(
+            showDiperaPopup(
               "Der Zugriff auf diesen Betrieb wurde gesperrt."
             );
 
@@ -597,6 +604,26 @@ const navLinks = [
       <section className="flex-1 min-w-0 w-full p-4 lg:p-10 overflow-x-auto">
         {children}
       </section>
+      {showPopup && (
+  <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-6 z-50">
+
+    <div className="max-w-lg w-full text-center rounded-3xl bg-[#0B1220]/95 p-8">
+
+      <p className="text-2xl font-bold text-white mb-8">
+        {popupMessage}
+      </p>
+
+      <button
+        onClick={() => setShowPopup(false)}
+        className="bg-blue-600 text-white px-10 py-4 rounded-2xl"
+      >
+        OK
+      </button>
+
+    </div>
+
+  </div>
+)}
     </main>
   );
 }

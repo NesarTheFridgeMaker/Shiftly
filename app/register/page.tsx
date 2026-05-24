@@ -11,15 +11,22 @@ export default function RegisterPage() {
   const [password, setPassword] = useState("");
 
   const [isLoading, setIsLoading] = useState(false);
+  const [popupMessage, setPopupMessage] = useState("");
+const [showPopup, setShowPopup] = useState(false);
+
+function showDiperaPopup(text: string) {
+  setPopupMessage(text);
+  setShowPopup(true);
+}
 
   async function handleRegister() {
     if (!businessName || !adminName || !adminPin || !email || !password) {
-      alert("Bitte alle Felder ausfüllen.");
+      showDiperaPopup("Bitte alle Felder ausfüllen.");
       return;
     }
 
     if (adminPin.length !== 4) {
-      alert("Die PIN muss genau 4 Zahlen haben.");
+      showDiperaPopup("Die PIN muss genau 4 Zahlen haben.");
       return;
     }
 
@@ -34,7 +41,7 @@ export default function RegisterPage() {
 
     if (signUpError) {
       console.error(signUpError);
-      alert(signUpError.message);
+      showDiperaPopup(signUpError.message);
       setIsLoading(false);
       return;
     }
@@ -50,7 +57,9 @@ export default function RegisterPage() {
 
     if (rpcError) {
       console.error(rpcError);
-      alert(JSON.stringify(rpcError, null, 2));
+      showDiperaPopup(
+"Es ist ein Fehler aufgetreten."
+);
       setIsLoading(false);
       return;
     }
@@ -125,6 +134,26 @@ export default function RegisterPage() {
           </button>
         </div>
       </div>
+      {showPopup && (
+  <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-6 z-50">
+
+    <div className="max-w-lg w-full text-center rounded-3xl bg-[#0B1220]/95 p-8">
+
+      <p className="text-2xl font-bold text-white mb-8">
+        {popupMessage}
+      </p>
+
+      <button
+        onClick={() => setShowPopup(false)}
+        className="bg-blue-600 text-white px-10 py-4 rounded-2xl"
+      >
+        OK
+      </button>
+
+    </div>
+
+  </div>
+)}
     </main>
   );
 }

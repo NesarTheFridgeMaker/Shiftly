@@ -23,7 +23,33 @@ export default function SettingsPage() {
   const [templateStart, setTemplateStart] = useState("");
   const [templateEnd, setTemplateEnd] = useState("");
   const [workTypes, setWorkTypes] = useState<WorkType[]>([]);
-  const [workTypeName, setWorkTypeName] = useState(""); 
+  const [workTypeName, setWorkTypeName] = useState("");
+  const [popupMessage, setPopupMessage] = useState("");
+  const [showPopup, setShowPopup] = useState(false);
+
+  const [confirmMessage, setConfirmMessage] = useState("");
+
+  const [confirmAction, setConfirmAction] =
+  useState<(() => void) | null>(null);
+
+  const [showConfirmPopup, setShowConfirmPopup] =
+  useState(false);
+
+  function showDiperaPopup(text:string){
+  setPopupMessage(text);
+  setShowPopup(true);
+}
+
+function showConfirm(
+  text:string,
+  action:()=>void
+){
+  setConfirmMessage(text);
+
+  setConfirmAction(()=>action);
+
+  setShowConfirmPopup(true);
+}
 
   async function loadShiftTemplates() {
     const businessId = await getBusinessId();
@@ -38,7 +64,9 @@ export default function SettingsPage() {
 
     if (error) {
       console.error(error);
-      alert(JSON.stringify(error, null, 2));
+      showDiperaPopup(
+"Es ist ein Fehler aufgetreten."
+);
       return;
     }
 
@@ -47,14 +75,18 @@ export default function SettingsPage() {
 
   async function createShiftTemplate() {
     if (!templateName || !templateStart || !templateEnd) {
-      alert("Bitte Name, Beginn und Ende ausfüllen.");
+      showDiperaPopup(
+"Bitte Name, Beginn und Ende ausfüllen."
+);
       return;
     }
 
     const businessId = await getBusinessId();
 
     if (!businessId) {
-      alert("Keine Business-ID gefunden.");
+      showDiperaPopup(
+"Keine Business-ID gefunden."
+);
       return;
     }
 
@@ -69,7 +101,9 @@ export default function SettingsPage() {
 
     if (error) {
       console.error(error);
-      alert(JSON.stringify(error, null, 2));
+      showDiperaPopup(
+"Es ist ein Fehler aufgetreten."
+);
       return;
     }
 
@@ -81,14 +115,11 @@ export default function SettingsPage() {
   }
 
   async function deleteShiftTemplate(id: string) {
-    const confirmed = confirm("Möchtest du diese Schichtvorlage wirklich löschen?");
-
-    if (!confirmed) return;
 
     const businessId = await getBusinessId();
 
     if (!businessId) {
-      alert("Keine Business-ID gefunden.");
+      showDiperaPopup("Keine Business-ID gefunden.");
       return;
     }
 
@@ -100,7 +131,9 @@ export default function SettingsPage() {
 
     if (error) {
       console.error(error);
-      alert(JSON.stringify(error, null, 2));
+      showDiperaPopup(
+"Es ist ein Fehler aufgetreten."
+);
       return;
     }
 
@@ -153,12 +186,6 @@ async function createWorkType() {
 }
 
 async function deleteWorkType(id:string) {
-
-const confirmed=confirm(
-"Arbeitstyp löschen?"
-);
-
-if(!confirmed) return;
 
 await supabase
 .from("work_types")
@@ -265,7 +292,12 @@ useEffect(() => {
 
                 <button
                   type="button"
-                  onClick={() => deleteShiftTemplate(template.id)}
+                  onClick={()=>
+                  showConfirm(
+                  "Möchtest du diese Schichtvorlage wirklich löschen?",
+                  ()=>deleteShiftTemplate(template.id)
+                  )
+                  }
                   className="w-full xl:w-auto bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition"
                 >
                   Löschen
@@ -349,7 +381,12 @@ items-center
 </p>
 
 <button
-onClick={()=>deleteWorkType(type.id)}
+onClick={()=>
+showConfirm(
+"Arbeitstyp wirklich löschen?",
+()=>deleteWorkType(type.id)
+)
+}
 className="
 bg-red-600
 text-white
@@ -369,6 +406,76 @@ Löschen
 </div>
 
 </div>
+{showPopup && (
+<div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-6 z-50">
+
+<div className="max-w-lg w-full text-center rounded-3xl bg-[#0B1220]/95 p-8">
+
+<p className="text-2xl font-bold text-white mb-8">
+
+{popupMessage}
+
+</p>
+
+<button
+onClick={()=>setShowPopup(false)}
+className="bg-blue-600 text-white px-10 py-4 rounded-2xl"
+>
+
+OK
+
+</button>
+
+</div>
+
+</div>
+)}
+
+{showConfirmPopup && (
+
+<div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-6 z-50">
+
+<div className="max-w-lg w-full text-center rounded-3xl bg-[#0B1220]/95 p-8">
+
+<p className="text-2xl font-bold text-white mb-8">
+
+{confirmMessage}
+
+</p>
+
+<div className="flex gap-3 justify-center">
+
+<button
+onClick={()=>
+setShowConfirmPopup(false)
+}
+className="bg-gray-600 text-white px-8 py-4 rounded-xl"
+>
+
+Abbrechen
+
+</button>
+
+<button
+onClick={()=>{
+confirmAction?.();
+
+setShowConfirmPopup(false);
+}}
+className="bg-red-600 text-white px-8 py-4 rounded-xl"
+>
+
+Löschen
+
+</button>
+
+</div>
+
+</div>
+
+</div>
+
+)}
     </div>
   );
 }

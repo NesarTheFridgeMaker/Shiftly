@@ -4,6 +4,7 @@ import React, { useEffect, useState } from "react";
 import ExcelJS from "exceljs";
 import { supabase } from "@/lib/supabaseClient";
 import { getBusinessId } from "@/lib/getBusinessId";
+import DiperaPopup from "@/components/DiperaPopup";
 
 type TimeEntry = {
   id: string;
@@ -248,6 +249,21 @@ export default function TimesPage() {
   const [targetHours, setTargetHours] = useState<EmployeeTargetHour[]>([]);
   const [openDetails, setOpenDetails] = useState<string | null>(null);
   const [businessName, setBusinessName] = useState("Dipera");
+  const [popupMessage, setPopupMessage] = useState("");
+const [showPopup, setShowPopup] = useState(false);
+
+const [confirmMessage, setConfirmMessage] = useState("");
+const [confirmAction, setConfirmAction] =
+  useState<(() => void) | null>(null);
+
+const [showConfirmPopup, setShowConfirmPopup] =
+  useState(false);
+
+const [successMessage, setSuccessMessage] =
+  useState("");
+
+const [showSuccessPopup, setShowSuccessPopup] =
+  useState(false);
 
   const [selectedEmployeeId, setSelectedEmployeeId] = useState("");
   const [selectedAction, setSelectedAction] = useState("check_in");
@@ -256,6 +272,23 @@ export default function TimesPage() {
   const [exportMonth, setExportMonth] = useState(
   new Date().toISOString().slice(0, 7)
 );
+
+function showDiperaPopup(text: string) {
+  setPopupMessage(text);
+  setShowPopup(true);
+}
+
+function showSuccess(text: string) {
+  setSuccessMessage(text);
+  setShowSuccessPopup(true);
+}
+
+function showConfirm(text: string, action: () => void) {
+  setConfirmMessage(text);
+  setConfirmAction(() => action);
+  setShowConfirmPopup(true);
+}
+
 
   async function loadTimeEntries() {
     const businessId = await getBusinessId();
@@ -273,7 +306,9 @@ export default function TimesPage() {
 
     if (error) {
       console.error(error);
-      alert(JSON.stringify(error, null, 2));
+      showDiperaPopup(
+  "Es ist ein Fehler aufgetreten. Bitte versuche es erneut."
+);
       return;
     }
 
@@ -347,16 +382,18 @@ useEffect(() => {
   setTargetHours((data || []) as EmployeeTargetHour[]);
 }
 
-  async function handleAddTimeEntry() {
+  async function handleAddTimeEntry(skipNightCheck = false) {
     if (!selectedEmployeeId || !selectedAction || !selectedDate || !selectedTime) {
-      alert("Bitte Mitarbeiter, Aktion, Datum und Uhrzeit auswählen.");
+      showDiperaPopup(
+  "Bitte Mitarbeiter, Aktion, Datum und Uhrzeit auswählen."
+);
       return;
     }
 
     const businessId = await getBusinessId();
 
     if (!businessId) {
-      alert("Keine Business-ID gefunden.");
+      showDiperaPopup("Keine Business-ID gefunden.");
       return;
     }
 
@@ -365,35 +402,41 @@ useEffect(() => {
     );
 
     if (!selectedEmployee) {
-      alert("Mitarbeiter nicht gefunden.");
+      showDiperaPopup("Mitarbeiter nicht gefunden.");
       return;
     }
 
     let entryDate = selectedDate;
 
 if (selectedAction === "check_out") {
-  const selectedHour = Number(selectedTime.split(":")[0]);
+  const selectedHour =
+    Number(selectedTime.split(":")[0]);
 
-let entryDate = selectedDate;
-
-if (selectedAction === "check_out") {
-  const selectedHour = Number(selectedTime.split(":")[0]);
-
-  if (selectedHour < 6) {
-    const confirmed = confirm(
-      "Diese Uhrzeit liegt nachts. Soll der Stempel als Folgetag gespeichert werden?"
+if (
+  selectedHour < 6 &&
+  !skipNightCheck
+) {
+    showConfirm(
+      "Diese Uhrzeit liegt nachts. Soll der Stempel als Folgetag gespeichert werden?",
+      () => {
+  handleAddTimeEntry(true);
+}
     );
 
-    if (!confirmed) {
-      return;
-    }
-
-    const nextDay = new Date(selectedDate);
-    nextDay.setDate(nextDay.getDate() + 1);
-
-    entryDate = nextDay.toISOString().split("T")[0];
+    return;
   }
-}
+
+  if (selectedHour < 6) {
+    const nextDay = new Date(selectedDate);
+
+    nextDay.setDate(
+      nextDay.getDate() + 1
+    );
+
+    entryDate =
+      nextDay.toISOString()
+      .split("T")[0];
+  }
 }
 
     const createdAt = buildDateTime(entryDate, selectedTime);
@@ -410,7 +453,9 @@ if (selectedAction === "check_out") {
 
     if (error) {
       console.error(error);
-      alert(JSON.stringify(error, null, 2));
+      showDiperaPopup(
+  "Es ist ein Fehler aufgetreten. Bitte versuche es erneut."
+);
       return;
     }
 
@@ -441,7 +486,9 @@ if (newEmployeeStatus) {
 
   if (statusError) {
     console.error(statusError);
-    alert(JSON.stringify(statusError, null, 2));
+    showDiperaPopup(
+  "Es ist ein Fehler aufgetreten. Bitte versuche es erneut."
+);
     return;
   }
 }
@@ -453,7 +500,7 @@ if (newEmployeeStatus) {
 
     await loadTimeEntries();
 
-    alert("Stempel wurde hinzugefügt.");
+    showSuccess("Stempel wurde hinzugefügt.");
   }
 
   async function handleQuickAddFromSummary(
@@ -473,7 +520,7 @@ async function handleExportExcel() {
   );
 
   if (selectedSummaries.length === 0) {
-    alert("Für diesen Monat gibt es keine Arbeitszeiten.");
+    showDiperaPopup("Für diesen Monat gibt es keine Arbeitszeiten.");
     return;
   }
 
@@ -793,7 +840,7 @@ async function handleExportExcel() {
 
         <button
           type="button"
-          onClick={handleAddTimeEntry}
+          onClick={() => handleAddTimeEntry()}
           className="mt-5 w-full md:w-auto bg-blue-950 text-white px-5 py-3 rounded-xl hover:bg-blue-900 transition"
         >
           Stempel speichern
@@ -1149,6 +1196,80 @@ async function handleExportExcel() {
           </p>
         )}
       </div>
+      {showPopup && (
+  <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-6 z-50">
+    <div className="max-w-lg w-full text-center rounded-3xl border border-white/10 bg-[#0B1220]/95 shadow-2xl p-8 md:p-10">
+
+      <p className="text-2xl md:text-3xl font-bold text-white mb-8 leading-snug">
+        {popupMessage}
+      </p>
+
+      <button
+        type="button"
+        onClick={() => setShowPopup(false)}
+        className="bg-gradient-to-r from-blue-700 to-blue-500 text-white px-12 py-4 rounded-2xl text-xl font-bold shadow-xl hover:scale-105 transition"
+      >
+        OK
+      </button>
+
+    </div>
+  </div>
+)}
+
+{showSuccessPopup && (
+  <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-6 z-50">
+    <div className="max-w-lg w-full text-center rounded-3xl border border-white/10 bg-[#0B1220]/95 shadow-2xl p-8 md:p-10">
+
+      <p className="text-2xl md:text-3xl font-bold text-white mb-8 leading-snug">
+        {successMessage}
+      </p>
+
+      <button
+        type="button"
+        onClick={() => setShowSuccessPopup(false)}
+        className="bg-gradient-to-r from-green-600 to-green-500 text-white px-12 py-4 rounded-2xl text-xl font-bold shadow-xl hover:scale-105 transition"
+      >
+        OK
+      </button>
+
+    </div>
+  </div>
+)}
+
+{showConfirmPopup && (
+  <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-6 z-50">
+    <div className="max-w-lg w-full text-center rounded-3xl border border-white/10 bg-[#0B1220]/95 shadow-2xl p-8 md:p-10">
+
+      <p className="text-2xl md:text-3xl font-bold text-white mb-8 leading-snug">
+        {confirmMessage}
+      </p>
+
+      <div className="flex flex-col md:flex-row gap-3 justify-center">
+
+        <button
+          type="button"
+          onClick={() => setShowConfirmPopup(false)}
+          className="bg-gray-600 text-white px-8 py-4 rounded-2xl text-lg font-bold hover:bg-gray-700 transition"
+        >
+          Abbrechen
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            confirmAction?.();
+            setShowConfirmPopup(false);
+          }}
+          className="bg-blue-600 text-white px-8 py-4 rounded-2xl text-lg font-bold hover:bg-blue-700 transition"
+        >
+          Bestätigen
+        </button>
+
+      </div>
+
+    </div>
+  </div>
+)}
     </div>
   );
 }
