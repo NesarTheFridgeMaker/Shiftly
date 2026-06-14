@@ -6,6 +6,7 @@ import { getBusinessId } from "@/lib/getBusinessId";
 import { getBusiness } from "@/lib/getBusiness";
 import { LogOut } from "lucide-react";
 import DiperaPopup from "@/components/DiperaPopup";
+import { BUSINESS_TIME_ZONE } from "@/lib/config/businessTime";
 
 type Employee = {
   id: string;
@@ -126,68 +127,133 @@ function getWeekNumber(date: Date) {
 }
 
 function calculateWorkedMinutes(entries: TimeEntry[]) {
-  const groups: Record<string, TimeEntry[]> = {};
-
-  entries.forEach((entry) => {
-    const date = new Date(entry.created_at).toLocaleDateString("de-DE");
-    const key = `${entry.employee_id}-${date}`;
-
-    if (!groups[key]) {
-      groups[key] = [];
-    }
-
-    groups[key].push(entry);
-  });
+  const sortedEntries = [...entries].sort(
+    (a, b) =>
+      new Date(a.created_at).getTime() -
+      new Date(b.created_at).getTime()
+  );
 
   let totalMinutes = 0;
+  let workStart: Date | null = null;
+  let pauseStart: Date | null = null;
 
-  Object.values(groups).forEach((groupEntries) => {
-    const sortedEntries = [...groupEntries].sort(
-      (a, b) =>
-        new Date(a.created_at).getTime() -
-        new Date(b.created_at).getTime()
-    );
-
-    const checkIn = sortedEntries.find(
-      (entry) => entry.action === "check_in"
-    );
-
-    const checkOut = [...sortedEntries]
-      .reverse()
-      .find((entry) => entry.action === "check_out");
-
-    if (!checkIn || !checkOut) return;
-
-    let pauseMinutes = 0;
-    let currentPauseStart: Date | null = null;
-
-    sortedEntries.forEach((entry) => {
-      if (entry.action === "break_start") {
-        currentPauseStart = new Date(entry.created_at);
+  sortedEntries.forEach((entry) => {
+    const entryDate = new Date(
+  new Date(entry.created_at)
+    .toLocaleString(
+      "en-US",
+      {
+        timeZone: BUSINESS_TIME_ZONE
       }
+    )
+);
 
-      if (entry.action === "break_end" && currentPauseStart) {
-        const pauseEnd = new Date(entry.created_at);
+    if (entry.action === "check_in") {
+      workStart = entryDate;
+      pauseStart = null;
+    }
 
-        pauseMinutes += Math.round(
-          (pauseEnd.getTime() - currentPauseStart.getTime()) / 60000
-        );
+    if (entry.action === "break_start" && workStart) {
+      totalMinutes +=
+        (entryDate.getTime() - workStart.getTime()) / 60000;
 
-        currentPauseStart = null;
-      }
-    });
+      workStart = null;
+      pauseStart = entryDate;
+    }
 
-    const start = new Date(checkIn.created_at);
-    const end = new Date(checkOut.created_at);
+    if (entry.action === "break_end" && pauseStart) {
+      workStart = entryDate;
+      pauseStart = null;
+    }
 
-    const workMinutes =
-      Math.round((end.getTime() - start.getTime()) / 60000) -
-      pauseMinutes;
+    if (entry.action === "check_out" && workStart) {
+      totalMinutes +=
+        (entryDate.getTime() - workStart.getTime()) / 60000;
 
-    totalMinutes += workMinutes;
+      workStart = null;
+      pauseStart = null;
+    }
   });
 
-  return totalMinutes;
+  return Math.round(totalMinutes);
+}
+
+function calculateSessionMinutesInRange(
+  entries: TimeEntry[],
+  rangeStart: Date,
+  rangeEnd: Date
+) {
+  const sortedEntries = [...entries].sort(
+    (a, b) =>
+      new Date(a.created_at).getTime() -
+      new Date(b.created_at).getTime()
+  );
+
+  let totalMinutes = 0;
+  let workStart: Date | null = null;
+  let pauseStart: Date | null = null;
+
+  sortedEntries.forEach((entry) => {
+    const entryDate = new Date(
+  new Date(entry.created_at)
+    .toLocaleString(
+      "en-US",
+      {
+        timeZone: BUSINESS_TIME_ZONE
+      }
+    )
+);
+
+    if (entry.action === "check_in") {
+      workStart = entryDate;
+      pauseStart = null;
+    }
+
+    if (entry.action === "break_start" && workStart) {
+      const start = Math.max(
+        workStart.getTime(),
+        rangeStart.getTime()
+      );
+
+      const end = Math.min(
+        entryDate.getTime(),
+        rangeEnd.getTime()
+      );
+
+      if (end > start) {
+        totalMinutes += (end - start) / 60000;
+      }
+
+      workStart = null;
+      pauseStart = entryDate;
+    }
+
+    if (entry.action === "break_end" && pauseStart) {
+      workStart = entryDate;
+      pauseStart = null;
+    }
+
+    if (entry.action === "check_out" && workStart) {
+      const start = Math.max(
+        workStart.getTime(),
+        rangeStart.getTime()
+      );
+
+      const end = Math.min(
+        entryDate.getTime(),
+        rangeEnd.getTime()
+      );
+
+      if (end > start) {
+        totalMinutes += (end - start) / 60000;
+      }
+
+      workStart = null;
+      pauseStart = null;
+    }
+  });
+
+  return Math.round(totalMinutes);
 }
 
 function formatNotificationDate(dateString: string) {
@@ -718,7 +784,28 @@ showDiperaPopup(
     );
   });
 
-  const todayMinutes = calculateWorkedMinutes(todayEntries);
+  const todayStart = new Date();
+
+todayStart.setHours(
+  0,
+  0,
+  0,
+  0
+);
+
+const todayEnd =
+new Date(todayStart);
+
+todayEnd.setDate(
+  todayEnd.getDate() + 1
+);
+
+const todayMinutes =
+calculateSessionMinutesInRange(
+  timeEntries,
+  todayStart,
+  todayEnd
+);
   const weeklyMinutes = calculateWorkedMinutes(weeklyEntries);
   const monthlyMinutes = calculateWorkedMinutes(monthlyEntries);
 

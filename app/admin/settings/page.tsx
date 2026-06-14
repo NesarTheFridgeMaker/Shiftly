@@ -3,6 +3,20 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { getBusinessId } from "@/lib/getBusinessId";
+import DiperaPopup from "@/components/DiperaPopup";
+import { calculateSurcharges } from "@/lib/payroll/calculateSurcharges";
+
+type PayRule = {
+  id: string;
+  business_id: string;
+  name: string;
+  rule_type: string;
+  starts_at: string | null;
+  ends_at: string | null;
+  percentage: number;
+  datev_wage_type: string | null;
+  active: boolean;
+};
 
 type ShiftTemplate = {
   id: string;
@@ -24,8 +38,23 @@ export default function SettingsPage() {
   const [templateEnd, setTemplateEnd] = useState("");
   const [workTypes, setWorkTypes] = useState<WorkType[]>([]);
   const [workTypeName, setWorkTypeName] = useState("");
+  const [payRuleName, setPayRuleName] = useState("");
+  const [payRuleType, setPayRuleType] = useState("night");
+  const [payRuleStart, setPayRuleStart] = useState("");
+  const [payRuleEnd, setPayRuleEnd] = useState("");
+  const [payRulePercentage, setPayRulePercentage] = useState("");
+  const [payRuleDatevType, setPayRuleDatevType] = useState("");
+  const [payRules, setPayRules] =
+  useState<PayRule[]>([]);
+  const [federalState, setFederalState] =
+  useState("BW");
+  const [
+  datevRegularHoursWageType,
+  setDatevRegularHoursWageType
+] = useState("100");
   const [popupMessage, setPopupMessage] = useState("");
   const [showPopup, setShowPopup] = useState(false);
+  
 
   const [confirmMessage, setConfirmMessage] = useState("");
 
@@ -196,9 +225,189 @@ await loadWorkTypes();
 
 }
 
+async function loadPayRules() {
+  const businessId = await getBusinessId();
+
+  if (!businessId) return;
+
+  const { data } = await supabase
+    .from("pay_rules")
+    .select("*")
+    .eq("business_id", businessId)
+    .order("created_at", { ascending: false });
+
+  if (data) {
+    setPayRules(data);
+  }
+}
+
+async function handleCreatePayRule() {
+  const businessId = await getBusinessId();
+
+  if (!businessId) return;
+
+  if (
+    !payRuleName.trim() ||
+    !payRulePercentage
+  ) {
+    return;
+  }
+
+  const { error } =
+    await supabase
+      .from("pay_rules")
+      .insert([
+        {
+          business_id: businessId,
+          name: payRuleName.trim(),
+          rule_type: payRuleType,
+          starts_at:
+            payRuleStart || null,
+          ends_at:
+            payRuleEnd || null,
+          percentage:
+            Number(
+              payRulePercentage
+            ),
+          datev_wage_type:
+            payRuleDatevType.trim()
+            || null
+        }
+      ]);
+
+  if (error) {
+    console.error(error);
+    return;
+  }
+
+  setPayRuleName("");
+  setPayRuleType("night");
+  setPayRuleStart("");
+  setPayRuleEnd("");
+  setPayRulePercentage("");
+  setPayRuleDatevType("");
+
+  await loadPayRules();
+
+  showDiperaPopup(
+  "Zuschlag wurde erfolgreich erstellt."
+);
+}
+
+  async function handleDeletePayRule(ruleId: string) {
+  const { error } = await supabase
+    .from("pay_rules")
+    .delete()
+    .eq("id", ruleId);
+
+  if (error) {
+    console.error(error);
+    return;
+  }
+
+ await loadPayRules();
+
+  showDiperaPopup(
+  "Zuschlag wurde erfolgreich gelöscht."
+);
+}
+
+async function handleTogglePayRuleActive(
+  ruleId: string,
+  currentActive: boolean
+) {
+  const { error } = await supabase
+    .from("pay_rules")
+    .update({
+      active: !currentActive,
+    })
+    .eq("id", ruleId);
+
+  if (error) {
+    console.error(error);
+    return;
+  }
+
+  await loadPayRules();
+
+  showDiperaPopup(
+    currentActive
+      ? "Zuschlag wurde deaktiviert."
+      : "Zuschlag wurde aktiviert."
+  );
+}
+
+async function loadBusiness() {
+  const businessId =
+    await getBusinessId();
+
+  if (!businessId) return;
+
+  const { data, error } =
+    await supabase
+      .from("businesses")
+      .select(
+  "federal_state, datev_regular_hours_wage_type"
+)
+      .eq("id", businessId)
+      .single();
+
+  if (error) {
+    console.error(error);
+    return;
+  }
+
+  if (data?.federal_state) {
+    setFederalState(
+      data.federal_state
+    );
+  }
+
+  if (
+  data?.datev_regular_hours_wage_type
+) {
+  setDatevRegularHoursWageType(
+    data.datev_regular_hours_wage_type
+  );
+}
+}
+
+
+
+async function saveFederalState() {
+  console.log("SAVE FEDERAL STATE CLICKED", federalState);
+
+  const businessId = await getBusinessId();
+
+  console.log("BUSINESS ID", businessId);
+
+  if (!businessId) return;
+
+  const { error } = await supabase
+    .from("businesses")
+    .update({
+  federal_state: federalState,
+  datev_regular_hours_wage_type:
+    datevRegularHoursWageType.trim() || null,
+})
+    .eq("id", businessId);
+
+  if (error) {
+    console.error("FEDERAL STATE SAVE ERROR:", error);
+    showDiperaPopup("Bundesland konnte nicht gespeichert werden.");
+    return;
+  }
+
+  console.log("FEDERAL STATE SAVED");
+
+  showDiperaPopup("Daten gespeichert.");
+}
+
 useEffect(() => {
   loadShiftTemplates();
   loadWorkTypes();
+  loadPayRules();
+  loadBusiness();
 }, []);
 
   return (
@@ -311,6 +520,263 @@ useEffect(() => {
           </p>
         )}
       </div>
+
+      <div className="bg-white rounded-2xl shadow p-4 md:p-6 mt-8">
+
+<h2 className="text-2xl font-bold text-blue-950 mb-2">
+Lohn & Zuschläge
+</h2>
+
+<div className="bg-white rounded-2xl shadow p-6 mb-8">
+  <h2 className="text-2xl font-semibold text-blue-950 mb-4">
+    Standort
+  </h2>
+
+  <div className="flex flex-col gap-4 max-w-md">
+
+    <select
+      value={federalState}
+      onChange={(event) =>
+        setFederalState(
+          event.target.value
+        )
+      }
+      className="border p-3 rounded-xl bg-white text-black"
+    >
+<option value="BW">Baden-Württemberg</option>
+<option value="BY">Bayern</option>
+<option value="BE">Berlin</option>
+<option value="BB">Brandenburg</option>
+<option value="HB">Bremen</option>
+<option value="HH">Hamburg</option>
+<option value="HE">Hessen</option>
+<option value="MV">Mecklenburg-Vorpommern</option>
+<option value="NI">Niedersachsen</option>
+<option value="NW">Nordrhein-Westfalen</option>
+<option value="RP">Rheinland-Pfalz</option>
+<option value="SL">Saarland</option>
+<option value="SN">Sachsen</option>
+<option value="ST">Sachsen-Anhalt</option>
+<option value="SH">Schleswig-Holstein</option>
+<option value="TH">Thüringen</option>
+    </select>
+
+    <div className="flex flex-col gap-1">
+  <label className="text-sm font-semibold text-gray-600">
+    DATEV-Lohnart für reguläre Arbeitsstunden
+  </label>
+
+  <input
+    type="text"
+    value={datevRegularHoursWageType}
+    onChange={(event) =>
+      setDatevRegularHoursWageType(event.target.value)
+    }
+    placeholder="z. B. 100"
+    className="border p-3 rounded-xl bg-white text-black"
+  />
+</div>
+
+    <button
+      type="button"
+      onClick={saveFederalState}
+      className="bg-blue-600 text-white px-5 py-3 rounded-xl hover:bg-blue-700 transition"
+    >
+      Bundesland & Lohnart speichern
+    </button>
+
+  </div>
+</div>
+
+<p className="text-gray-500 mb-6">
+Lege Nacht-, Sonn- oder Feiertagszuschläge fest.
+</p>
+
+<div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+
+<div className="flex flex-col gap-1">
+<label className="text-sm font-semibold text-gray-600">
+Name
+</label>
+
+<input
+value={payRuleName}
+onChange={(e)=>setPayRuleName(e.target.value)}
+placeholder="z.B. Nachtzuschlag"
+className="border p-3 rounded-lg bg-white text-black"
+/>
+</div>
+
+<div className="flex flex-col gap-1">
+<label className="text-sm font-semibold text-gray-600">
+Typ
+</label>
+
+<select
+value={payRuleType}
+onChange={(e)=>setPayRuleType(e.target.value)}
+className="border p-3 rounded-lg bg-white text-black"
+>
+<option value="night">Nacht</option>
+<option value="sunday">Sonntag</option>
+<option value="holiday">Feiertag</option>
+</select>
+</div>
+
+<div className="flex flex-col gap-1">
+<label className="text-sm font-semibold text-gray-600">
+Zuschlag %
+</label>
+
+<input
+type="number"
+value={payRulePercentage}
+onChange={(e)=>setPayRulePercentage(e.target.value)}
+placeholder="25"
+className="border p-3 rounded-lg bg-white text-black"
+/>
+</div>
+
+<div className="flex flex-col gap-1">
+<label className="text-sm font-semibold text-gray-600">
+Von
+</label>
+
+<input
+type="time"
+value={payRuleStart}
+onChange={(e)=>setPayRuleStart(e.target.value)}
+className="border p-3 rounded-lg bg-white text-black"
+/>
+</div>
+
+<div className="flex flex-col gap-1">
+<label className="text-sm font-semibold text-gray-600">
+Bis
+</label>
+
+<input
+type="time"
+value={payRuleEnd}
+onChange={(e)=>setPayRuleEnd(e.target.value)}
+className="border p-3 rounded-lg bg-white text-black"
+/>
+</div>
+
+<div className="flex flex-col gap-1">
+<label className="text-sm font-semibold text-gray-600">
+DATEV-Lohnart
+</label>
+
+<input
+value={payRuleDatevType}
+onChange={(e)=>setPayRuleDatevType(e.target.value)}
+placeholder="z.B. 150"
+className="border p-3 rounded-lg bg-white text-black"
+/>
+</div>
+
+</div>
+
+<button
+type="button"
+onClick={handleCreatePayRule}
+className="mt-5 w-full xl:w-auto bg-blue-950 text-white px-5 py-3 rounded-xl"
+>
+Zuschlag speichern
+</button>
+
+<div className="mt-6 flex flex-col gap-3">
+
+{payRules.map((rule)=>(
+
+<div
+key={rule.id}
+className="border rounded-xl p-4"
+>
+
+<div className="font-bold text-blue-950">
+  {rule.name}
+</div>
+
+<div
+  className={`text-sm font-bold ${
+    rule.active
+      ? "text-green-600"
+      : "text-red-600"
+  }`}
+>
+  {rule.active
+    ? "Aktiv"
+    : "Inaktiv"}
+</div>
+
+<div className="text-sm text-gray-600">
+
+{rule.rule_type === "night"
+ ? "Nacht"
+ : rule.rule_type === "sunday"
+ ? "Sonntag"
+ : rule.rule_type === "holiday"
+ ? "Feiertag"
+ : rule.rule_type}
+
+{" • "}
+
+{rule.percentage}%
+
+{rule.starts_at &&
+rule.ends_at &&
+` • ${rule.starts_at} - ${rule.ends_at}`}
+
+</div>
+
+{rule.datev_wage_type && (
+
+<div className="text-sm text-gray-500 mt-1">
+
+DATEV:
+{rule.datev_wage_type}
+
+</div>
+
+
+)}
+
+<button
+  type="button"
+  onClick={() =>
+    handleTogglePayRuleActive(
+      rule.id,
+      rule.active
+    )
+  }
+  className={`mt-3 mr-2 px-3 py-2 rounded-lg text-white transition ${
+    rule.active
+      ? "bg-yellow-500 hover:bg-yellow-600"
+      : "bg-green-600 hover:bg-green-700"
+  }`}
+>
+  {rule.active ? "Deaktivieren" : "Aktivieren"}
+</button>
+
+<button
+  type="button"
+  onClick={() => handleDeletePayRule(rule.id)}
+  className="mt-3 bg-red-600 text-white px-3 py-2 rounded-lg hover:bg-red-700 transition"
+>
+  Löschen
+</button>
+
+</div>
+
+
+))}
+
+</div>
+
+
+</div>
       <div className="bg-white rounded-2xl shadow p-4 md:p-6 mt-8">
 
 <h2 className="text-2xl font-bold text-blue-950 mb-2">
@@ -476,6 +942,14 @@ Löschen
 </div>
 
 )}
+<DiperaPopup
+  open={showPopup}
+  message={popupMessage}
+  onClose={() => {
+    setShowPopup(false);
+    setPopupMessage("");
+  }}
+/>
     </div>
   );
 }

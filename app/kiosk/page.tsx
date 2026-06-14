@@ -21,7 +21,6 @@ export default function KioskPage() {
   const [checkingAuth, setCheckingAuth] = useState(true);
   const [pin, setPin] = useState("");
   const [employees, setEmployees] = useState<Employee[]>([]);
-  const [message, setMessage] = useState("");
   const [showPopup, setShowPopup] = useState(false);
   const [businessName, setBusinessName] = useState("");
 
@@ -226,11 +225,11 @@ async function handleReturnToAdmin() {
   window.location.href = "/admin";
 }
 
-  function showMessage(text: string) {
-    setMessage(text);
-    setShowPopup(true);
-    setPin("");
-  }
+function showMessage(text: string) {
+  setPopupMessage(text);
+  setShowPopup(true);
+  setPin("");
+}
 
   function getRemainingLockSeconds() {
     if (!lockedUntil) return 0;
@@ -684,40 +683,6 @@ p-6
   </button>
 </div>
 
-{showPopup && (
-  <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-6">
-    <div
-      className="
-        max-w-lg w-full text-center
-        rounded-3xl
-        border border-white/10
-        bg-[#0B1220]/95
-        shadow-2xl
-        p-8 md:p-10
-      "
-    >
-      <p className="text-2xl md:text-3xl font-bold text-white mb-8 leading-snug">
-        {message}
-      </p>
-
-      <button
-        onClick={() => setShowPopup(false)}
-        className="
-          bg-gradient-to-r from-blue-700 to-blue-500
-          text-white
-          px-12 py-4
-          rounded-2xl
-          text-xl font-bold
-          shadow-xl
-          hover:scale-105
-          transition
-        "
-      >
-        OK
-      </button>
-    </div>
-  </div>
-)}
 
 {showAdminPopup && (
 <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-6">

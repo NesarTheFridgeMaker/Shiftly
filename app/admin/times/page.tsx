@@ -5,6 +5,13 @@ import ExcelJS from "exceljs";
 import { supabase } from "@/lib/supabaseClient";
 import { getBusinessId } from "@/lib/getBusinessId";
 import DiperaPopup from "@/components/DiperaPopup";
+import {
+  buildWorkSessions
+} from "@/lib/payroll/buildWorkSessions";
+
+import {
+  calculateSurcharges
+} from "@/lib/payroll/calculateSurcharges";
 
 type TimeEntry = {
   id: string;
@@ -18,6 +25,12 @@ type Employee = {
   id: string;
   name: string;
   account_status: string;
+  datev_personnel_number: string | null;
+  cost_center: string | null;
+  wage_type: "hourly" | "salary" | null;
+  hourly_rate: number | null;
+  monthly_salary: number | null;
+  eligible_for_surcharges: boolean;
 };
 
 type EmployeeTargetHour = {
@@ -25,6 +38,17 @@ type EmployeeTargetHour = {
   employee_id: string;
   weekly_hours: number;
   monthly_hours: number;
+};
+
+type PayRule = {
+  id: string;
+  name: string;
+  rule_type: string;
+  starts_at: string | null;
+  ends_at: string | null;
+  percentage: number;
+  datev_wage_type: string | null;
+  active: boolean;
 };
 
 type WorkSummary = {
@@ -247,10 +271,18 @@ export default function TimesPage() {
   const [timeEntries, setTimeEntries] = useState<TimeEntry[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [targetHours, setTargetHours] = useState<EmployeeTargetHour[]>([]);
+  const [payRules, setPayRules] =
+  useState<PayRule[]>([]);
+  const [federalState, setFederalState] =
+  useState("BW");
+  const [
+  datevRegularHoursWageType,
+  setDatevRegularHoursWageType
+] = useState("100");
   const [openDetails, setOpenDetails] = useState<string | null>(null);
   const [businessName, setBusinessName] = useState("Dipera");
   const [popupMessage, setPopupMessage] = useState("");
-const [showPopup, setShowPopup] = useState(false);
+  const [showPopup, setShowPopup] = useState(false);
 
 const [confirmMessage, setConfirmMessage] = useState("");
 const [confirmAction, setConfirmAction] =
@@ -325,7 +357,7 @@ function showConfirm(text: string, action: () => void) {
 
     const { data, error } = await supabase
       .from("employees")
-      .select("id, name, account_status")
+      .select("id, name, account_status, datev_personnel_number, cost_center, wage_type, hourly_rate, monthly_salary, eligible_for_surcharges")
       .eq("business_id", businessId)
       .eq("account_status", "active")
       .order("name", { ascending: true });
@@ -345,7 +377,7 @@ function showConfirm(text: string, action: () => void) {
 
   const { data, error } = await supabase
     .from("businesses")
-    .select("name")
+    .select("name, federal_state, datev_regular_hours_wage_type")
     .eq("id", businessId)
     .single();
 
@@ -357,12 +389,26 @@ function showConfirm(text: string, action: () => void) {
   if (data?.name) {
     setBusinessName(data.name);
   }
+  if (data.federal_state) {
+  setFederalState(
+    data.federal_state
+  );
 }
+
+if (data.datev_regular_hours_wage_type) {
+  setDatevRegularHoursWageType(
+    data.datev_regular_hours_wage_type
+  );
+}
+}
+
 
 useEffect(() => {
   loadTimeEntries();
   loadEmployees();
   loadBusiness();
+  loadTargetHours();
+  loadPayRules();
 }, []);
 
   async function loadTargetHours() {
@@ -380,6 +426,33 @@ useEffect(() => {
   }
 
   setTargetHours((data || []) as EmployeeTargetHour[]);
+}
+
+async function loadPayRules() {
+  const businessId =
+    await getBusinessId();
+
+  if (!businessId) return;
+
+  const { data,error } =
+    await supabase
+    .from("pay_rules")
+    .select("*")
+    .eq(
+      "business_id",
+      businessId
+    )
+    .eq(
+      "active",
+      true
+    );
+
+  if(error){
+    console.error(error);
+    return;
+  }
+
+  setPayRules(data || []);
 }
 
   async function handleAddTimeEntry(skipNightCheck = false) {
@@ -400,6 +473,7 @@ useEffect(() => {
     const selectedEmployee = employees.find(
       (employee) => employee.id === selectedEmployeeId
     );
+    
 
     if (!selectedEmployee) {
       showDiperaPopup("Mitarbeiter nicht gefunden.");
@@ -526,6 +600,17 @@ async function handleExportExcel() {
 
   const workbook = new ExcelJS.Workbook();
   const worksheet = workbook.addWorksheet("Arbeitszeiten");
+  const datevSheet = workbook.addWorksheet("DATEV-Vorbereitung");
+
+datevSheet.addRow([
+  "Personalnummer",
+  "Mitarbeiter",
+  "Kostenstelle",
+  "Lohnart",
+  "Bezeichnung",
+  "Stunden",
+  "Prozent",
+]);
 
   const monthDate = new Date(`${exportMonth}-01`);
 
@@ -620,6 +705,9 @@ async function handleExportExcel() {
     "Monats-Soll",
     "Ist-Arbeitszeit",
     "Pause gesamt",
+    "Nachtstunden",
+    "Sonntagsstunden",
+    "Feiertagsstunden",
     "Saldo",
     "Status",
   ]);
@@ -693,33 +781,103 @@ async function handleExportExcel() {
         status = "Im Minus";
       }
 
-      worksheet.addRow([
-        employeeName,
-        data.days,
-        `${monthlyHours} Std.`,
-        formatMinutes(
-          data.workMinutes
-        ),
-        formatMinutes(
-          data.pauseMinutes
-        ),
-        saldo,
-        status,
-      ]);
+const employeeEntries = selectedSummaries
+  .filter((summary) => summary.employee_name === employeeName)
+  .flatMap((summary) => summary.entries);
+
+const sessions = buildWorkSessions(employeeEntries);
+
+const surchargeResults =
+  calculateSurcharges(
+    sessions,
+    payRules,
+    federalState
+  );
+const nightHours =
+  surchargeResults.find((result) => result.ruleType === "night")?.hours ?? 0;
+
+const sundayHours =
+  surchargeResults.find((result) => result.ruleType === "sunday")?.hours ?? 0;
+
+const holidayHours =
+  surchargeResults.find(
+    (result) => result.ruleType === "holiday"
+  )?.hours ?? 0;
+
+  const employee = employees.find(
+  (item) => item.id === data.employeeId
+);
+
+if (
+  data.workMinutes > 0 &&
+  datevRegularHoursWageType
+) {
+  datevSheet.addRow([
+    employee?.datev_personnel_number || "",
+    employeeName,
+    employee?.cost_center || "",
+    datevRegularHoursWageType,
+    "Reguläre Arbeitsstunden",
+    Math.round((data.workMinutes / 60) * 100) / 100,
+    "",
+  ]);
+}
+
+if (employee?.eligible_for_surcharges !== false) {
+  surchargeResults.forEach((result) => {
+    if (result.hours <= 0) return;
+    if (!result.datevWageType) return;
+
+    datevSheet.addRow([
+      employee?.datev_personnel_number || "",
+      employeeName,
+      employee?.cost_center || "",
+      result.datevWageType,
+      result.name,
+      result.hours,
+      result.percentage,
+    ]);
+  });
+}
+
+worksheet.addRow([
+  employeeName,
+  data.days,
+  `${monthlyHours} Std.`,
+  formatMinutes(data.workMinutes),
+  formatMinutes(data.pauseMinutes),
+  `${nightHours} Std.`,
+  `${sundayHours} Std.`,
+  `${holidayHours} Std.`,
+  saldo,
+  status,
+]);
+
     }
   );
 
-  worksheet.columns = [
-    { width: 25 },
-    { width: 15 },
-    { width: 18 },
-    { width: 18 },
-    { width: 18 },
-    { width: 18 },
-    { width: 18 },
-    { width: 28 },
-  ];
+worksheet.columns = [
+  { width: 25 },
+  { width: 15 },
+  { width: 18 },
+  { width: 18 },
+  { width: 18 },
+  { width: 18 },
+  { width: 18 },
+  { width: 18 },
+  { width: 18 },
+  { width: 28 },
+];
 
+datevSheet.columns = [
+  { width: 18 },
+  { width: 25 },
+  { width: 18 },
+  { width: 15 },
+  { width: 25 },
+  { width: 12 },
+  { width: 12 },
+];
   const buffer =
     await workbook.xlsx.writeBuffer();
 
@@ -784,6 +942,7 @@ async function handleExportExcel() {
     >
       Excel exportieren
     </button>
+
   </div>
 </div>
 

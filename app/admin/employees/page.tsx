@@ -15,6 +15,12 @@ type Employee = {
   hours: string;
   vacation_days_per_year: number;
   work_days_per_week: number;
+  wage_type?: "hourly" | "salary";
+  hourly_rate?: number | null;
+  monthly_salary?: number | null;
+  datev_personnel_number?: string | null;
+  cost_center?: string | null;
+  eligible_for_surcharges?: boolean;
 };
 
 type EmployeeTargetHour = {
@@ -44,6 +50,7 @@ type EmployeeWithTargetHours = Employee & {
   notes: EmployeeNote[];
   invite: EmployeeInvite | null;
 };
+
 
 function formatAccountStatus(status: string) {
   if (status === "active") return "Aktiv";
@@ -89,8 +96,30 @@ export default function EmployeesPage() {
   const [showPopup, setShowPopup] = useState(false);
   const [employeeToDelete, setEmployeeToDelete] =
   useState<string | null>(null);
+  const [newEmployeeWageType, setNewEmployeeWageType] =
+  useState<"hourly" | "salary">("hourly");
 
-const [noteToDelete, setNoteToDelete] =
+  const [newEmployeeHourlyRate, setNewEmployeeHourlyRate] = useState("");
+  const [newEmployeeMonthlySalary, setNewEmployeeMonthlySalary] = useState("");
+  const [newEmployeeDatevPersonnelNumber, setNewEmployeeDatevPersonnelNumber] = useState("");
+  const [newEmployeeCostCenter, setNewEmployeeCostCenter] = useState("");
+
+  const [editingPayrollEmployee, setEditingPayrollEmployee] =
+  useState<EmployeeWithTargetHours | null>(null);
+
+const [editWageType, setEditWageType] =
+  useState<"hourly" | "salary">("hourly");
+
+const [editHourlyRate, setEditHourlyRate] = useState("");
+const [editMonthlySalary, setEditMonthlySalary] = useState("");
+const [editDatevPersonnelNumber, setEditDatevPersonnelNumber] = useState("");
+const [editCostCenter, setEditCostCenter] = useState("");
+const [
+  editEligibleForSurcharges,
+  setEditEligibleForSurcharges
+] = useState(true);
+
+  const [noteToDelete, setNoteToDelete] =
   useState<string | null>(null);
 
   const [noteTexts, setNoteTexts] = useState<Record<string, string>>({});
@@ -105,7 +134,7 @@ const [noteToDelete, setNoteToDelete] =
 
     const { data: employeeData, error: employeeError } = await supabase
       .from("employees")
-      .select("id, name, role, pin, status, account_status, hours, vacation_days_per_year, work_days_per_week")
+      .select("id, name, role, pin, status, account_status, hours, vacation_days_per_year, work_days_per_week, wage_type, hourly_rate, monthly_salary, datev_personnel_number, cost_center, eligible_for_surcharges")
       .eq("business_id", businessId)
       .order("created_at", { ascending: false });
 
@@ -313,6 +342,31 @@ showDiperaPopup(
             vacation_days_per_year: parsedVacationDays,
             work_days_per_week:
             parsedWorkDays,
+            wage_type: newEmployeeWageType,
+
+            hourly_rate:
+            newEmployeeWageType === "hourly" &&
+            newEmployeeHourlyRate
+            ? Number(
+            newEmployeeHourlyRate.replace(",", ".")
+            )
+            : null,
+
+            monthly_salary:
+            newEmployeeWageType === "salary" &&
+            newEmployeeMonthlySalary
+            ? Number(
+            newEmployeeMonthlySalary.replace(",", ".")
+            )
+            : null,
+
+            datev_personnel_number:
+            newEmployeeDatevPersonnelNumber.trim()
+            || null,
+
+            cost_center:
+            newEmployeeCostCenter.trim()
+            || null,
           },
         ])
         .select("id")
@@ -374,6 +428,11 @@ showDiperaPopup(
       setMonthlyHours("173");
       setVacationDays("");
       setWorkDaysPerWeek("5");
+      setNewEmployeeWageType("hourly");
+      setNewEmployeeHourlyRate("");
+      setNewEmployeeMonthlySalary("");
+      setNewEmployeeDatevPersonnelNumber("");
+      setNewEmployeeCostCenter("");
       setShowForm(false);
 
       await loadEmployees();
@@ -661,9 +720,87 @@ showDiperaPopup(
     );
   }
 
+  function handleOpenEditPayroll(employee: EmployeeWithTargetHours) {
+  setEditingPayrollEmployee(employee);
+
+  setEditWageType(
+    employee.wage_type === "salary" ? "salary" : "hourly"
+  );
+
+  setEditHourlyRate(
+    employee.hourly_rate !== null && employee.hourly_rate !== undefined
+      ? String(employee.hourly_rate)
+      : ""
+  );
+
+  setEditMonthlySalary(
+    employee.monthly_salary !== null && employee.monthly_salary !== undefined
+      ? String(employee.monthly_salary)
+      : ""
+  );
+
+  setEditDatevPersonnelNumber(
+    employee.datev_personnel_number || ""
+  );
+
+  setEditCostCenter(
+    employee.cost_center || ""
+  );
+
+  setEditEligibleForSurcharges(
+  employee.eligible_for_surcharges ?? true
+);
+  
+}
+
   const activeEmployees = employees.filter(
   (employee) => employee.account_status === "active"
 );
+
+async function handleSaveEmployeePayroll() {
+  if (!editingPayrollEmployee) return;
+
+  const hourlyRate =
+    editWageType === "hourly" && editHourlyRate
+      ? Number(editHourlyRate.replace(",", "."))
+      : null;
+
+  const monthlySalary =
+    editWageType === "salary" && editMonthlySalary
+      ? Number(editMonthlySalary.replace(",", "."))
+      : null;
+
+  const { error } = await supabase
+    .from("employees")
+    .update({
+      wage_type: editWageType,
+      hourly_rate: hourlyRate,
+      monthly_salary: monthlySalary,
+      datev_personnel_number:
+        editDatevPersonnelNumber.trim() || null,
+      cost_center:
+        editCostCenter.trim() || null,
+        eligible_for_surcharges:
+  editEligibleForSurcharges,
+    })
+    .eq("id", editingPayrollEmployee.id);
+
+  if (error) {
+    console.error(error);
+    showDiperaPopup(
+      "Lohndaten konnten nicht gespeichert werden."
+    );
+    return;
+  }
+
+  showDiperaPopup(
+    "Lohndaten wurden gespeichert."
+  );
+
+  setEditingPayrollEmployee(null);
+
+  await loadEmployees();
+}
 
 const inactiveEmployees = employees.filter(
   (employee) => employee.account_status === "inactive"
@@ -690,7 +827,7 @@ const inactiveEmployees = employees.filter(
               Neuer Mitarbeiter
             </h2>
 
-            <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
               <input
                 type="text"
                 placeholder="Name"
@@ -733,43 +870,98 @@ const inactiveEmployees = employees.filter(
                 disabled={isSaving}
                 className="border p-3 rounded-lg bg-white text-black disabled:bg-gray-200"
               />
+                              <select
+                value={newEmployeeWageType}
+                onChange={(event) =>
+                  setNewEmployeeWageType(event.target.value as "hourly" | "salary")
+                }
+                disabled={isSaving}
+                className="border p-3 rounded-lg bg-white text-black disabled:bg-gray-200"
+              >
+                <option value="hourly">Stundenlohn</option>
+                <option value="salary">Monatsgehalt</option>
+              </select>
+
+              {newEmployeeWageType === "hourly" && (
+                <input
+                  type="text"
+                  placeholder="Stundenlohn in €"
+                  value={newEmployeeHourlyRate}
+                  onChange={(event) => setNewEmployeeHourlyRate(event.target.value)}
+                  disabled={isSaving}
+                  inputMode="decimal"
+                  className="border p-3 rounded-lg bg-white text-black disabled:bg-gray-200"
+                />
+              )}
+
+              {newEmployeeWageType === "salary" && (
+                <input
+                  type="text"
+                  placeholder="Monatsgehalt in €"
+                  value={newEmployeeMonthlySalary}
+                  onChange={(event) => setNewEmployeeMonthlySalary(event.target.value)}
+                  disabled={isSaving}
+                  inputMode="decimal"
+                  className="border p-3 rounded-lg bg-white text-black disabled:bg-gray-200"
+                />
+              )}
+
+              <input
+                type="text"
+                placeholder="DATEV-Personalnummer optional"
+                value={newEmployeeDatevPersonnelNumber}
+                onChange={(event) => setNewEmployeeDatevPersonnelNumber(event.target.value)}
+                disabled={isSaving}
+                className="border p-3 rounded-lg bg-white text-black disabled:bg-gray-200"
+              />
+
+              <input
+                type="text"
+                placeholder="Kostenstelle optional"
+                value={newEmployeeCostCenter}
+                onChange={(event) => setNewEmployeeCostCenter(event.target.value)}
+                disabled={isSaving}
+                className="border p-3 rounded-lg bg-white text-black disabled:bg-gray-200"
+              />
             </div>
 
-<div className="flex flex-col gap-1 max-w-[180px]">
-  <label className="text-sm font-semibold text-gray-600">
-    Urlaubstage/Jahr
-  </label>
+<div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
 
-  <div className="flex flex-col gap-1 max-w-[180px]">
-  <label className="text-sm font-semibold text-gray-600">
-    Arbeitstage/Woche
-  </label>
+  <div className="flex flex-col gap-1">
+    <label className="text-sm font-semibold text-gray-600">
+      Urlaubstage/Jahr
+    </label>
 
-  <input
-    type="number"
-    min="1"
-    max="7"
-    placeholder="z. B. 5"
-    value={workDaysPerWeek}
-    onChange={(event) =>
-      setWorkDaysPerWeek(
-        event.target.value
-      )
-    }
-    disabled={isSaving}
-    className="border p-3 rounded-lg bg-white text-black disabled:bg-gray-200"
-  />
-</div>
+    <input
+      type="number"
+      min="0"
+      placeholder="z. B. 24"
+      value={vacationDays}
+      onChange={(event) => setVacationDays(event.target.value)}
+      disabled={isSaving}
+      className="border p-3 rounded-lg bg-white text-black disabled:bg-gray-200"
+    />
+  </div>
 
-  <input
-    type="number"
-    min="0"
-    placeholder="z. B. 24"
-    value={vacationDays}
-    onChange={(event) => setVacationDays(event.target.value)}
-    disabled={isSaving}
-    className="border p-3 rounded-lg bg-white text-black disabled:bg-gray-200"
-  />
+  <div className="flex flex-col gap-1">
+    <label className="text-sm font-semibold text-gray-600">
+      Arbeitstage/Woche
+    </label>
+
+    <input
+      type="number"
+      min="1"
+      max="7"
+      placeholder="z. B. 5"
+      value={workDaysPerWeek}
+      onChange={(event) =>
+        setWorkDaysPerWeek(event.target.value)
+      }
+      disabled={isSaving}
+      className="border p-3 rounded-lg bg-white text-black disabled:bg-gray-200"
+    />
+  </div>
+
 </div>
 
             <div className="flex flex-col md:flex-row gap-3 mt-5">
@@ -830,6 +1022,29 @@ const inactiveEmployees = employees.filter(
                     {employee.monthly_target_hours} Std.
                   </p>
                 </div>
+
+                <div className="bg-white rounded-xl p-3">
+                  <p className="text-gray-500 mb-1">Vergütung</p>
+                  <p className="font-semibold text-black">
+                    {employee.wage_type === "salary"
+                      ? `${employee.monthly_salary ?? 0} € / Monat`
+                      : `${employee.hourly_rate ?? 0} € / Std.`}
+                  </p>
+                </div>
+
+                <div className="bg-white rounded-xl p-3">
+                  <p className="text-gray-500 mb-1">DATEV-Nr.</p>
+                  <p className="font-semibold text-black">
+                    {employee.datev_personnel_number || "—"}
+                  </p>
+                </div>
+
+                <div className="bg-white rounded-xl p-3 col-span-2">
+                  <p className="text-gray-500 mb-1">Kostenstelle</p>
+                  <p className="font-semibold text-black">
+                    {employee.cost_center || "—"}
+                  </p>
+                </div>
               </div>
 
               <div className="flex flex-col gap-2 mb-3">
@@ -868,6 +1083,14 @@ const inactiveEmployees = employees.filter(
                 </button>
 
                 <button
+  type="button"
+  onClick={() => handleOpenEditPayroll(employee)}
+  className="w-full bg-blue-950 text-white px-3 py-3 rounded-lg hover:bg-blue-900 transition"
+>
+  Lohndaten bearbeiten
+</button>
+
+                <button
                   type="button"
                   onClick={() => setEmployeeToDelete(employee.id)}
                   className="w-full bg-red-600 text-white px-3 py-3 rounded-lg hover:bg-red-700 transition"
@@ -885,74 +1108,99 @@ const inactiveEmployees = employees.filter(
         <div className="hidden xl:flex flex-col gap-4">
           {activeEmployees.map((employee) => (
             <div key={employee.id} className="border rounded-2xl p-4">
-              <div className="grid grid-cols-[1.2fr_1fr_0.7fr_0.8fr_1fr_1.6fr] gap-3 items-center min-w-0">
-                <div className="text-black font-semibold">
-                  {employee.name}
-                </div>
+<div className="grid grid-cols-[1.2fr_1fr_0.7fr_0.9fr_1fr_1.1fr_0.9fr_0.9fr_1.6fr] gap-3 items-center min-w-0">
+  <div className="text-black font-semibold">
+    {employee.name}
+  </div>
 
-                <div className="text-black">{employee.role}</div>
+  <div className="text-black">{employee.role}</div>
 
-                <div className="text-black">{employee.pin}</div>
+  <div className="text-black">{employee.pin}</div>
 
-                <div
-                  className={`font-bold ${getAccountStatusColor(
-                    employee.account_status
-                  )}`}
-                >
-                  {formatAccountStatus(employee.account_status)}
-                </div>
+  <div
+    className={`font-bold ${getAccountStatusColor(
+      employee.account_status
+    )}`}
+  >
+    {formatAccountStatus(employee.account_status)}
+  </div>
 
-                <div className="flex items-center gap-2 text-black">
-                  <input
-                    type="number"
-                    min="1"
-                    defaultValue={employee.monthly_target_hours}
-                    onBlur={(event) =>
-                      handleUpdateMonthlyHours(
-                        employee.id,
-                        Number(event.target.value)
-                      )
-                    }
-                    className="border p-2 rounded-lg bg-white text-black w-24"
-                  />
+  <div className="flex items-center gap-2 text-black">
+    <input
+      type="number"
+      min="1"
+      defaultValue={employee.monthly_target_hours}
+      onBlur={(event) =>
+        handleUpdateMonthlyHours(
+          employee.id,
+          Number(event.target.value)
+        )
+      }
+      className="border p-2 rounded-lg bg-white text-black w-24"
+    />
 
-                  <span>Std.</span>
-                </div>
+    <span>Std.</span>
+  </div>
 
-                <div className="flex flex-wrap gap-2 justify-end">
-                  <button
-                    type="button"
-                    onClick={() =>
-                      handleToggleAccountStatus(
-                        employee.id,
-                        employee.account_status
-                      )
-                    }
-                    className="bg-yellow-500 text-white px-3 py-2 rounded-lg hover:bg-yellow-600 transition"
-                  >
-                    {employee.account_status === "active"
-                      ? "Deaktivieren"
-                      : "Aktivieren"}
-                  </button>
+  <div className="text-black">
+    {employee.wage_type === "salary"
+      ? `${employee.monthly_salary ?? 0} € / Monat`
+      : `${employee.hourly_rate ?? 0} € / Std.`}
+  </div>
 
-                  <button
-                    type="button"
-                    onClick={() => setEmployeeToDelete(employee.id)}
-                    className="bg-red-600 text-white px-3 py-2 rounded-lg hover:bg-red-700 transition"
-                  >
-                    Löschen
-                  </button>
-                </div>
-              </div>
+  <div className="text-black">
+    {employee.datev_personnel_number || "—"}
+  </div>
 
-              <div className="grid grid-cols-6 gap-4 text-sm text-gray-500 mt-3 border-t pt-3">
-                <div>Name</div>
-                <div>Rolle</div>
-                <div>PIN</div>
-                <div>Konto</div>
-                <div>Soll/Monat</div>
-                <div>Aktionen</div>
-              </div>
+  <div className="text-black">
+    {employee.cost_center || "—"}
+  </div>
+
+  <div className="flex flex-wrap gap-2 justify-end">
+    <button
+      type="button"
+      onClick={() =>
+        handleToggleAccountStatus(
+          employee.id,
+          employee.account_status
+        )
+      }
+      className="bg-yellow-500 text-white px-3 py-2 rounded-lg hover:bg-yellow-600 transition"
+    >
+      {employee.account_status === "active"
+        ? "Deaktivieren"
+        : "Aktivieren"}
+    </button>
+
+    <button
+  type="button"
+  onClick={() => handleOpenEditPayroll(employee)}
+  className="bg-blue-950 text-white px-3 py-2 rounded-lg hover:bg-blue-900 transition"
+>
+  Lohndaten
+</button>
+
+    <button
+      type="button"
+      onClick={() => setEmployeeToDelete(employee.id)}
+      className="bg-red-600 text-white px-3 py-2 rounded-lg hover:bg-red-700 transition"
+    >
+      Löschen
+    </button>
+  </div>
+</div>
+
+<div className="grid grid-cols-[1.2fr_1fr_0.7fr_0.9fr_1fr_1.1fr_0.9fr_0.9fr_1.6fr] gap-3 text-sm text-gray-500 mt-3 border-t pt-3">
+  <div>Name</div>
+  <div>Rolle</div>
+  <div>PIN</div>
+  <div>Konto</div>
+  <div>Soll/Monat</div>
+  <div>Vergütung</div>
+  <div>DATEV-Nr.</div>
+  <div>Kostenstelle</div>
+  <div>Aktionen</div>
+</div>
 
               {renderInvite(employee)}
               {renderNotes(employee)}
@@ -1057,6 +1305,105 @@ const inactiveEmployees = employees.filter(
   confirmText="Löschen"
   cancelText="Abbrechen"
 />
+
+{editingPayrollEmployee && (
+  <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-6 z-50">
+    <div className="max-w-xl w-full bg-white rounded-3xl p-6 shadow-2xl">
+      <h2 className="text-2xl font-bold text-blue-950 mb-4">
+        Lohndaten bearbeiten
+      </h2>
+
+      <p className="text-gray-600 mb-6">
+        {editingPayrollEmployee.name}
+      </p>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <select
+          value={editWageType}
+          onChange={(event) =>
+            setEditWageType(event.target.value as "hourly" | "salary")
+          }
+          className="border p-3 rounded-lg bg-white text-black"
+        >
+          <option value="hourly">Stundenlohn</option>
+          <option value="salary">Monatsgehalt</option>
+        </select>
+
+        {editWageType === "hourly" && (
+          <input
+            type="text"
+            placeholder="Stundenlohn in €"
+            value={editHourlyRate}
+            onChange={(event) => setEditHourlyRate(event.target.value)}
+            className="border p-3 rounded-lg bg-white text-black"
+          />
+        )}
+
+        {editWageType === "salary" && (
+          <input
+            type="text"
+            placeholder="Monatsgehalt in €"
+            value={editMonthlySalary}
+            onChange={(event) => setEditMonthlySalary(event.target.value)}
+            className="border p-3 rounded-lg bg-white text-black"
+          />
+        )}
+
+        <input
+          type="text"
+          placeholder="DATEV-Personalnummer"
+          value={editDatevPersonnelNumber}
+          onChange={(event) =>
+            setEditDatevPersonnelNumber(event.target.value)
+          }
+          className="border p-3 rounded-lg bg-white text-black"
+        />
+
+        <input
+          type="text"
+          placeholder="Kostenstelle"
+          value={editCostCenter}
+          onChange={(event) => setEditCostCenter(event.target.value)}
+          className="border p-3 rounded-lg bg-white text-black"
+        />
+
+        <label className="flex items-center gap-3">
+  <input
+    type="checkbox"
+    checked={editEligibleForSurcharges}
+    onChange={(event) =>
+      setEditEligibleForSurcharges(
+        event.target.checked
+      )
+    }
+  />
+
+  <span className="text-gray-900 font-medium">
+  Zuschlagsberechtigt
+</span>
+</label>
+      </div>
+
+      <div className="flex flex-col sm:flex-row gap-3 mt-6">
+        <button
+          type="button"
+          onClick={handleSaveEmployeePayroll}
+          className="flex-1 bg-blue-950 text-white px-5 py-3 rounded-xl hover:bg-blue-900 transition"
+        >
+          Speichern
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setEditingPayrollEmployee(null)}
+          className="flex-1 bg-gray-200 text-gray-800 px-5 py-3 rounded-xl hover:bg-gray-300 transition"
+        >
+          Abbrechen
+        </button>
+      </div>
+    </div>
+  </div>
+)}
     </div>
   );
 }
