@@ -12,6 +12,9 @@ import {
 import {
   calculateSurcharges
 } from "@/lib/payroll/calculateSurcharges";
+import {
+  calculatePayrollPreview
+} from "@/lib/payroll/calculatePayrollPreview";
 
 type TimeEntry = {
   id: string;
@@ -27,7 +30,7 @@ type Employee = {
   account_status: string;
   datev_personnel_number: string | null;
   cost_center: string | null;
-  wage_type: "hourly" | "salary" | null;
+  wage_type: "hourly" | "fixed_hourly" | "salary" | null;
   hourly_rate: number | null;
   monthly_salary: number | null;
   eligible_for_surcharges: boolean;
@@ -49,6 +52,17 @@ type PayRule = {
   percentage: number;
   datev_wage_type: string | null;
   active: boolean;
+};
+
+type Absence = {
+  id: string;
+  employee_id: string;
+  employee_name: string;
+  type: "vacation" | "sick" | string;
+  start_date: string;
+  end_date: string;
+  request_status: string;
+  business_id: string;
 };
 
 type WorkSummary = {
@@ -271,6 +285,45 @@ export default function TimesPage() {
   const [timeEntries, setTimeEntries] = useState<TimeEntry[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [targetHours, setTargetHours] = useState<EmployeeTargetHour[]>([]);
+  const [absences, setAbsences] = useState<Absence[]>([]);
+  function countAbsenceDaysForMonth(
+  employeeId: string,
+  type: "vacation" | "sick",
+  month: string
+) {
+  const [year, monthNumber] = month.split("-").map(Number);
+
+  const monthStart = new Date(year, monthNumber - 1, 1);
+  const monthEnd = new Date(year, monthNumber, 0);
+
+  let count = 0;
+
+  absences
+    .filter(
+      (absence) =>
+        absence.employee_id === employeeId &&
+        absence.type === type
+    )
+    .forEach((absence) => {
+      const start = new Date(absence.start_date);
+      const end = new Date(absence.end_date);
+
+      const current = new Date(
+        Math.max(start.getTime(), monthStart.getTime())
+      );
+
+      const final = new Date(
+        Math.min(end.getTime(), monthEnd.getTime())
+      );
+
+      while (current <= final) {
+        count += 1;
+        current.setDate(current.getDate() + 1);
+      }
+    });
+
+  return count;
+}
   const [payRules, setPayRules] =
   useState<PayRule[]>([]);
   const [federalState, setFederalState] =
@@ -279,6 +332,23 @@ export default function TimesPage() {
   datevRegularHoursWageType,
   setDatevRegularHoursWageType
 ] = useState("100");
+const [
+  datevSalaryWageType,
+  setDatevSalaryWageType
+] = useState("101");
+const [
+  datevOvertimeWageType,
+  setDatevOvertimeWageType
+] = useState("130");
+const [
+  datevVacationWageType,
+  setDatevVacationWageType
+] = useState("140");
+
+const [
+  datevSickWageType,
+  setDatevSickWageType
+] = useState("141");
   const [openDetails, setOpenDetails] = useState<string | null>(null);
   const [businessName, setBusinessName] = useState("Dipera");
   const [popupMessage, setPopupMessage] = useState("");
@@ -377,7 +447,9 @@ function showConfirm(text: string, action: () => void) {
 
   const { data, error } = await supabase
     .from("businesses")
-    .select("name, federal_state, datev_regular_hours_wage_type")
+    .select(
+  "name, federal_state, datev_regular_hours_wage_type, datev_salary_wage_type, datev_overtime_wage_type, datev_vacation_wage_type, datev_sick_wage_type"
+)
     .eq("id", businessId)
     .single();
 
@@ -385,6 +457,18 @@ function showConfirm(text: string, action: () => void) {
     console.error(error);
     return;
   }
+
+  if (data.datev_overtime_wage_type) {
+  setDatevOvertimeWageType(
+    data.datev_overtime_wage_type
+  );
+}
+
+  if (data.datev_salary_wage_type) {
+  setDatevSalaryWageType(
+    data.datev_salary_wage_type
+  );
+}
 
   if (data?.name) {
     setBusinessName(data.name);
@@ -400,6 +484,15 @@ if (data.datev_regular_hours_wage_type) {
     data.datev_regular_hours_wage_type
   );
 }
+
+if (data.datev_vacation_wage_type) {
+  setDatevVacationWageType(data.datev_vacation_wage_type);
+}
+
+if (data.datev_sick_wage_type) {
+  setDatevSickWageType(data.datev_sick_wage_type);
+}
+
 }
 
 
@@ -409,6 +502,7 @@ useEffect(() => {
   loadBusiness();
   loadTargetHours();
   loadPayRules();
+  loadAbsences();
 }, []);
 
   async function loadTargetHours() {
@@ -453,6 +547,27 @@ async function loadPayRules() {
   }
 
   setPayRules(data || []);
+}
+
+async function loadAbsences() {
+  const businessId = await getBusinessId();
+
+  if (!businessId) return;
+
+  const { data, error } = await supabase
+    .from("absences")
+    .select(
+      "id, employee_id, employee_name, type, start_date, end_date, request_status, business_id"
+    )
+    .eq("business_id", businessId)
+    .eq("request_status", "approved");
+
+  if (error) {
+    console.error(error);
+    return;
+  }
+
+  setAbsences(data || []);
 }
 
   async function handleAddTimeEntry(skipNightCheck = false) {
@@ -601,16 +716,114 @@ async function handleExportExcel() {
   const workbook = new ExcelJS.Workbook();
   const worksheet = workbook.addWorksheet("Arbeitszeiten");
   const datevSheet = workbook.addWorksheet("DATEV-Vorbereitung");
+  const payrollSheet = workbook.addWorksheet("Lohnübersicht");
+  const datevRows: Array<Array<string | number>> = [];
 
-datevSheet.addRow([
+function addDatevRow(row: Array<string | number>) {
+  datevRows.push(row);
+  datevSheet.addRow(row);
+}
+
+const datevCsvHeader = [
   "Personalnummer",
   "Mitarbeiter",
   "Kostenstelle",
   "Lohnart",
   "Bezeichnung",
-  "Stunden",
+  "Menge",
+  "Einheit",
   "Prozent",
+  "Betrag",
+];
+
+datevSheet.mergeCells("A1:H1");
+datevSheet.getCell("A1").value =
+  `${businessName} — DATEV-Vorbereitung ${exportMonth}`;
+datevSheet.getCell("A1").font = { bold: true, size: 18, color: { argb: "FFFFFFFF" } };
+datevSheet.getCell("A1").alignment = { horizontal: "center" };
+datevSheet.getCell("A1").fill = {
+  type: "pattern",
+  pattern: "solid",
+  fgColor: { argb: "FF172554" },
+};
+
+datevSheet.mergeCells("A2:H2");
+datevSheet.getCell("A2").value =
+  "Vorbereitete Bewegungsdaten – keine vollständige Lohnabrechnung";
+datevSheet.getCell("A2").font = { italic: true, size: 11 };
+datevSheet.getCell("A2").alignment = { horizontal: "center" };
+
+datevSheet.addRow([]);
+
+const datevHeader = datevSheet.addRow([
+  "Personalnummer",
+  "Mitarbeiter",
+  "Kostenstelle",
+  "Lohnart",
+  "Bezeichnung",
+  "Menge",
+  "Einheit",
+  "Prozent",
+  "Betrag",
 ]);
+
+payrollSheet.mergeCells("A1:I1");
+payrollSheet.getCell("A1").value =
+  `${businessName} — Lohnübersicht ${exportMonth}`;
+payrollSheet.getCell("A1").font = { bold: true, size: 18, color: { argb: "FFFFFFFF" } };
+payrollSheet.getCell("A1").alignment = { horizontal: "center" };
+payrollSheet.getCell("A1").fill = {
+  type: "pattern",
+  pattern: "solid",
+  fgColor: { argb: "FF172554" },
+};
+
+payrollSheet.mergeCells("A2:I2");
+payrollSheet.getCell("A2").value =
+  "Voraussichtliche Bruttowerte zur internen Lohnvorbereitung";
+payrollSheet.getCell("A2").font = { italic: true, size: 11 };
+payrollSheet.getCell("A2").alignment = { horizontal: "center" };
+
+payrollSheet.addRow([]);
+
+const payrollHeader = payrollSheet.addRow([
+  "Mitarbeiter",
+  "Vergütungsart",
+  "Urlaubstage",
+  "Kranktage",
+  "Rechnerischer Stundenlohn",
+  "Grundlohn",
+  "Überstunden",
+  "Nachtzuschlag",
+  "Sonntagszuschlag",
+  "Feiertagszuschlag",
+  "Zuschläge gesamt",
+  "Voraussichtliches Brutto",
+]);
+
+[datevHeader, payrollHeader].forEach((row) => {
+  row.font = { bold: true, color: { argb: "FFFFFFFF" } };
+
+  row.eachCell((cell) => {
+    cell.fill = {
+      type: "pattern",
+      pattern: "solid",
+      fgColor: { argb: "FF1E3A8A" },
+    };
+
+    cell.alignment = {
+      horizontal: "center",
+      vertical: "middle",
+    };
+
+    cell.border = {
+      top: { style: "thin" },
+      left: { style: "thin" },
+      bottom: { style: "thin" },
+      right: { style: "thin" },
+    };
+  });
+});
 
   const monthDate = new Date(`${exportMonth}-01`);
 
@@ -700,17 +913,19 @@ datevSheet.addRow([
   };
 
   const summaryHeader = worksheet.addRow([
-    "Mitarbeiter",
-    "Arbeitstage",
-    "Monats-Soll",
-    "Ist-Arbeitszeit",
-    "Pause gesamt",
-    "Nachtstunden",
-    "Sonntagsstunden",
-    "Feiertagsstunden",
-    "Saldo",
-    "Status",
-  ]);
+  "Mitarbeiter",
+  "Arbeitstage",
+  "Monats-Soll",
+  "Ist-Arbeitszeit",
+  "Pause gesamt",
+  "Nachtstunden",
+  "Sonntagsstunden",
+  "Feiertagsstunden",
+  "Urlaubstage",
+  "Kranktage",
+  "Saldo",
+  "Status",
+]);
 
   summaryHeader.font = {
     bold: true,
@@ -808,19 +1023,148 @@ const holidayHours =
   (item) => item.id === data.employeeId
 );
 
+const vacationDays =
+  countAbsenceDaysForMonth(
+    data.employeeId,
+    "vacation",
+    exportMonth
+  );
+
+const sickDays =
+  countAbsenceDaysForMonth(
+    data.employeeId,
+    "sick",
+    exportMonth
+  );
+
+const overtimeHours =
+  Math.max(
+    0,
+    Math.round(
+      (
+        (data.workMinutes / 60) -
+        monthlyHours
+      ) * 100
+    ) / 100
+  );
+
+const payrollPreview =
+  calculatePayrollPreview({
+    employee,
+    workHours:
+      Math.round((data.workMinutes / 60) * 100) / 100,
+    monthlyTargetHours:
+      monthlyHours,
+      overtimeHours,
+    surchargeResults,
+  });
+
+payrollSheet.addRow([
+  employeeName,
+  employee?.wage_type === "salary"
+    ? "Monatsgehalt"
+    : employee?.wage_type === "fixed_hourly"
+    ? "Fixer Monatslohn auf Stundenbasis"
+    : "Stundenlohn",
+
+  vacationDays,
+  sickDays,
+
+  payrollPreview.calculatedHourlyRate,
+  payrollPreview.baseGross,
+  payrollPreview.overtimeGross,
+  payrollPreview.nightGross,
+  payrollPreview.sundayGross,
+  payrollPreview.holidayGross,
+  payrollPreview.surchargeGross,
+  payrollPreview.estimatedGross,
+]);
+
 if (
+  employee?.wage_type === "hourly" &&
   data.workMinutes > 0 &&
   datevRegularHoursWageType
 ) {
-  datevSheet.addRow([
+  addDatevRow([
     employee?.datev_personnel_number || "",
     employeeName,
     employee?.cost_center || "",
     datevRegularHoursWageType,
     "Reguläre Arbeitsstunden",
     Math.round((data.workMinutes / 60) * 100) / 100,
+    "Stunden",
     "",
+    "",
+]);
+}
+
+if (
+  employee?.wage_type === "salary" &&
+  employee.monthly_salary &&
+  datevSalaryWageType
+) {
+  addDatevRow([
+    employee?.datev_personnel_number || "",
+    employeeName,
+    employee?.cost_center || "",
+    datevSalaryWageType,
+    "Monatsgehalt",
+    "",
+    "",
+    "",
+    employee.monthly_salary,
   ]);
+}
+
+if (
+  overtimeHours > 0 &&
+  datevOvertimeWageType
+) {
+  addDatevRow([
+    employee?.datev_personnel_number || "",
+    employeeName,
+    employee?.cost_center || "",
+    datevOvertimeWageType,
+    "Überstunden",
+    overtimeHours,
+    "Stunden",
+    "",
+    "",
+]);
+}
+
+if (
+  vacationDays > 0 &&
+  datevVacationWageType
+) {
+  addDatevRow([
+    employee?.datev_personnel_number || "",
+    employeeName,
+    employee?.cost_center || "",
+    datevVacationWageType,
+    "Urlaub",
+    vacationDays,
+    "Tage",
+    "",
+    "",
+]);
+}
+
+if (
+  sickDays > 0 &&
+  datevSickWageType
+) {
+  addDatevRow([
+    employee?.datev_personnel_number || "",
+    employeeName,
+    employee?.cost_center || "",
+    datevSickWageType,
+    "Krankheit",
+    sickDays,
+    "Tage",
+    "",
+    "",
+]);
 }
 
 if (employee?.eligible_for_surcharges !== false) {
@@ -828,15 +1172,17 @@ if (employee?.eligible_for_surcharges !== false) {
     if (result.hours <= 0) return;
     if (!result.datevWageType) return;
 
-    datevSheet.addRow([
+    addDatevRow([
       employee?.datev_personnel_number || "",
       employeeName,
       employee?.cost_center || "",
       result.datevWageType,
       result.name,
       result.hours,
+      "Stunden",
       result.percentage,
-    ]);
+      "",
+]);
   });
 }
 
@@ -849,9 +1195,24 @@ worksheet.addRow([
   `${nightHours} Std.`,
   `${sundayHours} Std.`,
   `${holidayHours} Std.`,
+  vacationDays,
+  sickDays,
   saldo,
   status,
 ]);
+
+const lastRow = datevSheet.lastRow;
+
+if (lastRow) {
+  lastRow.eachCell((cell) => {
+    cell.border = {
+      ...cell.border,
+      bottom: {
+        style: "thick",
+      },
+    };
+  });
+}
 
     }
   );
@@ -865,19 +1226,88 @@ worksheet.columns = [
   { width: 18 },
   { width: 18 },
   { width: 18 },
+  { width: 15 },
+  { width: 15 },
   { width: 18 },
   { width: 28 },
 ];
 
 datevSheet.columns = [
-  { width: 18 },
-  { width: 25 },
-  { width: 18 },
-  { width: 15 },
-  { width: 25 },
-  { width: 12 },
-  { width: 12 },
+  { width: 18 }, // Personalnummer
+  { width: 25 }, // Mitarbeiter
+  { width: 18 }, // Kostenstelle
+  { width: 15 }, // Lohnart
+  { width: 25 }, // Bezeichnung
+  { width: 12 }, // Menge
+  { width: 12 }, // Einheit
+  { width: 12 }, // Prozent
+  { width: 18 }, // Betrag
 ];
+
+payrollSheet.columns = [
+  { width: 25 },
+  { width: 18 },
+  { width: 24 },
+  { width: 15 },
+  { width: 30 },
+  { width: 18 },
+  { width: 18 },
+  { width: 18 },
+  { width: 24 },
+  { width: 18 },
+  { width: 18 },
+  { width: 24 },
+];
+
+datevSheet.getColumn(6).numFmt = "0.00";
+datevSheet.getColumn(8).numFmt = "0.00";
+datevSheet.getColumn(9).numFmt = '#,##0.00 €';
+
+payrollSheet.getColumn(5).numFmt = '#,##0.00 €';
+payrollSheet.getColumn(6).numFmt = '#,##0.00 €';
+payrollSheet.getColumn(7).numFmt = '#,##0.00 €';
+payrollSheet.getColumn(8).numFmt = '#,##0.00 €';
+payrollSheet.getColumn(9).numFmt = '#,##0.00 €';
+payrollSheet.getColumn(10).numFmt = '#,##0.00 €';
+payrollSheet.getColumn(11).numFmt = '#,##0.00 €';
+payrollSheet.getColumn(12).numFmt = '#,##0.00 €';
+
+datevSheet.autoFilter = {
+  from: "A4",
+  to: "H4",
+};
+
+payrollSheet.autoFilter = {
+  from: "A4",
+  to: "I4",
+};
+
+const csvContent = [
+  datevCsvHeader.join(";"),
+  ...datevRows.map((row) =>
+    row
+      .map((value) => {
+        if (
+          value === null ||
+          value === undefined
+        ) {
+          return "";
+        }
+
+        if (typeof value === "number") {
+          return value
+            .toFixed(2)
+            .replace(".", ",");
+        }
+
+        return String(value);
+      })
+      .join(";")
+  ),
+].join("\n");
+
+console.log(csvContent);
+
   const buffer =
     await workbook.xlsx.writeBuffer();
 
@@ -906,6 +1336,27 @@ datevSheet.columns = [
   link.click();
 
   window.URL.revokeObjectURL(url);
+  const csvBlob = new Blob(
+  ["\uFEFF" + csvContent],
+  {
+    type: "text/csv;charset=utf-8;",
+  }
+);
+
+const csvUrl =
+  window.URL.createObjectURL(csvBlob);
+
+const csvLink =
+  document.createElement("a");
+
+csvLink.href = csvUrl;
+
+csvLink.download =
+  `${safeBusinessName}-datev-vorbereitung-${exportMonth}.csv`;
+
+csvLink.click();
+
+window.URL.revokeObjectURL(csvUrl);
 }
   const dailySummaries = buildDailySummaries(timeEntries);
   const weeklySummaries = buildPeriodSummaries(dailySummaries, "week");

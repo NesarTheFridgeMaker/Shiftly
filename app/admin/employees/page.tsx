@@ -15,7 +15,7 @@ type Employee = {
   hours: string;
   vacation_days_per_year: number;
   work_days_per_week: number;
-  wage_type?: "hourly" | "salary";
+  wage_type?: "hourly" | "fixed_hourly" | "salary"
   hourly_rate?: number | null;
   monthly_salary?: number | null;
   datev_personnel_number?: string | null;
@@ -97,7 +97,7 @@ export default function EmployeesPage() {
   const [employeeToDelete, setEmployeeToDelete] =
   useState<string | null>(null);
   const [newEmployeeWageType, setNewEmployeeWageType] =
-  useState<"hourly" | "salary">("hourly");
+  useState<"hourly" | "fixed_hourly" | "salary">("hourly");
 
   const [newEmployeeHourlyRate, setNewEmployeeHourlyRate] = useState("");
   const [newEmployeeMonthlySalary, setNewEmployeeMonthlySalary] = useState("");
@@ -108,7 +108,7 @@ export default function EmployeesPage() {
   useState<EmployeeWithTargetHours | null>(null);
 
 const [editWageType, setEditWageType] =
-  useState<"hourly" | "salary">("hourly");
+  useState<"hourly" | "fixed_hourly" | "salary">("hourly");
 
 const [editHourlyRate, setEditHourlyRate] = useState("");
 const [editMonthlySalary, setEditMonthlySalary] = useState("");
@@ -345,7 +345,8 @@ showDiperaPopup(
             wage_type: newEmployeeWageType,
 
             hourly_rate:
-            newEmployeeWageType === "hourly" &&
+            (newEmployeeWageType === "hourly" ||
+            newEmployeeWageType === "fixed_hourly") &&
             newEmployeeHourlyRate
             ? Number(
             newEmployeeHourlyRate.replace(",", ".")
@@ -724,8 +725,12 @@ showDiperaPopup(
   setEditingPayrollEmployee(employee);
 
   setEditWageType(
-    employee.wage_type === "salary" ? "salary" : "hourly"
-  );
+  employee.wage_type === "fixed_hourly"
+    ? "fixed_hourly"
+    : employee.wage_type === "salary"
+    ? "salary"
+    : "hourly"
+);
 
   setEditHourlyRate(
     employee.hourly_rate !== null && employee.hourly_rate !== undefined
@@ -761,9 +766,11 @@ async function handleSaveEmployeePayroll() {
   if (!editingPayrollEmployee) return;
 
   const hourlyRate =
-    editWageType === "hourly" && editHourlyRate
-      ? Number(editHourlyRate.replace(",", "."))
-      : null;
+  (editWageType === "hourly" ||
+   editWageType === "fixed_hourly") &&
+  editHourlyRate
+    ? Number(editHourlyRate.replace(",", "."))
+    : null;
 
   const monthlySalary =
     editWageType === "salary" && editMonthlySalary
@@ -873,16 +880,18 @@ const inactiveEmployees = employees.filter(
                               <select
                 value={newEmployeeWageType}
                 onChange={(event) =>
-                  setNewEmployeeWageType(event.target.value as "hourly" | "salary")
+                  setNewEmployeeWageType(event.target.value as "hourly" | "fixed_hourly" | "salary")
                 }
                 disabled={isSaving}
                 className="border p-3 rounded-lg bg-white text-black disabled:bg-gray-200"
               >
-                <option value="hourly">Stundenlohn</option>
-                <option value="salary">Monatsgehalt</option>
+                <option value="hourly">Stundenlohn nach Iststunden</option>
+                <option value="fixed_hourly">Fixer Monatslohn auf Stundenbasis</option>
+                <option value="salary">Festes Monatsgehalt</option>
               </select>
 
-              {newEmployeeWageType === "hourly" && (
+              {(newEmployeeWageType === "hourly" ||
+              newEmployeeWageType === "fixed_hourly") && (
                 <input
                   type="text"
                   placeholder="Stundenlohn in €"
@@ -1319,17 +1328,21 @@ const inactiveEmployees = employees.filter(
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <select
-          value={editWageType}
-          onChange={(event) =>
-            setEditWageType(event.target.value as "hourly" | "salary")
-          }
-          className="border p-3 rounded-lg bg-white text-black"
-        >
-          <option value="hourly">Stundenlohn</option>
-          <option value="salary">Monatsgehalt</option>
-        </select>
+  value={editWageType}
+  onChange={(event) =>
+    setEditWageType(
+      event.target.value as "hourly" | "fixed_hourly" | "salary"
+    )
+  }
+  className="border p-3 rounded-lg bg-white text-black"
+>
+  <option value="hourly">Stundenlohn nach Iststunden</option>
+  <option value="fixed_hourly">Fixer Monatslohn auf Stundenbasis</option>
+  <option value="salary">Festes Monatsgehalt</option>
+</select>
 
-        {editWageType === "hourly" && (
+        {(editWageType === "hourly" ||
+        editWageType === "fixed_hourly") && (
           <input
             type="text"
             placeholder="Stundenlohn in €"

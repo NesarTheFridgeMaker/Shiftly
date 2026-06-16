@@ -52,6 +52,16 @@ export default function SettingsPage() {
   datevRegularHoursWageType,
   setDatevRegularHoursWageType
 ] = useState("100");
+const [
+  datevSalaryWageType,
+  setDatevSalaryWageType
+] = useState("101");
+
+const [
+  datevOvertimeWageType,
+  setDatevOvertimeWageType
+] = useState("130");
+
   const [popupMessage, setPopupMessage] = useState("");
   const [showPopup, setShowPopup] = useState(false);
   
@@ -63,6 +73,16 @@ export default function SettingsPage() {
 
   const [showConfirmPopup, setShowConfirmPopup] =
   useState(false);
+
+  const [
+  datevVacationWageType,
+  setDatevVacationWageType
+] = useState("140");
+
+const [
+  datevSickWageType,
+  setDatevSickWageType
+] = useState("141");
 
   function showDiperaPopup(text:string){
   setPopupMessage(text);
@@ -347,10 +367,30 @@ async function loadBusiness() {
     await supabase
       .from("businesses")
       .select(
-  "federal_state, datev_regular_hours_wage_type"
+  "federal_state, datev_regular_hours_wage_type, datev_salary_wage_type, datev_overtime_wage_type, datev_vacation_wage_type, datev_sick_wage_type"
 )
       .eq("id", businessId)
       .single();
+
+      if (data?.datev_vacation_wage_type) {
+  setDatevVacationWageType(data.datev_vacation_wage_type);
+}
+
+if (data?.datev_sick_wage_type) {
+  setDatevSickWageType(data.datev_sick_wage_type);
+}
+
+      if (data?.datev_overtime_wage_type) {
+  setDatevOvertimeWageType(
+    data.datev_overtime_wage_type
+  );
+}
+
+      if (data?.datev_salary_wage_type) {
+  setDatevSalaryWageType(
+    data.datev_salary_wage_type
+  );
+}
 
   if (error) {
     console.error(error);
@@ -389,6 +429,15 @@ async function saveFederalState() {
   federal_state: federalState,
   datev_regular_hours_wage_type:
     datevRegularHoursWageType.trim() || null,
+    datev_salary_wage_type:
+  datevSalaryWageType.trim() || null,
+  datev_overtime_wage_type:
+  datevOvertimeWageType.trim() || null,
+  datev_vacation_wage_type:
+  datevVacationWageType.trim() || null,
+
+datev_sick_wage_type:
+  datevSickWageType.trim() || null,
 })
     .eq("id", businessId);
 
@@ -573,6 +622,70 @@ Lohn & Zuschläge
       setDatevRegularHoursWageType(event.target.value)
     }
     placeholder="z. B. 100"
+    className="border p-3 rounded-xl bg-white text-black"
+  />
+</div>
+
+<div className="flex flex-col gap-1">
+  <label className="text-sm font-semibold text-gray-600">
+    DATEV-Lohnart Monatsgehalt
+  </label>
+
+  <input
+    type="text"
+    value={datevSalaryWageType}
+    onChange={(event) =>
+      setDatevSalaryWageType(event.target.value)
+    }
+    placeholder="z. B. 101"
+    className="border p-3 rounded-xl bg-white text-black"
+  />
+</div>
+
+<div className="flex flex-col gap-1">
+  <label className="text-sm font-semibold text-gray-600">
+    DATEV-Lohnart Überstunden
+  </label>
+
+  <input
+    type="text"
+    value={datevOvertimeWageType}
+    onChange={(event) =>
+      setDatevOvertimeWageType(event.target.value)
+    }
+    placeholder="z. B. 130"
+    className="border p-3 rounded-xl bg-white text-black"
+  />
+</div>
+
+<div className="flex flex-col gap-1">
+  <label className="text-sm font-semibold text-gray-600">
+    DATEV-Lohnart Urlaubstage
+  </label>
+
+  <input
+    type="text"
+    value={datevVacationWageType}
+    onChange={(event) =>
+      setDatevVacationWageType(event.target.value)
+    }
+    placeholder="z. B. 140"
+    className="border p-3 rounded-xl bg-white text-black"
+  />
+</div>
+
+<div className="flex flex-col gap-1">
+  <label className="text-sm font-semibold text-gray-600">
+    DATEV-Lohnart Krankheitstage
+  </label>
+
+  <input
+    type="text"
+    value={datevSickWageType}
+    onChange={(event) =>
+      setDatevSickWageType(event.target.value)
+    }
+    placeholder="z. B. 141"
     className="border p-3 rounded-xl bg-white text-black"
   />
 </div>
