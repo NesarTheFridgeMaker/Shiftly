@@ -1391,7 +1391,7 @@ window.URL.revokeObjectURL(csvUrl);
       onClick={handleExportExcel}
       className="bg-green-600 text-white px-5 py-3 rounded-xl hover:bg-green-700 transition"
     >
-      Excel exportieren
+      Excel & CSV exportieren
     </button>
 
   </div>
