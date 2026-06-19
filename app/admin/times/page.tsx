@@ -374,6 +374,21 @@ const [showSuccessPopup, setShowSuccessPopup] =
   const [exportMonth, setExportMonth] = useState(
   new Date().toISOString().slice(0, 7)
 );
+const [viewMonth, setViewMonth] = useState(
+  new Date().toISOString().slice(0, 7)
+);
+const [openEmployeeId, setOpenEmployeeId] =
+  useState<string | null>(null);
+  const [editingSummary, setEditingSummary] =
+  useState<WorkSummary | null>(null);
+
+const [editStartTime, setEditStartTime] =
+  useState("");
+
+const [editEndTime, setEditEndTime] =
+  useState("");
+  const [pendingDeleteSummary, setPendingDeleteSummary] =
+  useState<WorkSummary | null>(null);
 
 function showDiperaPopup(text: string) {
   setPopupMessage(text);
@@ -385,10 +400,140 @@ function showSuccess(text: string) {
   setShowSuccessPopup(true);
 }
 
+function changeMonth(direction: number) {
+  const date = new Date(`${viewMonth}-01`);
+
+  date.setMonth(date.getMonth() + direction);
+
+  setViewMonth(date.toISOString().slice(0, 7));
+}
+
 function showConfirm(text: string, action: () => void) {
   setConfirmMessage(text);
   setConfirmAction(() => action);
   setShowConfirmPopup(true);
+}
+
+function handleOpenEditSummary(summary: WorkSummary) {
+  setEditingSummary(summary);
+  setEditStartTime(summary.start || "");
+  setEditEndTime(summary.end || "");
+}
+
+function handleAskDeleteEditedSummary() {
+  if (!editingSummary) return;
+
+  setPendingDeleteSummary(editingSummary);
+}
+
+async function handleSaveEditedSummary() {
+  if (!editingSummary) return;
+
+  const checkInEntry =
+    editingSummary.entries.find(
+      (entry) => entry.action === "check_in"
+    );
+
+  const checkOutEntry =
+    editingSummary.entries.find(
+      (entry) => entry.action === "check_out"
+    );
+
+  if (!checkInEntry || !checkOutEntry) {
+    showDiperaPopup(
+      "Diese Arbeitszeit kann nicht automatisch bearbeitet werden, weil Ein- oder Ausstempelung fehlt."
+    );
+    return;
+  }
+
+  const startDateTime =
+    `${editingSummary.rawDate}T${editStartTime}:00`;
+
+  const endDateTime =
+    `${editingSummary.rawDate}T${editEndTime}:00`;
+
+  const startDate =
+    new Date(startDateTime);
+
+  let endDate =
+    new Date(endDateTime);
+
+  if (endDate <= startDate) {
+    endDate.setDate(
+      endDate.getDate() + 1
+    );
+  }
+
+  const { error: startError } =
+    await supabase
+      .from("time_entries")
+      .update({
+        created_at: startDate.toISOString(),
+      })
+      .eq("id", checkInEntry.id);
+
+  if (startError) {
+    console.error(startError);
+    showDiperaPopup(
+      "Arbeitsbeginn konnte nicht gespeichert werden."
+    );
+    return;
+  }
+
+  const { error: endError } =
+    await supabase
+      .from("time_entries")
+      .update({
+        created_at: endDate.toISOString(),
+      })
+      .eq("id", checkOutEntry.id);
+
+  if (endError) {
+    console.error(endError);
+    showDiperaPopup(
+      "Arbeitsende konnte nicht gespeichert werden."
+    );
+    return;
+  }
+
+  setEditingSummary(null);
+
+  await loadTimeEntries();
+
+  showDiperaPopup(
+    "Arbeitszeit wurde aktualisiert."
+  );
+}
+
+async function handleConfirmDeleteSummary() {
+  if (!pendingDeleteSummary) return;
+
+  const entryIds = pendingDeleteSummary.entries.map(
+    (entry) => entry.id
+  );
+
+  if (entryIds.length === 0) {
+    showDiperaPopup("Keine Stempelungen zum Löschen gefunden.");
+    return;
+  }
+
+  const { error } = await supabase
+    .from("time_entries")
+    .delete()
+    .in("id", entryIds);
+
+  if (error) {
+    console.error(error);
+    showDiperaPopup("Arbeitszeit konnte nicht gelöscht werden.");
+    return;
+  }
+
+  setPendingDeleteSummary(null);
+  setEditingSummary(null);
+
+  await loadTimeEntries();
+
+  showDiperaPopup("Arbeitszeit wurde gelöscht.");
 }
 
 
@@ -1359,6 +1504,41 @@ csvLink.click();
 window.URL.revokeObjectURL(csvUrl);
 }
   const dailySummaries = buildDailySummaries(timeEntries);
+  const monthSummaries = dailySummaries.filter(
+  (summary) =>
+    summary.rawDate.startsWith(viewMonth)
+);
+const employeeMonthGroups = monthSummaries.reduce(
+  (acc, summary) => {
+    if (!acc[summary.employee_id]) {
+      acc[summary.employee_id] = {
+        employeeName: summary.employee_name,
+        entries: [],
+        totalWorkMinutes: 0,
+        totalPauseMinutes: 0,
+      };
+    }
+
+    acc[summary.employee_id].entries.push(summary);
+
+    acc[summary.employee_id].totalWorkMinutes +=
+      summary.workMinutes;
+
+    acc[summary.employee_id].totalPauseMinutes +=
+      summary.pauseMinutes;
+
+    return acc;
+  },
+  {} as Record<
+    string,
+    {
+      employeeName: string;
+      entries: WorkSummary[];
+      totalWorkMinutes: number;
+      totalPauseMinutes: number;
+    }
+  >
+);
   const weeklySummaries = buildPeriodSummaries(dailySummaries, "week");
   const monthlySummaries = buildPeriodSummaries(dailySummaries, "month");
   const todayRawDate = formatDateForDatabase(new Date());
@@ -1458,354 +1638,265 @@ window.URL.revokeObjectURL(csvUrl);
       </div>
 
       <div className="bg-white rounded-2xl shadow p-4 md:p-6 mb-8">
-        <h2 className="text-2xl font-semibold text-blue-950 mb-4">
-          Tagesübersicht
-        </h2>
+  <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
+    <div>
+      <h2 className="text-2xl font-semibold text-blue-950">
+        Monatsübersicht
+      </h2>
 
-        <div className="xl:hidden flex flex-col gap-4">
-          {todaysDailySummaries.map((summary) => (
-            <div
-              key={summary.key}
-              className="bg-gray-50 rounded-2xl p-4 border shadow-sm"
-            >
-              <div className="mb-4">
-                <h3 className="text-lg font-bold text-blue-950">
-                  {summary.employee_name}
-                </h3>
-                <p className="text-sm text-gray-500">{summary.date}</p>
-              </div>
+      <p className="text-sm text-gray-500 mt-1">
+        Arbeitszeiten pro Mitarbeiter im ausgewählten Monat
+      </p>
+    </div>
 
-              <div className="grid grid-cols-2 gap-3 text-sm mb-4">
-                <div className="bg-white rounded-xl p-3">
-                  <p className="text-gray-500 mb-1">Arbeitszeit</p>
-                  <p className="font-semibold text-black">
-                    {summary.start} - {summary.end}
+    <div className="flex items-center gap-3">
+      <button
+        type="button"
+        onClick={() => changeMonth(-1)}
+        className="px-4 py-2 rounded-xl bg-gray-100 text-blue-950 font-bold hover:bg-gray-200 transition"
+      >
+        ←
+      </button>
+
+      <div className="min-w-[160px] text-center font-bold text-blue-950">
+        {new Date(`${viewMonth}-01`).toLocaleDateString("de-DE", {
+          month: "long",
+          year: "numeric",
+        })}
+      </div>
+
+      <button
+        type="button"
+        onClick={() => changeMonth(1)}
+        className="px-4 py-2 rounded-xl bg-gray-100 text-blue-950 font-bold hover:bg-gray-200 transition"
+      >
+        →
+      </button>
+    </div>
+  </div>
+
+  {Object.keys(employeeMonthGroups).length === 0 ? (
+    <div className="bg-gray-50 border rounded-2xl p-6 text-center text-gray-600">
+      In diesem Monat wurden noch keine Arbeitszeiten erfasst.
+    </div>
+  ) : (
+    <div className="space-y-4">
+      {Object.entries(employeeMonthGroups).map(
+        ([employeeId, group]) => (
+          <details
+            key={employeeId}
+            className="bg-gray-50 border rounded-2xl p-4 open:bg-white transition"
+          >
+            <summary className="cursor-pointer list-none">
+              <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                <div>
+                  <h3 className="text-lg font-bold text-blue-950">
+                    {group.employeeName}
+                  </h3>
+
+                  <p className="text-sm text-gray-500">
+                    {group.entries.length} Arbeitstag(e)
                   </p>
                 </div>
 
-                <div className="bg-white rounded-xl p-3">
-                  <p className="text-gray-500 mb-1">Gesamt</p>
-                  <p className="font-bold text-green-700">
-                    {summary.workDuration}
-                  </p>
-                </div>
-
-                <div className="bg-white rounded-xl p-3 col-span-2">
-                  <p className="text-gray-500 mb-1">Pause</p>
-                  <p className="font-bold text-yellow-600">
-                    {summary.pauseDuration}
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex flex-col gap-2">
-                {summary.end === "Offen" && (
-                  <button
-                    type="button"
-                    onClick={() =>
-                      handleQuickAddFromSummary(summary, "check_out")
-                    }
-                    className="w-full bg-green-600 text-white px-4 py-3 rounded-xl hover:bg-green-700 transition"
-                  >
-                    Ausstempeln ergänzen
-                  </button>
-                )}
-
-                <button
-                  onClick={() =>
-                    setOpenDetails(
-                      openDetails === summary.key ? null : summary.key
-                    )
-                  }
-                  className="w-full bg-blue-950 text-white px-4 py-3 rounded-xl hover:bg-blue-900 transition"
-                >
-                  Stempelverlauf
-                </button>
-              </div>
-
-              {openDetails === summary.key && (
-                <div className="mt-4 bg-white rounded-xl p-4">
-                  <h4 className="font-bold text-blue-950 mb-3">
-                    Stempelverlauf
-                  </h4>
-
-                  <div className="flex flex-col gap-2">
-                    {summary.entries.map((entry) => (
-                      <div
-                        key={entry.id}
-                        className="flex justify-between border-b py-2 text-black text-sm"
-                      >
-                        <span>{formatAction(entry.action)}</span>
-                        <span>{formatTime(entry.created_at)}</span>
-                      </div>
-                    ))}
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  <div className="bg-white rounded-xl p-3 border">
+                    <p className="text-gray-500">Arbeitszeit</p>
+                    <p className="font-bold text-blue-950">
+                      {formatMinutes(group.totalWorkMinutes)}
+                    </p>
                   </div>
+
+                  <div className="bg-white rounded-xl p-3 border">
+                    <p className="text-gray-500">Pause</p>
+                    <p className="font-bold text-blue-950">
+                      {formatMinutes(group.totalPauseMinutes)}
+                    </p>
+                  </div>
+
                 </div>
-              )}
-            </div>
-          ))}
-        </div>
+                <div className="flex justify-end">
+                <span className="bg-blue-950 text-white px-4 py-2 rounded-xl font-semibold inline-block">
+                  Details anzeigen
+                </span>
+              </div>
+              </div>
+            </summary>
 
-        <div className="hidden xl:block overflow-x-auto max-w-full">
-          <table className="w-full text-left">
-            <thead>
-              <tr className="border-b text-gray-600">
-                <th className="py-3 px-3">Mitarbeiter</th>
-                <th className="py-3 px-3">Datum</th>
-                <th className="py-3 px-3">Arbeitszeit</th>
-                <th className="py-3 px-3">Gesamt</th>
-                <th className="py-3 px-3">Pause</th>
-                <th className="py-3 px-3">Aktionen</th>
-              </tr>
-            </thead>
-
-            <tbody>
-              {dailySummaries.map((summary) => (
-                <React.Fragment key={summary.key}>
-                  <tr className="border-b">
-                    <td className="py-3 px-3 text-black">
-                      {summary.employee_name}
-                    </td>
-
-                    <td className="py-3 px-3 text-black">
-                      {summary.date}
-                    </td>
-
-                    <td className="py-3 px-3 text-black">
-                      {summary.start} - {summary.end}
-                    </td>
-
-                    <td className="py-3 px-3 font-bold text-green-700">
-                      {summary.workDuration}
-                    </td>
-
-                    <td className="py-3 px-3 text-yellow-600 font-bold">
-                      {summary.pauseDuration}
-                    </td>
-
-                    <td className="py-3 px-3">
-                      <div className="flex gap-2">
-                        {summary.end === "Offen" && (
-                          <button
-                            type="button"
-                            onClick={() =>
-                              handleQuickAddFromSummary(summary, "check_out")
-                            }
-                            className="bg-green-600 text-white px-3 py-2 rounded-lg hover:bg-green-700 transition"
-                          >
-                            Ausstempeln ergänzen
-                          </button>
-                        )}
-
-                        <button
-                          onClick={() =>
-                            setOpenDetails(
-                              openDetails === summary.key ? null : summary.key
-                            )
-                          }
-                          className="bg-blue-950 text-white px-4 py-2 rounded-lg hover:bg-blue-900 transition"
-                        >
-                          Stempelverlauf
-                        </button>
-                      </div>
-                    </td>
+            <div className="mt-5 overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-left text-gray-500 border-b">
+                    <th className="py-3 pr-4">Datum</th>
+                    <th className="py-3 pr-4">Beginn</th>
+                    <th className="py-3 pr-4">Ende</th>
+                    <th className="py-3 pr-4">Pause</th>
+                    <th className="py-3 pr-4">Arbeitszeit</th>
+                    <th className="py-3 pr-4">Status</th>
+                    <th className="py-3 pr-4">Aktion</th>
                   </tr>
+                </thead>
 
-                  {openDetails === summary.key && (
-                    <tr>
-                      <td colSpan={6} className="bg-gray-100 p-4">
-                        <div className="rounded-xl bg-white p-4">
-                          <h3 className="font-bold text-blue-950 mb-3">
-                            Stempelverlauf
-                          </h3>
+                <tbody>
+                  {group.entries.map((summary) => (
+                    <tr
+                      key={summary.key}
+                      className="border-b last:border-b-0"
+                    >
+                      <td className="py-3 pr-4 font-medium text-gray-900">
+                        {summary.date}
+                      </td>
 
-                          <div className="flex flex-col gap-2">
-                            {summary.entries.map((entry) => (
-                              <div
-                                key={entry.id}
-                                className="flex justify-between border-b py-2 text-black"
-                              >
-                                <span>{formatAction(entry.action)}</span>
-                                <span>{formatTime(entry.created_at)}</span>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
+                      <td className="py-3 pr-4 text-gray-700">
+                        {summary.start || "-"}
+                      </td>
+
+                      <td className="py-3 pr-4 text-gray-700">
+                        {summary.end || "-"}
+                      </td>
+
+                      <td className="py-3 pr-4 text-gray-700">
+                        {formatMinutes(summary.pauseMinutes)}
+                      </td>
+
+                      <td className="py-3 pr-4 font-semibold text-blue-950">
+                        {formatMinutes(summary.workMinutes)}
+                      </td>
+
+                      <td className="py-3 pr-4">
+                      <span className="text-gray-500">
+                        —
+                      </span>
+                      </td>
+
+                      <td className="py-3 pr-4">
+                        <button
+                        type="button"
+                        onClick={() => handleOpenEditSummary(summary)}
+                        className="text-blue-700 font-semibold hover:underline"
+                      >
+                        Bearbeiten
+                      </button>
                       </td>
                     </tr>
-                  )}
-                </React.Fragment>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        {todaysDailySummaries.length === 0 && (
-          <p className="text-gray-500 mt-4">
-            Noch keine Arbeitszeiten vorhanden.
-          </p>
-        )}
-      </div>
-
-      <div className="bg-white rounded-2xl shadow p-4 md:p-6 mb-8">
-        <h2 className="text-2xl font-semibold text-blue-950 mb-4">
-          Wochenübersicht
-        </h2>
-
-        <div className="hidden xl:block overflow-x-auto max-w-full">
-          <table className="w-full text-left">
-            <thead>
-              <tr className="border-b text-gray-600">
-                <th className="py-3 px-3">Mitarbeiter</th>
-                <th className="py-3 px-3">Woche</th>
-                <th className="py-3 px-3">Arbeitsstunden</th>
-                <th className="py-3 px-3">Pausenzeit</th>
-              </tr>
-            </thead>
-
-            <tbody>
-              {weeklySummaries.map((summary) => (
-                <tr key={summary.key} className="border-b">
-                  <td className="py-3 px-3 text-black">
-                    {summary.employee_name}
-                  </td>
-
-                  <td className="py-3 px-3 text-black">
-                    {summary.period}
-                  </td>
-
-                  <td className="py-3 px-3 font-bold text-green-700">
-                    {formatMinutes(summary.workMinutes)}
-                  </td>
-
-                  <td className="py-3 px-3 font-bold text-yellow-600">
-                    {formatMinutes(summary.pauseMinutes)}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        <div className="xl:hidden flex flex-col gap-4">
-          {weeklySummaries.map((summary) => (
-            <div
-              key={summary.key}
-              className="bg-gray-50 rounded-2xl p-4 border shadow-sm"
-            >
-              <h3 className="text-lg font-bold text-blue-950">
-                {summary.employee_name}
-              </h3>
-
-              <p className="text-sm text-gray-500 mb-4">
-                {summary.period}
-              </p>
-
-              <div className="grid grid-cols-2 gap-3 text-sm">
-                <div className="bg-white rounded-xl p-3">
-                  <p className="text-gray-500 mb-1">Arbeitsstunden</p>
-                  <p className="font-bold text-green-700">
-                    {formatMinutes(summary.workMinutes)}
-                  </p>
-                </div>
-
-                <div className="bg-white rounded-xl p-3">
-                  <p className="text-gray-500 mb-1">Pausenzeit</p>
-                  <p className="font-bold text-yellow-600">
-                    {formatMinutes(summary.pauseMinutes)}
-                  </p>
-                </div>
-              </div>
+                  ))}
+                </tbody>
+              </table>
             </div>
-          ))}
+          </details>
+        )
+      )}
+    </div>
+  )}
+</div> 
+
+{editingSummary && (
+  <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-6 z-50">
+    <div className="max-w-lg w-full rounded-3xl bg-white p-6 shadow-2xl">
+      <h2 className="text-2xl font-bold text-blue-950 mb-2">
+        Arbeitszeit bearbeiten
+      </h2>
+
+      <p className="text-gray-600 mb-6">
+        {editingSummary.employee_name} — {editingSummary.date}
+      </p>
+
+      <div className="grid grid-cols-1 gap-4">
+        <div>
+          <label className="block text-sm font-semibold text-gray-700 mb-1">
+            Arbeitsbeginn
+          </label>
+
+          <input
+            type="time"
+            value={editStartTime === "Offen" ? "" : editStartTime}
+            onChange={(event) => setEditStartTime(event.target.value)}
+            className="w-full border p-3 rounded-xl bg-white text-black"
+          />
         </div>
 
-        {weeklySummaries.length === 0 && (
-          <p className="text-gray-500 mt-4">
-            Noch keine Wochenwerte vorhanden.
-          </p>
-        )}
+        <div>
+          <label className="block text-sm font-semibold text-gray-700 mb-1">
+            Arbeitsende
+          </label>
+
+          <input
+            type="time"
+            value={editEndTime === "Offen" ? "" : editEndTime}
+            onChange={(event) => setEditEndTime(event.target.value)}
+            className="w-full border p-3 rounded-xl bg-white text-black"
+          />
+        </div>
       </div>
 
-      <div className="bg-white rounded-2xl shadow p-4 md:p-6">
-        <h2 className="text-2xl font-semibold text-blue-950 mb-4">
-          Monatsübersicht
-        </h2>
+      <div className="flex flex-col sm:flex-row gap-3 mt-6">
+        <button
+          type="button"
+          onClick={handleSaveEditedSummary}
+          className="flex-1 bg-blue-950 text-white px-5 py-3 rounded-xl font-semibold hover:bg-blue-900 transition"
+        >
+          Speichern
+        </button>
 
-        <div className="hidden xl:block overflow-x-auto max-w-full">
-          <table className="w-full text-left">
-            <thead>
-              <tr className="border-b text-gray-600">
-                <th className="py-3 px-3">Mitarbeiter</th>
-                <th className="py-3 px-3">Monat</th>
-                <th className="py-3 px-3">Arbeitsstunden</th>
-                <th className="py-3 px-3">Pausenzeit</th>
-              </tr>
-            </thead>
+        <button
+          type="button"
+          onClick={handleAskDeleteEditedSummary}
+          className="flex-1 bg-red-600 text-white px-5 py-3 rounded-xl font-semibold hover:bg-red-700 transition"
+        >
+          Löschen
+        </button>
 
-            <tbody>
-              {monthlySummaries.map((summary) => (
-                <tr key={summary.key} className="border-b">
-                  <td className="py-3 px-3 text-black">
-                    {summary.employee_name}
-                  </td>
-
-                  <td className="py-3 px-3 text-black">
-                    {summary.period}
-                  </td>
-
-                  <td className="py-3 px-3 font-bold text-green-700">
-                    {formatMinutes(summary.workMinutes)}
-                  </td>
-
-                  <td className="py-3 px-3 font-bold text-yellow-600">
-                    {formatMinutes(summary.pauseMinutes)}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        <div className="xl:hidden flex flex-col gap-4">
-          {monthlySummaries.map((summary) => (
-            <div
-              key={summary.key}
-              className="bg-gray-50 rounded-2xl p-4 border shadow-sm"
-            >
-              <h3 className="text-lg font-bold text-blue-950">
-                {summary.employee_name}
-              </h3>
-
-              <p className="text-sm text-gray-500 mb-4">
-                {summary.period}
-              </p>
-
-              <div className="grid grid-cols-2 gap-3 text-sm">
-                <div className="bg-white rounded-xl p-3">
-                  <p className="text-gray-500 mb-1">Arbeitsstunden</p>
-                  <p className="font-bold text-green-700">
-                    {formatMinutes(summary.workMinutes)}
-                  </p>
-                </div>
-
-                <div className="bg-white rounded-xl p-3">
-                  <p className="text-gray-500 mb-1">Pausenzeit</p>
-                  <p className="font-bold text-yellow-600">
-                    {formatMinutes(summary.pauseMinutes)}
-                  </p>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-
-        {monthlySummaries.length === 0 && (
-          <p className="text-gray-500 mt-4">
-            Noch keine Monatswerte vorhanden.
-          </p>
-        )}
+        <button
+          type="button"
+          onClick={() => setEditingSummary(null)}
+          className="flex-1 bg-gray-200 text-gray-800 px-5 py-3 rounded-xl font-semibold hover:bg-gray-300 transition"
+        >
+          Abbrechen
+        </button>
       </div>
+    </div>
+  </div>
+)}
+
+{pendingDeleteSummary && (
+  <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-6 z-[60]">
+    <div className="max-w-lg w-full text-center rounded-3xl border border-white/10 bg-[#0B1220]/95 shadow-2xl p-8 md:p-10">
+      <h2 className="text-2xl md:text-3xl font-bold text-white mb-4">
+        Arbeitszeit löschen?
+      </h2>
+
+      <p className="text-white/80 mb-8 leading-relaxed">
+        Möchtest du die Arbeitszeit von{" "}
+        <span className="font-bold text-white">
+          {pendingDeleteSummary.employee_name}
+        </span>{" "}
+        am{" "}
+        <span className="font-bold text-white">
+          {pendingDeleteSummary.date}
+        </span>{" "}
+        wirklich löschen?
+      </p>
+
+      <div className="flex flex-col sm:flex-row gap-3">
+        <button
+          type="button"
+          onClick={handleConfirmDeleteSummary}
+          className="flex-1 bg-red-600 text-white px-5 py-4 rounded-2xl font-bold hover:bg-red-700 transition"
+        >
+          Ja, löschen
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setPendingDeleteSummary(null)}
+          className="flex-1 bg-white/10 text-white px-5 py-4 rounded-2xl font-bold hover:bg-white/20 transition"
+        >
+          Abbrechen
+        </button>
+      </div>
+    </div>
+  </div>
+)}
       {showPopup && (
   <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-6 z-50">
     <div className="max-w-lg w-full text-center rounded-3xl border border-white/10 bg-[#0B1220]/95 shadow-2xl p-8 md:p-10">
