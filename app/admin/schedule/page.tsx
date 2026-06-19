@@ -18,9 +18,9 @@ type Shift = {
   shift_date: string;
   start_time: string;
   end_time: string;
-
   work_type_id?: string;
   work_type_name?: string;
+  is_published: boolean;
 };
 
 type Absence = {
@@ -422,13 +422,20 @@ if (existingShift) {
         .eq("business_id", businessId);
 
       if (error) {
-        console.error(error);
+        console.error("SHIFT INSERT ERROR", error);
+
         showDiperaPopup(
-"Es ist ein Fehler aufgetreten."
-);
+          error.message || "Es ist ein Fehler aufgetreten."
+        );
         return;
       }
     } else {
+      if (!selectedWorkType) {
+    showDiperaPopup(
+    "Bitte wähle einen Arbeitstyp aus, bevor du die Schicht speicherst."
+    );
+    return;
+}
       const { error } = await supabase.from("shifts").insert([
         {
           employee_id: selectedEmployee.id,
@@ -563,6 +570,9 @@ showSuccess(
       start_time: shift.start_time,
       end_time: shift.end_time,
       business_id: businessId,
+      work_type_id: shift.work_type_id || null,
+      work_type_name: shift.work_type_name || null,
+      is_published: false,
     };
   });
 
@@ -610,12 +620,68 @@ showConfirm(
 return;
 }
 
+async function handlePublishSelectedWeek() {
+  const businessId = await getBusinessId();
+
+  if (!businessId) {
+    showInfo("Keine Business-ID gefunden.");
+    return;
+  }
+
+  const weekDates = getWeekDays(selectedWeekStart).map(
+    (day) => day.date
+  );
+
+  const shiftsToPublish = shifts.filter((shift) =>
+    weekDates.includes(shift.shift_date)
+  );
+
+  if (shiftsToPublish.length === 0) {
+    showInfo("In dieser Woche gibt es keine Schichten zum Veröffentlichen.");
+    return;
+  }
+
+  showConfirm(
+    `${shiftsToPublish.length} Schichten dieser Woche veröffentlichen?`,
+    async () => {
+      const { error } = await supabase
+        .from("shifts")
+        .update({
+          is_published: true,
+        })
+        .eq("business_id", businessId)
+        .in("shift_date", weekDates);
+
+      if (error) {
+        console.error(error);
+        showInfo("Dienstplan konnte nicht veröffentlicht werden.");
+        return;
+      }
+
+      await loadShifts();
+
+      showSuccess("Dienstplan wurde veröffentlicht.");
+    }
+  );
+}
+
   const todayDate = formatDateForDatabase(new Date());
   const todaysShifts = shifts.filter((shift) => shift.shift_date === todayDate);
 
   const weekDays = getWeekDays(selectedWeekStart);
   const weekStartText = formatDateForDisplay(weekDays[0].date);
   const weekEndText = formatDateForDisplay(weekDays[6].date);
+  const weekDates = weekDays.map((day) => day.date);
+
+const shiftsInSelectedWeek = shifts.filter((shift) =>
+  weekDates.includes(shift.shift_date)
+);
+
+const isSelectedWeekPublished =
+  shiftsInSelectedWeek.length > 0 &&
+  shiftsInSelectedWeek.every(
+    (shift) => shift.is_published
+  );
 
   return (
     <div>
@@ -845,6 +911,16 @@ value={type.id}
             <p className="text-gray-500 mt-1">
               {weekStartText} bis {weekEndText}
             </p>
+
+            <p
+            className={`mt-2 inline-flex px-3 py-1 rounded-full text-sm font-semibold ${
+              isSelectedWeekPublished
+                ? "bg-green-100 text-green-700"
+                : "bg-yellow-100 text-yellow-700"
+            }`}
+          >
+            {isSelectedWeekPublished ? "Veröffentlicht" : "Entwurf"}
+          </p>
           </div>
 
           <div className="flex flex-col md:flex-row gap-2">
@@ -875,6 +951,13 @@ value={type.id}
 >
                 Woche → nächste kopieren
             </button>
+
+            <button
+            onClick={handlePublishSelectedWeek}
+            className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition"
+          >
+            Dienstplan veröffentlichen
+          </button>
           </div>
         </div>
 

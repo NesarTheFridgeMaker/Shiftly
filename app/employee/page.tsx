@@ -424,6 +424,7 @@ export default function EmployeePage() {
       .select("*")
       .eq("business_id", businessId)
       .eq("employee_id", selectedEmployeeId)
+      .eq("is_published", true)
       .order("shift_date", { ascending: true });
 
     if (error) {
