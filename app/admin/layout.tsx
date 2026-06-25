@@ -15,6 +15,7 @@ import {
   Bell,
   LogOut,
   ArrowUpRight,
+  FileText,
 } from "lucide-react";
 
 type Notification = {
@@ -37,6 +38,7 @@ export default function AdminLayout({
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [businessName, setBusinessName] = useState("");
   const [pendingRequests, setPendingRequests] = useState(0);
+  const [pendingCorrectionRequests, setPendingCorrectionRequests] = useState(0);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [popupMessage, setPopupMessage] = useState("");
   const [showPopup, setShowPopup] = useState(false);
@@ -77,6 +79,26 @@ export default function AdminLayout({
 
     setPendingRequests(data?.length || 0);
   }
+
+  async function loadPendingCorrectionRequests() {
+  const businessId = await getBusinessId();
+
+  if (!businessId) return;
+
+  const { data, error } = await supabase
+    .from("time_correction_requests")
+    .select("id")
+    .eq("business_id", businessId)
+    .eq("status", "pending");
+
+  if (error) {
+    console.error(error);
+    return;
+  }
+
+  setPendingCorrectionRequests(data?.length || 0);
+}
+
 
   async function getCurrentUserId() {
     const {
@@ -156,6 +178,15 @@ export default function AdminLayout({
         return;
       }
 
+      function handleCorrectionRequestsChanged() {
+        loadPendingCorrectionRequests();
+      }
+
+      window.addEventListener(
+        "correctionRequestsChanged",
+        handleCorrectionRequestsChanged
+      );
+
       const { data: profile, error: profileError } = await supabase
         .from("profiles")
         .select("role")
@@ -191,6 +222,7 @@ export default function AdminLayout({
       setIsLoggedIn(true);
 
       await loadPendingRequests();
+      await loadPendingCorrectionRequests();
       await loadNotifications();
 
       setCheckingAuth(false);
@@ -241,6 +273,19 @@ useEffect(() => {
       )
 
       .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "time_correction_requests",
+            filter: `business_id=eq.${businessId}`,
+          },
+          async () => {
+            await loadPendingCorrectionRequests();
+          }
+        )
+
+      .on(
         "postgres_changes",
         {
           event: "UPDATE",
@@ -270,15 +315,29 @@ useEffect(() => {
       .subscribe();
   }
 
+  function handleCorrectionRequestsChanged() {
+  loadPendingCorrectionRequests();
+}
+
+window.addEventListener(
+  "correctionRequestsChanged",
+  handleCorrectionRequestsChanged
+);
+
   if (isLoggedIn) {
     setupRealtime();
   }
 
   return () => {
-    if (channel) {
-      supabase.removeChannel(channel);
-    }
-  };
+  window.removeEventListener(
+    "correctionRequestsChanged",
+    handleCorrectionRequestsChanged
+  );
+
+  if (channel) {
+    supabase.removeChannel(channel);
+  }
+};
 }, [isLoggedIn]);
 
   async function handleLogout() {
@@ -307,18 +366,22 @@ const navLinks = [
     icon: CalendarDays,
   },
   {
-    label:
-      pendingRequests > 0
-        ? `Abwesenheiten (${pendingRequests})`
-        : "Abwesenheiten",
-    href: "/admin/absences",
-    icon: CalendarX,
-  },
+  label: "Abwesenheiten",
+  href: "/admin/absences",
+  icon: CalendarX,
+},
   {
     label: "Arbeitszeiten",
     href: "/admin/times",
     icon: Clock3,
   },
+
+  {
+  href: "/admin/corrections",
+  label: "Korrekturanträge",
+  icon: FileText,
+},
+
   {
     label: "Einstellungen",
     href: "/admin/settings",
@@ -345,7 +408,7 @@ const navLinks = [
       <div className="lg:hidden bg-blue-950 text-white px-4 py-2 flex items-center justify-between">
         <div>
 <img
-  src="/logo/dipera-logo.png"
+  src="/logo/dipera-logo-light.png"
   alt="Dipera"
   className="w-48 h-auto"
 />
@@ -451,7 +514,7 @@ const navLinks = [
             <div className="flex items-start justify-between mb-10">
               <div>
 <img
-  src="/logo/dipera-logo.png"
+  src="/logo/dipera-logo-light.png"
   alt="Dipera"
   className="w-48 h-auto"
 />
@@ -527,7 +590,7 @@ const navLinks = [
         <div>
           <div className="mb-10">
 <img
-  src="/logo/dipera-logo.png"
+  src="/logo/dipera-logo-light.png"
   alt="Dipera"
   className="w-48 h-auto"
 />
@@ -550,20 +613,35 @@ const navLinks = [
           </div>
 
           <nav className="flex flex-col gap-4">
-{navLinks.map((link) => {
-  const Icon = link.icon;
+          {navLinks.map((link) => {
+            const Icon = link.icon;
 
-  return (
-    <a
-      key={link.href}
-      href={link.href}
-      className="flex items-center gap-3 hover:text-blue-300"
-    >
-      <Icon size={20} />
-      <span>{link.label}</span>
-    </a>
-  );
-})}
+            const badgeCount =
+              link.href === "/admin/absences"
+                ? pendingRequests
+                : link.href === "/admin/corrections"
+                ? pendingCorrectionRequests
+                : 0;
+
+            return (
+              <a
+                key={link.href}
+                href={link.href}
+                className="flex items-center justify-between gap-3 hover:text-blue-300"
+              >
+                <div className="flex items-center gap-3">
+                  <Icon size={20} />
+                  <span>{link.label}</span>
+                </div>
+
+                {badgeCount > 0 && (
+                  <span className="min-w-6 h-6 px-2 rounded-full bg-red-500 text-white text-xs font-bold flex items-center justify-center">
+                    {badgeCount}
+                  </span>
+                )}
+              </a>
+            );
+          })}
           </nav>
 <button
   type="button"

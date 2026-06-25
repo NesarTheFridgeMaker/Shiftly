@@ -479,7 +479,7 @@ min-h-0
           <div>
 <div className="flex justify-center mb-6">
   <img
-    src="/logo/dipera-logo.png"
+    src="/logo/dipera-logo-dark.png"
     alt="Dipera"
     className="w-40 sm:w-48 md:w-56 h-auto"
   />

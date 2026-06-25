@@ -329,6 +329,10 @@ export default function EmployeePage() {
   const [endDate, setEndDate] = useState("");
   const [popupMessage, setPopupMessage] = useState("");
   const [showPopup, setShowPopup] = useState(false);
+  const [correctionDate, setCorrectionDate] = useState("");
+  const [correctionStartTime, setCorrectionStartTime] = useState("");
+  const [correctionEndTime, setCorrectionEndTime] = useState("");
+  const [correctionReason, setCorrectionReason] = useState("");
 
   async function loadEmployeeProfile() {
     const {
@@ -434,6 +438,69 @@ export default function EmployeePage() {
 
     setShifts(data || []);
   }
+
+  async function handleSubmitCorrectionRequest() {
+  if (!employee) {
+    showDiperaPopup("Mitarbeiter konnte nicht gefunden werden.");
+    return;
+  }
+
+  const businessId = await getBusinessId();
+
+  if (!businessId) {
+    showDiperaPopup("Keine Business-ID gefunden.");
+    return;
+  }
+
+  if (!correctionDate) {
+    showDiperaPopup("Bitte wähle ein Datum aus.");
+    return;
+  }
+
+  if (!correctionStartTime && !correctionEndTime) {
+    showDiperaPopup(
+      "Bitte gib mindestens eine Start- oder Endzeit an."
+    );
+    return;
+  }
+
+  const { error } = await supabase
+    .from("time_correction_requests")
+    .insert([
+      {
+        business_id: businessId,
+        employee_id: employee.id,
+        employee_name: employee.name,
+        correction_date: correctionDate,
+        requested_start_time:
+          correctionStartTime || null,
+        requested_end_time:
+          correctionEndTime || null,
+        reason:
+          correctionReason.trim() || null,
+        status: "pending",
+      },
+    ]);
+
+  if (error) {
+  console.error("CORRECTION REQUEST ERROR:", error);
+
+  showDiperaPopup(
+    error.message || "Der Korrekturantrag konnte nicht gesendet werden."
+  );
+
+  return;
+}
+
+  setCorrectionDate("");
+  setCorrectionStartTime("");
+  setCorrectionEndTime("");
+  setCorrectionReason("");
+
+  showDiperaPopup(
+    "Dein Korrekturantrag wurde gesendet."
+  );
+}
 
 async function loadTeamShifts(weekStartDate = selectedWeekStart) {
   const businessId = await getBusinessId();
@@ -1208,6 +1275,72 @@ approvedVacationDays;
       Für diese Woche sind keine Team-Schichten eingetragen.
     </p>
   )}
+</div>
+
+<div className="bg-white rounded-2xl shadow p-6 mb-8">
+  <h2 className="text-2xl font-semibold text-blue-950 mb-2">
+    Zeitkorrektur beantragen
+  </h2>
+
+  <p className="text-sm text-gray-500 mb-5">
+    Falls du eine Stempelung vergessen hast, kannst du hier eine Korrektur beantragen.
+  </p>
+
+  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+    <div>
+  <label className="block text-sm font-semibold text-gray-700 mb-1">
+    Datum
+  </label>
+
+  <input
+    type="date"
+    value={correctionDate}
+    onChange={(event) => setCorrectionDate(event.target.value)}
+    className="border p-3 rounded-xl bg-white text-black w-full"
+  />
+</div>
+
+    <div>
+  <label className="block text-sm font-semibold text-gray-700 mb-1">
+    Arbeitsbeginn
+  </label>
+
+  <input
+    type="time"
+    value={correctionStartTime}
+    onChange={(event) => setCorrectionStartTime(event.target.value)}
+    className="border p-3 rounded-xl bg-white text-black w-full"
+  />
+</div>
+
+    <div>
+  <label className="block text-sm font-semibold text-gray-700 mb-1">
+    Arbeitsende
+  </label>
+
+  <input
+    type="time"
+    value={correctionEndTime}
+    onChange={(event) => setCorrectionEndTime(event.target.value)}
+    className="border p-3 rounded-xl bg-white text-black w-full"
+  />
+</div>
+  </div>
+
+  <textarea
+    value={correctionReason}
+    onChange={(event) => setCorrectionReason(event.target.value)}
+    placeholder="Grund / Hinweis für den Admin"
+    className="w-full border p-3 rounded-xl bg-white text-black mt-4 min-h-[100px]"
+  />
+
+  <button
+    type="button"
+    onClick={handleSubmitCorrectionRequest}
+    className="mt-4 bg-blue-950 text-white px-6 py-3 rounded-xl font-semibold hover:bg-blue-900 transition"
+  >
+    Korrekturantrag senden
+  </button>
 </div>
 
         <div className="bg-white rounded-2xl shadow p-4 md:p-6 mb-6">

@@ -4,15 +4,12 @@ import { useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 
 export default function RegisterPage() {
-  const [businessName, setBusinessName] = useState("");
-  const [adminName, setAdminName] = useState("");
-  const [adminPin, setAdminPin] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [popupMessage, setPopupMessage] = useState("");
-const [showPopup, setShowPopup] = useState(false);
+  const [showPopup, setShowPopup] = useState(false);
 
 function showDiperaPopup(text: string) {
   setPopupMessage(text);
@@ -20,24 +17,27 @@ function showDiperaPopup(text: string) {
 }
 
   async function handleRegister() {
-    if (!businessName || !adminName || !adminPin || !email || !password) {
-      showDiperaPopup("Bitte alle Felder ausfüllen.");
-      return;
-    }
+    if (!email || !password || !confirmPassword) {
+  showDiperaPopup("Bitte alle Felder ausfüllen.");
+  return;
+}
 
-    if (adminPin.length !== 4) {
-      showDiperaPopup("Die PIN muss genau 4 Zahlen haben.");
-      return;
-    }
+if (password !== confirmPassword) {
+  showDiperaPopup("Die Passwörter stimmen nicht überein.");
+  return;
+}
 
     setIsLoading(true);
 
     await supabase.auth.signOut();
 
     const { error: signUpError } = await supabase.auth.signUp({
-      email,
-      password,
-    });
+  email,
+  password,
+  options: {
+    emailRedirectTo: `${window.location.origin}/login`,
+  },
+});
 
     if (signUpError) {
       console.error(signUpError);
@@ -46,25 +46,11 @@ function showDiperaPopup(text: string) {
       return;
     }
 
-    const { error: rpcError } = await supabase.rpc(
-      "create_business_with_admin",
-      {
-        p_business_name: businessName.trim(),
-        p_admin_name: adminName.trim(),
-        p_admin_pin: adminPin.trim(),
-      }
-    );
+    setIsLoading(false);
 
-    if (rpcError) {
-      console.error(rpcError);
-      showDiperaPopup(
-"Es ist ein Fehler aufgetreten."
+    showDiperaPopup(
+  "Wir haben einen Registrierungslink an deine E-Mail Adresse versendet. Schaue wenn nötig auch in den Spamordner."
 );
-      setIsLoading(false);
-      return;
-    }
-
-    window.location.href = "/admin";
   }
 
   return (
@@ -75,38 +61,10 @@ function showDiperaPopup(text: string) {
         </h1>
 
         <p className="text-gray-500 mb-6">
-          Erstelle deinen Betrieb und deinen ersten Admin-Zugang.
+          Erstelle hier dein Dipera-Konto. Deinen Betrieb richtest du im nächsten Schritt, nach Bestätigung deiner E-Mail Adresse ein.
         </p>
 
         <div className="flex flex-col gap-4">
-          <input
-            type="text"
-            placeholder="Betriebsname"
-            value={businessName}
-            onChange={(event) => setBusinessName(event.target.value)}
-            className="border p-3 rounded-lg bg-white text-black"
-          />
-
-          <input
-            type="text"
-            placeholder="Dein Name"
-            value={adminName}
-            onChange={(event) => setAdminName(event.target.value)}
-            className="border p-3 rounded-lg bg-white text-black"
-          />
-
-          <input
-            type="text"
-            inputMode="numeric"
-            maxLength={4}
-            placeholder="4-stellige Admin-PIN"
-            value={adminPin}
-            onChange={(event) => {
-              const onlyNumbers = event.target.value.replace(/\D/g, "");
-              setAdminPin(onlyNumbers.slice(0, 4));
-            }}
-            className="border p-3 rounded-lg bg-white text-black"
-          />
 
           <input
             type="email"
@@ -124,13 +82,21 @@ function showDiperaPopup(text: string) {
             className="border p-3 rounded-lg bg-white text-black"
           />
 
+          <input
+            type="password"
+            placeholder="Passwort wiederholen"
+            value={confirmPassword}
+            onChange={(event) => setConfirmPassword(event.target.value)}
+            className="border p-3 rounded-lg bg-white text-black"
+          />
+
           <button
             type="button"
             onClick={handleRegister}
             disabled={isLoading}
             className="bg-blue-950 text-white px-5 py-3 rounded-xl hover:bg-blue-900 transition disabled:bg-gray-400"
           >
-            {isLoading ? "Registrierung läuft..." : "Betrieb erstellen"}
+            {isLoading ? "Registrierung läuft..." : "Konto erstellen"}
           </button>
         </div>
       </div>
