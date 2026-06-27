@@ -50,11 +50,19 @@ export default function LoginPage() {
     }
 
     if (!profile) {
-      window.location.assign("/setup");
-      return;
-    }
+    const registrationType =
+    user.user_metadata?.registration_type;
 
-    if (profile.role === "admin") {
+  if (registrationType === "employee_invite") {
+    window.location.assign("/employee-setup");
+    return;
+  }
+
+  window.location.assign("/setup");
+  return;
+}
+
+    if (profile.role === "admin" || profile.role === "owner") {
       window.location.assign("/admin");
       return;
     }

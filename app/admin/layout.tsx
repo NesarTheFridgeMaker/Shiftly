@@ -200,9 +200,9 @@ export default function AdminLayout({
         return;
       }
 
-      if (profile.role !== "admin") {
-        window.location.href = "/employee";
-        return;
+      if (profile.role !== "admin" && profile.role !== "owner") {
+      window.location.href = "/employee";
+      return;
       }
 
       const business = await getBusiness();

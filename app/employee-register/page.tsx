@@ -50,9 +50,21 @@ if (!isInviteValid) {
 }
 
     const { error: signUpError } = await supabase.auth.signUp({
-      email,
-      password,
-    });
+  email,
+  password,
+  options: {
+    emailRedirectTo: `${window.location.origin}/login`,
+    data: {
+      registration_type: "employee_invite",
+    },
+  },
+});
+
+setIsLoading(false);
+
+showDiperaPopup(
+  "Bitte bestätige deine E-Mail-Adresse. Danach kannst du dich einloggen und deinen Mitarbeiter-Zugang aktivieren."
+);
 
     if (signUpError) {
       console.error(signUpError);
@@ -60,24 +72,6 @@ if (!isInviteValid) {
       setIsLoading(false);
       return;
     }
-
-    const { error: rpcError } = await supabase.rpc(
-      "complete_employee_invite",
-      {
-        p_invite_code: cleanedInviteCode,
-      }
-    );
-
-    if (rpcError) {
-      console.error(rpcError);
-      showDiperaPopup(
-"Es ist ein Fehler aufgetreten."
-);
-      setIsLoading(false);
-      return;
-    }
-
-    window.location.href = "/employee";
   }
 
   return (

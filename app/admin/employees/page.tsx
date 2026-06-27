@@ -85,6 +85,7 @@ export default function EmployeesPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [showInactiveEmployees, setShowInactiveEmployees] =
   useState(false);
+  const [currentUserRole, setCurrentUserRole] = useState("");
 
   const [name, setName] = useState("");
   const [role, setRole] = useState("Mitarbeiter");
@@ -131,6 +132,28 @@ const [
       console.error("Keine Business-ID gefunden.");
       return;
     }
+
+    const {
+  data: { user },
+} = await supabase.auth.getUser();
+
+if (!user) {
+  console.error("Kein Benutzer gefunden.");
+  return;
+}
+
+const { data: currentProfile, error: profileError } = await supabase
+  .from("profiles")
+  .select("role")
+  .eq("id", user.id)
+  .single();
+
+if (profileError || !currentProfile) {
+  console.error(profileError);
+  return;
+}
+
+setCurrentUserRole(currentProfile.role);
 
     const { data: employeeData, error: employeeError } = await supabase
       .from("employees")
@@ -211,6 +234,8 @@ const [
 
     setEmployees(employeesWithData);
   }
+
+  const canManageAdmins = currentUserRole === "owner";
 
   useEffect(() => {
     loadEmployees();
@@ -328,6 +353,16 @@ showDiperaPopup(
         return;
       }
 
+      if (
+  currentUserRole !== "owner" &&
+  role === "Admin"
+) {
+  showDiperaPopup(
+    "Du hast keine Berechtigung, Admins anzulegen."
+  );
+  return;
+}
+
       const { data: insertedEmployee, error: employeeError } = await supabase
         .from("employees")
         .insert([
@@ -374,7 +409,12 @@ showDiperaPopup(
         .single();
 
       if (employeeError || !insertedEmployee) {
-        console.error(employeeError);
+  console.error("EMPLOYEE INSERT ERROR:", employeeError);
+
+  showDiperaPopup(
+    employeeError?.message || "Mitarbeiter konnte nicht erstellt werden."
+  );
+  return;
 
         if (
           employeeError?.message?.includes("unique_employee_pin_per_business")
@@ -382,9 +422,6 @@ showDiperaPopup(
           showDiperaPopup("Diese PIN ist bereits vergeben.");
           return;
         }
-
-        showDiperaPopup("Mitarbeiter konnte nicht erstellt werden.");
-        return;
       }
 
       const { error: targetHoursError } = await supabase
@@ -442,66 +479,112 @@ showDiperaPopup(
     }
   }
 
-  async function handleDeleteEmployee(id: string) {
+async function handleDeleteEmployee(id: string) {
+  const businessId = await getBusinessId();
 
-    const businessId = await getBusinessId();
-
-    if (!businessId) {
-      showDiperaPopup("Keine Business-ID gefunden.");
-      return;
-    }
-
-    const { error } = await supabase
-      .from("employees")
-      .delete()
-      .eq("id", id)
-      .eq("business_id", businessId);
-
-if (error) {
-  if (
-    error.message?.includes("profiles") ||
-    error.message?.includes("employee_id")
-  ) {
-showDiperaPopup(
-  "Dieser Mitarbeiter wurde bereits registriert. Bitte deaktiviere ihn stattdessen."
-);
+  if (!businessId) {
+    showDiperaPopup("Keine Business-ID gefunden.");
     return;
   }
 
-  console.error(error);
-  showDiperaPopup("Mitarbeiter konnte nicht gelöscht werden.");
-  return;
+  const employee = employees.find(
+    (employee) => employee.id === id
+  );
+
+  if (!employee) {
+    showDiperaPopup("Mitarbeiter wurde nicht gefunden.");
+    return;
+  }
+
+  if (employee.role === "Owner") {
+    showDiperaPopup("Der Owner kann nicht gelöscht werden.");
+    return;
+  }
+
+  if (
+    employee.role === "Admin" &&
+    currentUserRole !== "owner"
+  ) {
+    showDiperaPopup(
+      "Du hast keine Berechtigung, Admins zu löschen."
+    );
+    return;
+  }
+
+  const { error } = await supabase
+    .from("employees")
+    .delete()
+    .eq("id", id)
+    .eq("business_id", businessId);
+
+  if (error) {
+    if (
+      error.message?.includes("profiles") ||
+      error.message?.includes("employee_id")
+    ) {
+      showDiperaPopup(
+        "Dieser Mitarbeiter wurde bereits registriert. Bitte deaktiviere ihn stattdessen."
+      );
+      return;
+    }
+
+    console.error(error);
+    showDiperaPopup("Mitarbeiter konnte nicht gelöscht werden.");
+    return;
+  }
+
+  await loadEmployees();
 }
 
-    await loadEmployees();
+async function handleToggleAccountStatus(id: string, currentStatus: string) {
+  const businessId = await getBusinessId();
+
+  if (!businessId) {
+    showDiperaPopup("Keine Business-ID gefunden.");
+    return;
   }
 
-  async function handleToggleAccountStatus(id: string, currentStatus: string) {
-    const businessId = await getBusinessId();
+  const employee = employees.find(
+    (employee) => employee.id === id
+  );
 
-    if (!businessId) {
-      showDiperaPopup("Keine Business-ID gefunden.");
-      return;
-    }
-
-    const newStatus = currentStatus === "active" ? "inactive" : "active";
-
-    const { error } = await supabase
-      .from("employees")
-      .update({ account_status: newStatus })
-      .eq("id", id)
-      .eq("business_id", businessId);
-
-    if (error) {
-      console.error(error);
-      showDiperaPopup(
-"Es ist ein Fehler aufgetreten."
-);
-      return;
-    }
-
-    await loadEmployees();
+  if (!employee) {
+    showDiperaPopup("Mitarbeiter wurde nicht gefunden.");
+    return;
   }
+
+  if (employee.role === "Owner") {
+    showDiperaPopup("Der Owner kann nicht deaktiviert werden.");
+    return;
+  }
+
+  if (
+    employee.role === "Admin" &&
+    currentUserRole !== "owner"
+  ) {
+    showDiperaPopup(
+      "Du hast keine Berechtigung, Admins zu deaktivieren."
+    );
+    return;
+  }
+
+  const newStatus =
+    currentStatus === "active" ? "inactive" : "active";
+
+  const { error } = await supabase
+    .from("employees")
+    .update({ account_status: newStatus })
+    .eq("id", id)
+    .eq("business_id", businessId);
+
+  if (error) {
+    console.error(error);
+    showDiperaPopup("Es ist ein Fehler aufgetreten.");
+    return;
+  }
+
+  await loadEmployees();
+}
 
   async function handleUpdateMonthlyHours(
     employeeId: string,
@@ -845,14 +928,17 @@ const inactiveEmployees = employees.filter(
               />
 
               <select
-                value={role}
-                onChange={(event) => setRole(event.target.value)}
-                disabled={isSaving}
-                className="border p-3 rounded-lg bg-white text-black disabled:bg-gray-200"
-              >
-                <option>Mitarbeiter</option>
+              value={role}
+              onChange={(event) => setRole(event.target.value)}
+              disabled={isSaving}
+              className="border p-3 rounded-lg bg-white text-black disabled:bg-gray-200"
+            >
+              {currentUserRole === "owner" && (
                 <option>Admin</option>
-              </select>
+              )}
+
+              <option>Mitarbeiter</option>
+            </select>
 
               <input
                 type="text"

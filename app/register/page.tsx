@@ -31,11 +31,14 @@ if (password !== confirmPassword) {
 
     await supabase.auth.signOut();
 
-    const { error: signUpError } = await supabase.auth.signUp({
+   const { error: signUpError } = await supabase.auth.signUp({
   email,
   password,
   options: {
     emailRedirectTo: `${window.location.origin}/login`,
+    data: {
+      registration_type: "business_owner",
+    },
   },
 });
 
