@@ -416,28 +416,50 @@ export default function EmployeePage() {
     setCheckingAuth(false);
   }
 
-  async function loadShifts(selectedEmployeeId: string) {
-    if (!selectedEmployeeId) return;
+async function loadShifts(selectedEmployeeId: string) {
+  if (!selectedEmployeeId) return;
 
-    const businessId = await getBusinessId();
+  const businessId = await getBusinessId();
 
-    if (!businessId) return;
+  if (!businessId) return;
 
-    const { data, error } = await supabase
-      .from("shifts")
-      .select("*")
-      .eq("business_id", businessId)
-      .eq("employee_id", selectedEmployeeId)
-      .eq("is_published", true)
-      .order("shift_date", { ascending: true });
+  const today = new Date().toISOString().split("T")[0];
 
-    if (error) {
-      console.error(error);
-      return;
+  const { data, error } = await supabase
+    .from("shifts")
+    .select("*")
+    .eq("business_id", businessId)
+    .eq("employee_id", selectedEmployeeId)
+    .eq("is_published", true)
+    .gte("shift_date", today)
+    .order("shift_date", { ascending: true })
+    .order("start_time", { ascending: true });
+
+  if (error) {
+    console.error(error);
+    return;
+  }
+
+  const now = new Date();
+
+  const upcomingShifts = (data || []).filter((shift) => {
+    const startDateTime = new Date(
+      `${shift.shift_date}T${shift.start_time}`
+    );
+
+    let endDateTime = new Date(
+      `${shift.shift_date}T${shift.end_time}`
+    );
+
+    if (endDateTime <= startDateTime) {
+      endDateTime.setDate(endDateTime.getDate() + 1);
     }
 
-    setShifts(data || []);
-  }
+    return endDateTime >= now;
+  });
+
+  setShifts(upcomingShifts);
+}
 
   async function handleSubmitCorrectionRequest() {
   if (!employee) {
@@ -567,6 +589,7 @@ async function loadTeamShifts(weekStartDate = selectedWeekStart) {
       .select("*")
       .eq("business_id", businessId)
       .eq("employee_id", selectedEmployeeId)
+      .eq("hidden_by_employee", false)
       .or(`request_status.eq.pending,start_date.gte.${sixtyDaysAgoString}`)
       .order("start_date", { ascending: false });
 
@@ -577,6 +600,27 @@ async function loadTeamShifts(weekStartDate = selectedWeekStart) {
 
     setAbsences(data || []);
   }
+
+  async function handleHideAbsence(absenceId: string) {
+  const { error } = await supabase
+    .from("absences")
+    .update({
+      hidden_by_employee: true,
+    })
+    .eq("id", absenceId);
+
+  if (error) {
+    console.error(error);
+    showDiperaPopup("Der Antrag konnte nicht entfernt werden.");
+    return;
+  }
+
+  setAbsences((currentAbsences) =>
+    currentAbsences.filter((absence) => absence.id !== absenceId)
+  );
+
+  showDiperaPopup("Der Antrag wurde aus deiner Übersicht entfernt.");
+}
 
   async function loadNotifications(selectedEmployeeId: string) {
     if (!selectedEmployeeId) return;
@@ -1366,13 +1410,27 @@ approvedVacationDays;
                       </p>
                     </div>
 
-                    <p
-                      className={`font-bold ${getRequestStatusColor(
-                        absence.request_status
-                      )}`}
-                    >
-                      {formatRequestStatus(absence.request_status)}
-                    </p>
+                    <div className="flex flex-col items-start md:items-end gap-2">
+                      <p
+                        className={`font-bold ${getRequestStatusColor(
+                          absence.request_status
+                        )}`}
+                      >
+                        {formatRequestStatus(absence.request_status)}
+                      </p>
+
+                      
+                    </div>
+
+                    {absence.request_status !== "pending" && (
+                      <button
+                        type="button"
+                        onClick={() => handleHideAbsence(absence.id)}
+                        className="text-sm font-semibold text-gray-500 hover:text-red-600 transition"
+                      >
+                        Aus Übersicht entfernen
+                      </button>
+                    )}
                   </div>
                 </div>
               ))}

@@ -153,99 +153,132 @@ function formatMinutes(totalMinutes: number) {
 }
 
 function buildDateTime(date: string, time: string) {
-  return new Date(`${date}T${time}:00`).toISOString();
+  const [year, month, day] = date.split("-").map(Number);
+  const [hour, minute] = time.split(":").map(Number);
+
+  return new Date(
+    year,
+    month - 1,
+    day,
+    hour,
+    minute,
+    0
+  ).toISOString();
 }
 
 function buildDailySummaries(entries: TimeEntry[]): WorkSummary[] {
-  const groups: Record<string, TimeEntry[]> = {};
+  const entriesByEmployee: Record<string, TimeEntry[]> = {};
 
-entries.forEach((entry) => {
-  const entryDate = new Date(entry.created_at);
+  entries.forEach((entry) => {
+    if (!entriesByEmployee[entry.employee_id]) {
+      entriesByEmployee[entry.employee_id] = [];
+    }
 
-  // Nachts zwischen 00:00–05:59
-  // wird dem Vortag zugeordnet
-  if (entryDate.getHours() < 6) {
-    entryDate.setDate(
-      entryDate.getDate() - 1
-    );
-  }
+    entriesByEmployee[entry.employee_id].push(entry);
+  });
 
-  const date =
-    formatDateForDatabase(entryDate);
+  const summaries: WorkSummary[] = [];
 
-  const key =
-    `${entry.employee_id}-${date}`;
-
-  if (!groups[key]) {
-    groups[key] = [];
-  }
-
-  groups[key].push(entry);
-});
-
-  return Object.entries(groups).map(([key, groupEntries]) => {
-    const sortedEntries = [...groupEntries].sort(
+  Object.entries(entriesByEmployee).forEach(([employeeId, employeeEntries]) => {
+    const sortedEntries = [...employeeEntries].sort(
       (a, b) =>
         new Date(a.created_at).getTime() -
         new Date(b.created_at).getTime()
     );
 
-    const checkIn = sortedEntries.find(
-      (entry) => entry.action === "check_in"
-    );
-
-    const checkOut = [...sortedEntries]
-      .reverse()
-      .find((entry) => entry.action === "check_out");
-
-    let pauseMinutes = 0;
-    let currentPauseStart: Date | null = null;
+    let currentSession: TimeEntry[] = [];
 
     sortedEntries.forEach((entry) => {
-      if (entry.action === "break_start") {
-        currentPauseStart = new Date(entry.created_at);
+      if (entry.action === "check_in") {
+        if (currentSession.length > 0) {
+          summaries.push(buildSummaryFromEntries(currentSession));
+        }
+
+        currentSession = [entry];
+        return;
       }
 
-      if (entry.action === "break_end" && currentPauseStart) {
-        const pauseEnd = new Date(entry.created_at);
+      if (currentSession.length === 0) {
+        currentSession = [entry];
+      } else {
+        currentSession.push(entry);
+      }
 
-        pauseMinutes += Math.round(
-          (pauseEnd.getTime() - currentPauseStart.getTime()) / 60000
-        );
-
-        currentPauseStart = null;
+      if (entry.action === "check_out") {
+        summaries.push(buildSummaryFromEntries(currentSession));
+        currentSession = [];
       }
     });
 
-    let workMinutes = 0;
+    if (currentSession.length > 0) {
+      summaries.push(buildSummaryFromEntries(currentSession));
+    }
+  });
 
-    if (checkIn && checkOut) {
-      const start = new Date(checkIn.created_at);
-      const end = new Date(checkOut.created_at);
+  return summaries;
+}
 
-      workMinutes = Math.round(
-        (end.getTime() - start.getTime()) / 60000
-      );
+function buildSummaryFromEntries(sortedEntries: TimeEntry[]): WorkSummary {
+  const checkIn = sortedEntries.find(
+    (entry) => entry.action === "check_in"
+  );
 
-      workMinutes = workMinutes - pauseMinutes;
+  const checkOut = [...sortedEntries]
+    .reverse()
+    .find((entry) => entry.action === "check_out");
+
+  let pauseMinutes = 0;
+  let currentPauseStart: Date | null = null;
+
+  sortedEntries.forEach((entry) => {
+    if (entry.action === "break_start") {
+      currentPauseStart = new Date(entry.created_at);
     }
 
-    return {
-      key,
-      employee_id: sortedEntries[0].employee_id,
-      employee_name: sortedEntries[0].employee_name,
-      date: formatDate(sortedEntries[0].created_at),
-      rawDate: formatDateForDatabase(new Date(sortedEntries[0].created_at)),
-      start: checkIn ? formatTime(checkIn.created_at) : "Offen",
-      end: checkOut ? formatTime(checkOut.created_at) : "Offen",
-      workMinutes,
-      pauseMinutes,
-      workDuration:
-        checkIn && checkOut ? formatMinutes(workMinutes) : "Noch offen",
-      pauseDuration: formatMinutes(pauseMinutes),
-      entries: sortedEntries,
-    };
+    if (entry.action === "break_end" && currentPauseStart) {
+      const pauseEnd = new Date(entry.created_at);
+
+      pauseMinutes += Math.round(
+        (pauseEnd.getTime() - currentPauseStart.getTime()) / 60000
+      );
+
+      currentPauseStart = null;
+    }
   });
+
+  let workMinutes = 0;
+
+  if (checkIn && checkOut) {
+    const start = new Date(checkIn.created_at);
+    const end = new Date(checkOut.created_at);
+
+    workMinutes = Math.round(
+      (end.getTime() - start.getTime()) / 60000
+    );
+
+    workMinutes = workMinutes - pauseMinutes;
+  }
+
+  const dateSource = checkIn || sortedEntries[0];
+  const rawDate = formatDateForDatabase(
+    new Date(dateSource.created_at)
+  );
+
+  return {
+    key: `${sortedEntries[0].employee_id}-${rawDate}-${sortedEntries[0].id}`,
+    employee_id: sortedEntries[0].employee_id,
+    employee_name: sortedEntries[0].employee_name,
+    date: formatDate(dateSource.created_at),
+    rawDate,
+    start: checkIn ? formatTime(checkIn.created_at) : "Offen",
+    end: checkOut ? formatTime(checkOut.created_at) : "Offen",
+    workMinutes,
+    pauseMinutes,
+    workDuration:
+      checkIn && checkOut ? formatMinutes(workMinutes) : "Noch offen",
+    pauseDuration: formatMinutes(pauseMinutes),
+    entries: sortedEntries,
+  };
 }
 
 function buildPeriodSummaries(
@@ -372,10 +405,10 @@ const [showSuccessPopup, setShowSuccessPopup] =
   const [selectedDate, setSelectedDate] = useState("");
   const [selectedTime, setSelectedTime] = useState("");
   const [exportMonth, setExportMonth] = useState(
-  new Date().toISOString().slice(0, 7)
+  formatDateForDatabase(new Date()).slice(0, 7)
 );
 const [viewMonth, setViewMonth] = useState(
-  new Date().toISOString().slice(0, 7)
+  formatDateForDatabase(new Date()).slice(0, 7)
 );
 const [openEmployeeId, setOpenEmployeeId] =
   useState<string | null>(null);
@@ -405,7 +438,7 @@ function changeMonth(direction: number) {
 
   date.setMonth(date.getMonth() + direction);
 
-  setViewMonth(date.toISOString().slice(0, 7));
+  setViewMonth(formatDateForDatabase(date).slice(0, 7));
 }
 
 function showConfirm(text: string, action: () => void) {
@@ -761,15 +794,18 @@ if (
   }
 
   if (selectedHour < 6) {
-    const nextDay = new Date(selectedDate);
+    const [year, month, day] =
+  selectedDate.split("-").map(Number);
 
-    nextDay.setDate(
-      nextDay.getDate() + 1
-    );
+const nextDay = new Date(
+  year,
+  month - 1,
+  day
+);
 
-    entryDate =
-      nextDay.toISOString()
-      .split("T")[0];
+nextDay.setDate(nextDay.getDate() + 1);
+
+entryDate = formatDateForDatabase(nextDay);
   }
 }
 

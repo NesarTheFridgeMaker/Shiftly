@@ -115,6 +115,8 @@ const [editHourlyRate, setEditHourlyRate] = useState("");
 const [editMonthlySalary, setEditMonthlySalary] = useState("");
 const [editDatevPersonnelNumber, setEditDatevPersonnelNumber] = useState("");
 const [editCostCenter, setEditCostCenter] = useState("");
+const [unsavedMonthlyHours, setUnsavedMonthlyHours] =
+  useState<Record<string, boolean>>({});
 const [
   editEligibleForSurcharges,
   setEditEligibleForSurcharges
@@ -646,6 +648,13 @@ async function handleToggleAccountStatus(id: string, currentStatus: string) {
     }
 
     await loadEmployees();
+
+    showDiperaPopup("Die Monats-Sollstunden wurden erfolgreich gespeichert.");
+
+    setUnsavedMonthlyHours((current) => ({
+  ...current,
+  [employeeId]: false,
+}));
   }
 
   async function handleAddNote(employeeId: string) {
@@ -1143,23 +1152,51 @@ const inactiveEmployees = employees.filter(
               </div>
 
               <div className="flex flex-col gap-2 mb-3">
-                <label className="text-sm font-semibold text-gray-600">
-                  Monats-Sollstunden ändern
-                </label>
+  <label className="text-sm font-semibold text-gray-600">
+    Monats-Sollstunden ändern
+  </label>
 
-                <input
-                  type="number"
-                  min="1"
-                  defaultValue={employee.monthly_target_hours}
-                  onBlur={(event) =>
-                    handleUpdateMonthlyHours(
-                      employee.id,
-                      Number(event.target.value)
-                    )
-                  }
-                  className="border p-3 rounded-lg bg-white text-black"
-                />
-              </div>
+  <div className="flex flex-col sm:flex-row gap-2">
+    <input
+      type="number"
+      min="1"
+      value={employee.monthly_target_hours}
+      onChange={(event) => {
+  setEmployees((currentEmployees) =>
+    currentEmployees.map((currentEmployee) =>
+      currentEmployee.id === employee.id
+        ? {
+            ...currentEmployee,
+            monthly_target_hours: Number(event.target.value),
+          }
+        : currentEmployee
+    )
+  );
+
+  setUnsavedMonthlyHours((current) => ({
+    ...current,
+    [employee.id]: true,
+  }));
+}}
+      className="border p-3 rounded-lg bg-white text-black flex-1"
+    />
+
+    {unsavedMonthlyHours[employee.id] && (
+  <button
+    type="button"
+    onClick={() =>
+      handleUpdateMonthlyHours(
+        employee.id,
+        employee.monthly_target_hours
+      )
+    }
+    className="bg-blue-950 text-white px-4 py-3 rounded-lg font-semibold hover:bg-blue-900 transition"
+  >
+    Speichern
+  </button>
+)}
+  </div>
+</div>
 
               <div className="flex flex-col gap-2">
                 <button
