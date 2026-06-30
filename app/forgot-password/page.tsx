@@ -4,9 +4,9 @@ import Link from "next/link";
 import { useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 
-export default function LoginPage() {
+export default function ForgotPasswordPage() {
   const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
   const [popupMessage, setPopupMessage] = useState("");
   const [showPopup, setShowPopup] = useState(false);
 
@@ -15,64 +15,29 @@ export default function LoginPage() {
     setShowPopup(true);
   }
 
-  async function handleLogin() {
-    if (!email || !password) {
-      showDiperaPopup("Bitte E-Mail und Passwort eingeben.");
+  async function handleResetPassword() {
+    if (!email) {
+      showDiperaPopup("Bitte gib deine E-Mail-Adresse ein.");
       return;
     }
 
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
+    setIsLoading(true);
+
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/reset-password`,
     });
 
+    setIsLoading(false);
+
     if (error) {
-      showDiperaPopup(`Login fehlgeschlagen: ${error.message}`);
+      console.error(error);
+      showDiperaPopup(error.message);
       return;
     }
 
-    const user = data.user;
-
-    if (!user) {
-      showDiperaPopup("Benutzer konnte nicht geladen werden.");
-      return;
-    }
-
-    const { data: profile, error: profileError } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", user.id)
-      .maybeSingle();
-
-    if (profileError) {
-      console.error(profileError);
-      showDiperaPopup("Profil konnte nicht geladen werden.");
-      return;
-    }
-
-    if (!profile) {
-      const registrationType = user.user_metadata?.registration_type;
-
-      if (registrationType === "employee_invite") {
-        window.location.assign("/employee-setup");
-        return;
-      }
-
-      window.location.assign("/setup");
-      return;
-    }
-
-    if (profile.role === "admin" || profile.role === "owner") {
-      window.location.assign("/admin");
-      return;
-    }
-
-    if (profile.role === "employee") {
-      window.location.assign("/employee");
-      return;
-    }
-
-    showDiperaPopup("Unbekannte Benutzerrolle.");
+    showDiperaPopup(
+      "Wenn ein Konto mit dieser E-Mail-Adresse existiert, wurde ein Link zum Zurücksetzen des Passworts versendet."
+    );
   }
 
   return (
@@ -106,11 +71,11 @@ export default function LoginPage() {
       <section className="relative z-10 w-full max-w-md rounded-3xl bg-white/95 p-8 shadow-2xl border border-white">
         <div className="text-center mb-8">
           <h1 className="text-[2.6rem] leading-tight font-light tracking-[-0.04em] text-blue-950">
-            Einloggen
+            Passwort vergessen?
           </h1>
 
           <p className="mt-2 text-sm text-slate-500">
-            Zugriff auf dein Dipera-Dashboard
+            Gib deine E-Mail-Adresse ein. Wir senden dir einen Link zum Zurücksetzen.
           </p>
         </div>
 
@@ -123,38 +88,22 @@ export default function LoginPage() {
             className="h-12 rounded-xl border border-slate-300 bg-white px-4 text-black outline-none focus:border-blue-700"
           />
 
-          <input
-            type="password"
-            placeholder="Passwort"
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
-            className="h-12 rounded-xl border border-slate-300 bg-white px-4 text-black outline-none focus:border-blue-700"
-          />
-
-          <div className="flex justify-end -mt-1">
-            <Link
-              href="/forgot-password"
-              className="text-sm font-semibold text-blue-700 hover:text-blue-950"
-            >
-              Passwort vergessen?
-            </Link>
-          </div>
-
           <button
             type="button"
-            onClick={handleLogin}
-            className="h-12 rounded-xl bg-blue-700 text-white font-semibold hover:bg-blue-800 transition"
+            onClick={handleResetPassword}
+            disabled={isLoading}
+            className="h-12 rounded-xl bg-blue-700 text-white font-semibold hover:bg-blue-800 transition disabled:bg-gray-400"
           >
-            Einloggen
+            {isLoading ? "Link wird versendet..." : "Link senden"}
           </button>
 
           <p className="text-center text-sm text-slate-500 mt-2">
-            Noch kein Konto?{" "}
+            Zurück zum{" "}
             <Link
-              href="/register"
+              href="/login"
               className="font-semibold text-blue-700 hover:text-blue-950"
             >
-              Kostenlos registrieren
+              Login
             </Link>
           </p>
         </div>
