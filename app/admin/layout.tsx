@@ -42,6 +42,7 @@ export default function AdminLayout({
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [popupMessage, setPopupMessage] = useState("");
   const [showPopup, setShowPopup] = useState(false);
+  const [accessBlocked, setAccessBlocked] = useState(false);
 
   function showDiperaPopup(text: string) {
   setPopupMessage(text);
@@ -218,6 +219,21 @@ export default function AdminLayout({
         return;
       }
 
+      const blockedSubscriptionStatuses = [
+  "canceled",
+  "unpaid",
+  "incomplete_expired",
+];
+
+if (
+  business.subscription_status &&
+  blockedSubscriptionStatuses.includes(business.subscription_status)
+) {
+  setAccessBlocked(true);
+  setCheckingAuth(false);
+  return;
+}
+
       setBusinessName(business.name);
       setIsLoggedIn(true);
 
@@ -345,6 +361,28 @@ window.addEventListener(
     window.location.href = "/login";
   }
 
+   async function handleOpenBillingPortal() {
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+
+  const response = await fetch("/api/stripe/create-portal-session", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${session?.access_token}`,
+    },
+  });
+
+  const data = await response.json();
+
+  if (!response.ok || !data.url) {
+    alert(data.error || "Das Kundenportal konnte nicht geöffnet werden.");
+    return;
+  }
+
+  window.location.href = data.url;
+}
+
   const unreadNotifications = notifications.filter(
     (notification) => !notification.is_read
   );
@@ -399,9 +437,47 @@ const navLinks = [
     );
   }
 
-  if (!isLoggedIn) {
-    return null;
-  }
+if (accessBlocked) {
+  return (
+    <main className="min-h-screen bg-[#f7f7f8] flex items-center justify-center p-6">
+      <div className="max-w-lg w-full bg-white rounded-3xl shadow-2xl p-8 text-center">
+        <img
+          src="/logo/dipera-logo-dark.png"
+          alt="Dipera"
+          className="w-40 h-auto mx-auto mb-8"
+        />
+
+        <h1 className="text-3xl font-light tracking-[-0.04em] text-blue-950 mb-4">
+          Abonnement nicht aktiv
+        </h1>
+
+        <p className="text-slate-500 mb-8 leading-relaxed">
+          Dein Dipera-Abonnement ist derzeit nicht aktiv. Bitte aktualisiere deine Zahlung oder reaktiviere dein Abonnement, um Dipera weiter zu nutzen.
+        </p>
+
+        <button
+          type="button"
+          onClick={handleOpenBillingPortal}
+          className="w-full bg-blue-700 text-white py-3 rounded-xl font-semibold hover:bg-blue-800 transition"
+        >
+          Abonnement verwalten
+        </button>
+
+        <button
+          type="button"
+          onClick={handleLogout}
+          className="w-full mt-3 text-slate-500 font-semibold hover:text-blue-950 transition"
+        >
+          Abmelden
+        </button>
+      </div>
+    </main>
+  );
+}
+
+if (!isLoggedIn) {
+  return null;
+}
 
   return (
     <main className="min-h-screen bg-gray-100 lg:flex overflow-x-hidden">

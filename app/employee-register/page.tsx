@@ -67,11 +67,25 @@ showDiperaPopup(
 );
 
     if (signUpError) {
-      console.error(signUpError);
-      showDiperaPopup(signUpError.message);
-      setIsLoading(false);
-      return;
-    }
+  console.error(signUpError);
+
+  const message = signUpError.message.toLowerCase();
+
+  if (
+    message.includes("already") ||
+    message.includes("registered") ||
+    message.includes("exists")
+  ) {
+    showDiperaPopup(
+      "Für diese E-Mail-Adresse existiert bereits ein Dipera-Konto. Bitte melde dich an oder nutze „Passwort vergessen“."
+    );
+  } else {
+    showDiperaPopup(signUpError.message);
+  }
+
+  setIsLoading(false);
+  return;
+}
   }
 
   return (
