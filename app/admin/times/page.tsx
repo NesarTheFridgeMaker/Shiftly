@@ -5,6 +5,14 @@ import ExcelJS from "exceljs";
 import { supabase } from "@/lib/supabaseClient";
 import { getBusinessId } from "@/lib/getBusinessId";
 import DiperaPopup from "@/components/DiperaPopup";
+import PageHeader from "@/components/ui/PageHeader";
+import PageActions from "@/components/ui/PageActions";
+import Section from "@/components/ui/Section";
+import StatCard from "@/components/ui/StatCard";
+import Button from "@/components/ui/Button";
+import Input from "@/components/ui/Input";
+import Select from "@/components/ui/Select";
+import Badge from "@/components/ui/Badge";
 import {
   buildWorkSessions
 } from "@/lib/payroll/buildWorkSessions";
@@ -1583,430 +1591,383 @@ const employeeMonthGroups = monthSummaries.reduce(
   (summary) => summary.rawDate === todayRawDate
 );
 
+  const monthEmployeeCount = Object.keys(employeeMonthGroups).length;
+  const monthWorkMinutes = monthSummaries.reduce(
+    (sum, summary) => sum + summary.workMinutes,
+    0
+  );
+  const todayWorkMinutes = todaysDailySummaries.reduce(
+    (sum, summary) => sum + summary.workMinutes,
+    0
+  );
+
   return (
-    <div>
-      <h1 className="text-3xl md:text-4xl font-bold text-blue-950 mb-6 md:mb-8">
-        Arbeitszeiten
-      </h1>
+    <div className="space-y-8">
+      <PageHeader
+        title="Arbeitszeiten"
+        description="Prüfe Stempelungen, ergänze fehlende Zeiten und exportiere Monatsdaten."
+        action={
+          <PageActions>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={handleExportExcel}
+            >
+              Excel & CSV exportieren
+            </Button>
+          </PageActions>
+        }
+      />
 
-      <div className="bg-white rounded-2xl shadow p-4 md:p-6 mb-8">
-  <h2 className="text-2xl font-semibold text-blue-950 mb-4">
-    Excel-Export
-  </h2>
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-4">
+        <StatCard
+          title="Arbeitstage im Monat"
+          value={monthSummaries.length}
+        />
 
-  <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-    <input
-      type="month"
-      value={exportMonth}
-      onChange={(event) => setExportMonth(event.target.value)}
-      className="border p-3 rounded-lg bg-white text-black"
-    />
+        <StatCard
+          title="Mitarbeiter im Monat"
+          value={monthEmployeeCount}
+        />
 
-    <button
-      type="button"
-      onClick={handleExportExcel}
-      className="bg-green-600 text-white px-5 py-3 rounded-xl hover:bg-green-700 transition"
-    >
-      Excel & CSV exportieren
-    </button>
+        <StatCard
+          title="Arbeitszeit heute"
+          value={formatMinutes(todayWorkMinutes)}
+          badge="Heute"
+          badgeVariant="primary"
+        />
 
-  </div>
-</div>
+        <StatCard
+          title="Arbeitszeit Monat"
+          value={formatMinutes(monthWorkMinutes)}
+          badge={new Date(`${viewMonth}-01`).toLocaleDateString("de-DE", {
+            month: "short",
+          })}
+          badgeVariant="muted"
+        />
+      </div>
 
-      <div className="bg-white rounded-2xl shadow p-4 md:p-6 mb-8">
-        <h2 className="text-2xl font-semibold text-blue-950 mb-4">
-          Stempel hinzufügen
-        </h2>
-
-        <p className="text-gray-500 mb-5">
-          Nutze diese Funktion, wenn ein Mitarbeiter vergessen hat, sich ein-
-          oder auszustempeln.
-        </p>
-
-        <div className="grid grid-cols-1 xl:grid-cols-4 gap-4">
-          <select
-            value={selectedEmployeeId}
-            onChange={(event) => setSelectedEmployeeId(event.target.value)}
-            className="border p-3 rounded-lg bg-white text-black"
-          >
-            <option value="">Mitarbeiter auswählen</option>
-
-            {employees.map((employee) => (
-              <option key={employee.id} value={employee.id}>
-                {employee.name}
-              </option>
-            ))}
-          </select>
-
-          <select
-            value={selectedAction}
-            onChange={(event) => setSelectedAction(event.target.value)}
-            className="border p-3 rounded-lg bg-white text-black"
-          >
-            <option value="check_in">Einstempeln</option>
-            <option value="break_start">Pausenbeginn</option>
-            <option value="break_end">Pausenende</option>
-            <option value="check_out">Ausstempeln</option>
-          </select>
-
-          <input
-            type="date"
-            value={selectedDate}
-            onChange={(event) => setSelectedDate(event.target.value)}
-            className="border p-3 rounded-lg bg-white text-black"
-          />
-
-          <input
-            type="time"
-            value={selectedTime}
-            onChange={(event) => setSelectedTime(event.target.value)}
-            className="border p-3 rounded-lg bg-white text-black"
-          />
-        </div>
-
-        <button
-          type="button"
-          onClick={() => handleAddTimeEntry()}
-          className="mt-5 w-full md:w-auto bg-blue-950 text-white px-5 py-3 rounded-xl hover:bg-blue-900 transition"
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+        <Section
+          title="Excel-Export"
+          description="Wähle einen Monat und exportiere Arbeitszeiten sowie DATEV-Vorbereitung."
         >
-          Stempel speichern
-        </button>
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-[1fr_auto] md:items-end">
+            <Input
+              label="Exportmonat"
+              type="month"
+              value={exportMonth}
+              onChange={(event) => setExportMonth(event.target.value)}
+            />
+
+            <Button
+              type="button"
+              variant="primary"
+              onClick={handleExportExcel}
+            >
+              Excel & CSV exportieren
+            </Button>
+          </div>
+        </Section>
+
+        <Section
+          title="Stempel hinzufügen"
+          description="Nutze diese Funktion, wenn ein Mitarbeiter vergessen hat, sich ein- oder auszustempeln."
+        >
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <Select
+              label="Mitarbeiter"
+              value={selectedEmployeeId}
+              onChange={(event) => setSelectedEmployeeId(event.target.value)}
+              options={[
+                { value: "", label: "Mitarbeiter auswählen" },
+                ...employees.map((employee) => ({
+                  value: employee.id,
+                  label: employee.name,
+                })),
+              ]}
+            />
+
+            <Select
+              label="Aktion"
+              value={selectedAction}
+              onChange={(event) => setSelectedAction(event.target.value)}
+              options={[
+                { value: "check_in", label: "Einstempeln" },
+                { value: "break_start", label: "Pausenbeginn" },
+                { value: "break_end", label: "Pausenende" },
+                { value: "check_out", label: "Ausstempeln" },
+              ]}
+            />
+
+            <Input
+              label="Datum"
+              type="date"
+              value={selectedDate}
+              onChange={(event) => setSelectedDate(event.target.value)}
+            />
+
+            <Input
+              label="Uhrzeit"
+              type="time"
+              value={selectedTime}
+              onChange={(event) => setSelectedTime(event.target.value)}
+            />
+          </div>
+
+          <div className="mt-6">
+            <Button
+              type="button"
+              variant="primary"
+              onClick={() => handleAddTimeEntry()}
+            >
+              Stempel speichern
+            </Button>
+          </div>
+        </Section>
       </div>
 
-      <div className="bg-white rounded-2xl shadow p-4 md:p-6 mb-8">
-  <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
-    <div>
-      <h2 className="text-2xl font-semibold text-blue-950">
-        Monatsübersicht
-      </h2>
+      <Section
+        title="Monatsübersicht"
+        description="Arbeitszeiten pro Mitarbeiter im ausgewählten Monat."
+        action={
+          <div className="flex items-center gap-3">
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={() => changeMonth(-1)}
+              aria-label="Vorheriger Monat"
+            >
+              ←
+            </Button>
 
-      <p className="text-sm text-gray-500 mt-1">
-        Arbeitszeiten pro Mitarbeiter im ausgewählten Monat
-      </p>
-    </div>
-
-    <div className="flex items-center gap-3">
-      <button
-        type="button"
-        onClick={() => changeMonth(-1)}
-        className="px-4 py-2 rounded-xl bg-gray-100 text-blue-950 font-bold hover:bg-gray-200 transition"
-      >
-        ←
-      </button>
-
-      <div className="min-w-[160px] text-center font-bold text-blue-950">
-        {new Date(`${viewMonth}-01`).toLocaleDateString("de-DE", {
-          month: "long",
-          year: "numeric",
-        })}
-      </div>
-
-      <button
-        type="button"
-        onClick={() => changeMonth(1)}
-        className="px-4 py-2 rounded-xl bg-gray-100 text-blue-950 font-bold hover:bg-gray-200 transition"
-      >
-        →
-      </button>
-    </div>
-  </div>
-
-  {Object.keys(employeeMonthGroups).length === 0 ? (
-    <div className="bg-gray-50 border rounded-2xl p-6 text-center text-gray-600">
-      In diesem Monat wurden noch keine Arbeitszeiten erfasst.
-    </div>
-  ) : (
-    <div className="space-y-4">
-      {Object.entries(employeeMonthGroups).map(
-        ([employeeId, group]) => (
-          <details
-            key={employeeId}
-            className="bg-gray-50 border rounded-2xl p-4 open:bg-white transition"
-          >
-            <summary className="cursor-pointer list-none">
-              <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-                <div>
-                  <h3 className="text-lg font-bold text-blue-950">
-                    {group.employeeName}
-                  </h3>
-
-                  <p className="text-sm text-gray-500">
-                    {group.entries.length} Arbeitstag(e)
-                  </p>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3 text-sm">
-                  <div className="bg-white rounded-xl p-3 border">
-                    <p className="text-gray-500">Arbeitszeit</p>
-                    <p className="font-bold text-blue-950">
-                      {formatMinutes(group.totalWorkMinutes)}
-                    </p>
-                  </div>
-
-                  <div className="bg-white rounded-xl p-3 border">
-                    <p className="text-gray-500">Pause</p>
-                    <p className="font-bold text-blue-950">
-                      {formatMinutes(group.totalPauseMinutes)}
-                    </p>
-                  </div>
-
-                </div>
-                <div className="flex justify-end">
-                <span className="bg-blue-950 text-white px-4 py-2 rounded-xl font-semibold inline-block">
-                  Details anzeigen
-                </span>
-              </div>
-              </div>
-            </summary>
-
-            <div className="mt-5 overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-left text-gray-500 border-b">
-                    <th className="py-3 pr-4">Datum</th>
-                    <th className="py-3 pr-4">Beginn</th>
-                    <th className="py-3 pr-4">Ende</th>
-                    <th className="py-3 pr-4">Pause</th>
-                    <th className="py-3 pr-4">Arbeitszeit</th>
-                    <th className="py-3 pr-4">Status</th>
-                    <th className="py-3 pr-4">Aktion</th>
-                  </tr>
-                </thead>
-
-                <tbody>
-                  {group.entries.map((summary) => (
-                    <tr
-                      key={summary.key}
-                      className="border-b last:border-b-0"
-                    >
-                      <td className="py-3 pr-4 font-medium text-gray-900">
-                        {summary.date}
-                      </td>
-
-                      <td className="py-3 pr-4 text-gray-700">
-                        {summary.start || "-"}
-                      </td>
-
-                      <td className="py-3 pr-4 text-gray-700">
-                        {summary.end || "-"}
-                      </td>
-
-                      <td className="py-3 pr-4 text-gray-700">
-                        {formatMinutes(summary.pauseMinutes)}
-                      </td>
-
-                      <td className="py-3 pr-4 font-semibold text-blue-950">
-                        {formatMinutes(summary.workMinutes)}
-                      </td>
-
-                      <td className="py-3 pr-4">
-                      <span className="text-gray-500">
-                        —
-                      </span>
-                      </td>
-
-                      <td className="py-3 pr-4">
-                        <button
-                        type="button"
-                        onClick={() => handleOpenEditSummary(summary)}
-                        className="text-blue-700 font-semibold hover:underline"
-                      >
-                        Bearbeiten
-                      </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div className="min-w-[160px] text-center text-sm font-medium text-[#111827]">
+              {new Date(`${viewMonth}-01`).toLocaleDateString("de-DE", {
+                month: "long",
+                year: "numeric",
+              })}
             </div>
-          </details>
-        )
+
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={() => changeMonth(1)}
+              aria-label="Nächster Monat"
+            >
+              →
+            </Button>
+          </div>
+        }
+      >
+        {Object.keys(employeeMonthGroups).length === 0 ? (
+          <div className="rounded-2xl border border-[#E5E7EB] bg-[#F8FAFC] p-8 text-center text-sm text-[#6B7280]">
+            In diesem Monat wurden noch keine Arbeitszeiten erfasst.
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {Object.entries(employeeMonthGroups).map(
+              ([employeeId, group]) => (
+                <details
+                  key={employeeId}
+                  className="rounded-3xl border border-[#E5E7EB] bg-[#F8FAFC] p-4 transition open:bg-white"
+                >
+                  <summary className="cursor-pointer list-none">
+                    <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                      <div>
+                        <h3 className="text-lg font-medium tracking-[-0.02em] text-[#111827]">
+                          {group.employeeName}
+                        </h3>
+
+                        <p className="mt-1 text-sm text-[#6B7280]">
+                          {group.entries.length} Arbeitstag(e)
+                        </p>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3 text-sm">
+                        <div className="rounded-2xl border border-[#E5E7EB] bg-white px-4 py-3">
+                          <p className="text-xs text-[#6B7280]">
+                            Arbeitszeit
+                          </p>
+                          <p className="mt-1 font-medium text-[#111827]">
+                            {formatMinutes(group.totalWorkMinutes)}
+                          </p>
+                        </div>
+
+                        <div className="rounded-2xl border border-[#E5E7EB] bg-white px-4 py-3">
+                          <p className="text-xs text-[#6B7280]">Pause</p>
+                          <p className="mt-1 font-medium text-[#111827]">
+                            {formatMinutes(group.totalPauseMinutes)}
+                          </p>
+                        </div>
+                      </div>
+
+                      <Badge variant="primary">Details anzeigen</Badge>
+                    </div>
+                  </summary>
+
+                  <div className="mt-5 overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-[#E5E7EB] text-left text-xs font-medium uppercase tracking-[0.08em] text-[#6B7280]">
+                          <th className="py-3 pr-4">Datum</th>
+                          <th className="py-3 pr-4">Beginn</th>
+                          <th className="py-3 pr-4">Ende</th>
+                          <th className="py-3 pr-4">Pause</th>
+                          <th className="py-3 pr-4">Arbeitszeit</th>
+                          <th className="py-3 pr-4">Status</th>
+                          <th className="py-3 pr-4 text-right">Aktion</th>
+                        </tr>
+                      </thead>
+
+                      <tbody>
+                        {group.entries.map((summary) => (
+                          <tr
+                            key={summary.key}
+                            className="border-b border-[#E5E7EB] last:border-b-0"
+                          >
+                            <td className="py-4 pr-4 font-medium text-[#111827]">
+                              {summary.date}
+                            </td>
+
+                            <td className="py-4 pr-4 text-[#6B7280]">
+                              {summary.start || "-"}
+                            </td>
+
+                            <td className="py-4 pr-4 text-[#6B7280]">
+                              {summary.end || "-"}
+                            </td>
+
+                            <td className="py-4 pr-4 text-[#6B7280]">
+                              {formatMinutes(summary.pauseMinutes)}
+                            </td>
+
+                            <td className="py-4 pr-4 font-medium text-[#111827]">
+                              {formatMinutes(summary.workMinutes)}
+                            </td>
+
+                            <td className="py-4 pr-4">
+                              <Badge variant="muted">Erfasst</Badge>
+                            </td>
+
+                            <td className="py-4 pr-4 text-right">
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleOpenEditSummary(summary)}
+                              >
+                                Bearbeiten
+                              </Button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </details>
+              )
+            )}
+          </div>
+        )}
+      </Section>
+
+      {editingSummary && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#111827]/35 p-6 backdrop-blur-sm">
+          <div className="w-full max-w-lg rounded-[28px] border border-[#E5E7EB] bg-white p-6 shadow-[0_24px_70px_rgba(17,24,39,0.18)]">
+            <h2 className="text-2xl font-light tracking-[-0.03em] text-[#111827]">
+              Arbeitszeit bearbeiten
+            </h2>
+
+            <p className="mt-2 text-sm text-[#6B7280]">
+              {editingSummary.employee_name} · {editingSummary.date}
+            </p>
+
+            <div className="mt-6 grid grid-cols-1 gap-4">
+              <Input
+                label="Arbeitsbeginn"
+                type="time"
+                value={editStartTime === "Offen" ? "" : editStartTime}
+                onChange={(event) => setEditStartTime(event.target.value)}
+              />
+
+              <Input
+                label="Arbeitsende"
+                type="time"
+                value={editEndTime === "Offen" ? "" : editEndTime}
+                onChange={(event) => setEditEndTime(event.target.value)}
+              />
+            </div>
+
+            <div className="mt-6 flex flex-col gap-3 sm:flex-row">
+              <Button
+                type="button"
+                variant="primary"
+                fullWidth
+                onClick={handleSaveEditedSummary}
+              >
+                Speichern
+              </Button>
+
+              <Button
+                type="button"
+                variant="danger"
+                fullWidth
+                onClick={handleAskDeleteEditedSummary}
+              >
+                Löschen
+              </Button>
+
+              <Button
+                type="button"
+                variant="secondary"
+                fullWidth
+                onClick={() => setEditingSummary(null)}
+              >
+                Abbrechen
+              </Button>
+            </div>
+          </div>
+        </div>
       )}
-    </div>
-  )}
-</div> 
 
-{editingSummary && (
-  <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-6 z-50">
-    <div className="max-w-lg w-full rounded-3xl bg-white p-6 shadow-2xl">
-      <h2 className="text-2xl font-bold text-blue-950 mb-2">
-        Arbeitszeit bearbeiten
-      </h2>
+      <DiperaPopup
+        open={Boolean(pendingDeleteSummary)}
+        message={
+          pendingDeleteSummary
+            ? `Möchtest du die Arbeitszeit von ${pendingDeleteSummary.employee_name} am ${pendingDeleteSummary.date} wirklich löschen?`
+            : ""
+        }
+        onClose={() => setPendingDeleteSummary(null)}
+        onConfirm={handleConfirmDeleteSummary}
+        confirmText="Ja, löschen"
+        cancelText="Abbrechen"
+      />
 
-      <p className="text-gray-600 mb-6">
-        {editingSummary.employee_name} — {editingSummary.date}
-      </p>
+      <DiperaPopup
+        open={showPopup}
+        message={popupMessage}
+        onClose={() => setShowPopup(false)}
+      />
 
-      <div className="grid grid-cols-1 gap-4">
-        <div>
-          <label className="block text-sm font-semibold text-gray-700 mb-1">
-            Arbeitsbeginn
-          </label>
+      <DiperaPopup
+        open={showSuccessPopup}
+        message={successMessage}
+        onClose={() => setShowSuccessPopup(false)}
+      />
 
-          <input
-            type="time"
-            value={editStartTime === "Offen" ? "" : editStartTime}
-            onChange={(event) => setEditStartTime(event.target.value)}
-            className="w-full border p-3 rounded-xl bg-white text-black"
-          />
-        </div>
-
-        <div>
-          <label className="block text-sm font-semibold text-gray-700 mb-1">
-            Arbeitsende
-          </label>
-
-          <input
-            type="time"
-            value={editEndTime === "Offen" ? "" : editEndTime}
-            onChange={(event) => setEditEndTime(event.target.value)}
-            className="w-full border p-3 rounded-xl bg-white text-black"
-          />
-        </div>
-      </div>
-
-      <div className="flex flex-col sm:flex-row gap-3 mt-6">
-        <button
-          type="button"
-          onClick={handleSaveEditedSummary}
-          className="flex-1 bg-blue-950 text-white px-5 py-3 rounded-xl font-semibold hover:bg-blue-900 transition"
-        >
-          Speichern
-        </button>
-
-        <button
-          type="button"
-          onClick={handleAskDeleteEditedSummary}
-          className="flex-1 bg-red-600 text-white px-5 py-3 rounded-xl font-semibold hover:bg-red-700 transition"
-        >
-          Löschen
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setEditingSummary(null)}
-          className="flex-1 bg-gray-200 text-gray-800 px-5 py-3 rounded-xl font-semibold hover:bg-gray-300 transition"
-        >
-          Abbrechen
-        </button>
-      </div>
-    </div>
-  </div>
-)}
-
-{pendingDeleteSummary && (
-  <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-6 z-[60]">
-    <div className="max-w-lg w-full text-center rounded-3xl border border-white/10 bg-[#0B1220]/95 shadow-2xl p-8 md:p-10">
-      <h2 className="text-2xl md:text-3xl font-bold text-white mb-4">
-        Arbeitszeit löschen?
-      </h2>
-
-      <p className="text-white/80 mb-8 leading-relaxed">
-        Möchtest du die Arbeitszeit von{" "}
-        <span className="font-bold text-white">
-          {pendingDeleteSummary.employee_name}
-        </span>{" "}
-        am{" "}
-        <span className="font-bold text-white">
-          {pendingDeleteSummary.date}
-        </span>{" "}
-        wirklich löschen?
-      </p>
-
-      <div className="flex flex-col sm:flex-row gap-3">
-        <button
-          type="button"
-          onClick={handleConfirmDeleteSummary}
-          className="flex-1 bg-red-600 text-white px-5 py-4 rounded-2xl font-bold hover:bg-red-700 transition"
-        >
-          Ja, löschen
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setPendingDeleteSummary(null)}
-          className="flex-1 bg-white/10 text-white px-5 py-4 rounded-2xl font-bold hover:bg-white/20 transition"
-        >
-          Abbrechen
-        </button>
-      </div>
-    </div>
-  </div>
-)}
-      {showPopup && (
-  <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-6 z-50">
-    <div className="max-w-lg w-full text-center rounded-3xl border border-white/10 bg-[#0B1220]/95 shadow-2xl p-8 md:p-10">
-
-      <p className="text-2xl md:text-3xl font-bold text-white mb-8 leading-snug">
-        {popupMessage}
-      </p>
-
-      <button
-        type="button"
-        onClick={() => setShowPopup(false)}
-        className="bg-gradient-to-r from-blue-700 to-blue-500 text-white px-12 py-4 rounded-2xl text-xl font-bold shadow-xl hover:scale-105 transition"
-      >
-        OK
-      </button>
-
-    </div>
-  </div>
-)}
-
-{showSuccessPopup && (
-  <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-6 z-50">
-    <div className="max-w-lg w-full text-center rounded-3xl border border-white/10 bg-[#0B1220]/95 shadow-2xl p-8 md:p-10">
-
-      <p className="text-2xl md:text-3xl font-bold text-white mb-8 leading-snug">
-        {successMessage}
-      </p>
-
-      <button
-        type="button"
-        onClick={() => setShowSuccessPopup(false)}
-        className="bg-gradient-to-r from-green-600 to-green-500 text-white px-12 py-4 rounded-2xl text-xl font-bold shadow-xl hover:scale-105 transition"
-      >
-        OK
-      </button>
-
-    </div>
-  </div>
-)}
-
-{showConfirmPopup && (
-  <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-6 z-50">
-    <div className="max-w-lg w-full text-center rounded-3xl border border-white/10 bg-[#0B1220]/95 shadow-2xl p-8 md:p-10">
-
-      <p className="text-2xl md:text-3xl font-bold text-white mb-8 leading-snug">
-        {confirmMessage}
-      </p>
-
-      <div className="flex flex-col md:flex-row gap-3 justify-center">
-
-        <button
-          type="button"
-          onClick={() => setShowConfirmPopup(false)}
-          className="bg-gray-600 text-white px-8 py-4 rounded-2xl text-lg font-bold hover:bg-gray-700 transition"
-        >
-          Abbrechen
-        </button>
-
-        <button
-          type="button"
-          onClick={() => {
-            confirmAction?.();
-            setShowConfirmPopup(false);
-          }}
-          className="bg-blue-600 text-white px-8 py-4 rounded-2xl text-lg font-bold hover:bg-blue-700 transition"
-        >
-          Bestätigen
-        </button>
-
-      </div>
-
-    </div>
-  </div>
-)}
+      <DiperaPopup
+        open={showConfirmPopup}
+        message={confirmMessage}
+        onClose={() => setShowConfirmPopup(false)}
+        onConfirm={() => {
+          confirmAction?.();
+          setShowConfirmPopup(false);
+        }}
+        confirmText="Bestätigen"
+        cancelText="Abbrechen"
+      />
     </div>
   );
 }

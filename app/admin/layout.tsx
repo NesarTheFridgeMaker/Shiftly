@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
+import Button from "@/components/ui/Button";
 import { supabase } from "@/lib/supabaseClient";
 import { getBusiness } from "@/lib/getBusiness";
 import { getBusinessId } from "@/lib/getBusinessId";
-import Image from "next/image";
 import {
   LayoutDashboard,
   Users,
@@ -16,6 +17,11 @@ import {
   LogOut,
   ArrowUpRight,
   FileText,
+  CreditCard,
+  ChevronLeft,
+  ChevronRight,
+  Menu,
+  X,
 } from "lucide-react";
 
 type Notification = {
@@ -27,12 +33,21 @@ type Notification = {
   created_at: string;
 };
 
+type NavLink = {
+  label: string;
+  href: string;
+  icon: React.ComponentType<{ className?: string }>;
+};
+
 export default function AdminLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const pathname = usePathname();
+
   const [menuOpen, setMenuOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [checkingAuth, setCheckingAuth] = useState(true);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -45,9 +60,9 @@ export default function AdminLayout({
   const [accessBlocked, setAccessBlocked] = useState(false);
 
   function showDiperaPopup(text: string) {
-  setPopupMessage(text);
-  setShowPopup(true);
-}
+    setPopupMessage(text);
+    setShowPopup(true);
+  }
 
   async function loadBusinessName() {
     const business = await getBusiness();
@@ -82,24 +97,23 @@ export default function AdminLayout({
   }
 
   async function loadPendingCorrectionRequests() {
-  const businessId = await getBusinessId();
+    const businessId = await getBusinessId();
 
-  if (!businessId) return;
+    if (!businessId) return;
 
-  const { data, error } = await supabase
-    .from("time_correction_requests")
-    .select("id")
-    .eq("business_id", businessId)
-    .eq("status", "pending");
+    const { data, error } = await supabase
+      .from("time_correction_requests")
+      .select("id")
+      .eq("business_id", businessId)
+      .eq("status", "pending");
 
-  if (error) {
-    console.error(error);
-    return;
+    if (error) {
+      console.error(error);
+      return;
+    }
+
+    setPendingCorrectionRequests(data?.length || 0);
   }
-
-  setPendingCorrectionRequests(data?.length || 0);
-}
-
 
   async function getCurrentUserId() {
     const {
@@ -179,15 +193,6 @@ export default function AdminLayout({
         return;
       }
 
-      function handleCorrectionRequestsChanged() {
-        loadPendingCorrectionRequests();
-      }
-
-      window.addEventListener(
-        "correctionRequestsChanged",
-        handleCorrectionRequestsChanged
-      );
-
       const { data: profile, error: profileError } = await supabase
         .from("profiles")
         .select("role")
@@ -202,8 +207,8 @@ export default function AdminLayout({
       }
 
       if (profile.role !== "admin" && profile.role !== "owner") {
-      window.location.href = "/employee";
-      return;
+        window.location.href = "/employee";
+        return;
       }
 
       const business = await getBusiness();
@@ -220,19 +225,19 @@ export default function AdminLayout({
       }
 
       const blockedSubscriptionStatuses = [
-  "canceled",
-  "unpaid",
-  "incomplete_expired",
-];
+        "canceled",
+        "unpaid",
+        "incomplete_expired",
+      ];
 
-if (
-  business.subscription_status &&
-  blockedSubscriptionStatuses.includes(business.subscription_status)
-) {
-  setAccessBlocked(true);
-  setCheckingAuth(false);
-  return;
-}
+      if (
+        business.subscription_status &&
+        blockedSubscriptionStatuses.includes(business.subscription_status)
+      ) {
+        setAccessBlocked(true);
+        setCheckingAuth(false);
+        return;
+      }
 
       setBusinessName(business.name);
       setIsLoggedIn(true);
@@ -247,48 +252,45 @@ if (
     checkUser();
   }, []);
 
-useEffect(() => {
-  let channel: ReturnType<typeof supabase.channel>;
+  useEffect(() => {
+    let channel: ReturnType<typeof supabase.channel>;
 
-  async function setupRealtime() {
-    const businessId = await getBusinessId();
+    async function setupRealtime() {
+      const businessId = await getBusinessId();
 
-    if (!businessId) return;
+      if (!businessId) return;
 
-    const userId = await getCurrentUserId();
+      const userId = await getCurrentUserId();
 
-    if (!userId) return;
+      if (!userId) return;
 
-    channel = supabase
-      .channel(`admin-live-${businessId}-${userId}`)
-
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "notifications",
-          filter: `user_id=eq.${userId}`,
-        },
-        async () => {
-          await loadNotifications();
-        }
-      )
-
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "absences",
-          filter: `business_id=eq.${businessId}`,
-        },
-        async () => {
-          await loadPendingRequests();
-        }
-      )
-
-      .on(
+      channel = supabase
+        .channel(`admin-live-${businessId}-${userId}`)
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "notifications",
+            filter: `user_id=eq.${userId}`,
+          },
+          async () => {
+            await loadNotifications();
+          }
+        )
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "absences",
+            filter: `business_id=eq.${businessId}`,
+          },
+          async () => {
+            await loadPendingRequests();
+          }
+        )
+        .on(
           "postgres_changes",
           {
             event: "*",
@@ -300,234 +302,335 @@ useEffect(() => {
             await loadPendingCorrectionRequests();
           }
         )
+        .on(
+          "postgres_changes",
+          {
+            event: "UPDATE",
+            schema: "public",
+            table: "businesses",
+            filter: `id=eq.${businessId}`,
+          },
+          async () => {
+            const { data } = await supabase
+              .from("businesses")
+              .select("status")
+              .eq("id", businessId)
+              .single();
 
-      .on(
-        "postgres_changes",
-        {
-          event: "UPDATE",
-          schema: "public",
-          table: "businesses",
-          filter: `id=eq.${businessId}`,
-        },
-        async () => {
-          const { data } = await supabase
-            .from("businesses")
-            .select("status")
-            .eq("id", businessId)
-            .single();
+            if (data?.status === "suspended") {
+              await supabase.auth.signOut();
 
-          if (data?.status === "suspended") {
-            await supabase.auth.signOut();
+              showDiperaPopup("Der Zugriff auf diesen Betrieb wurde gesperrt.");
 
-            showDiperaPopup(
-              "Der Zugriff auf diesen Betrieb wurde gesperrt."
-            );
-
-            window.location.href = "/login";
+              window.location.href = "/login";
+            }
           }
-        }
-      )
+        )
+        .subscribe();
+    }
 
-      .subscribe();
-  }
+    function handleCorrectionRequestsChanged() {
+      loadPendingCorrectionRequests();
+    }
 
-  function handleCorrectionRequestsChanged() {
-  loadPendingCorrectionRequests();
-}
+    window.addEventListener(
+      "correctionRequestsChanged",
+      handleCorrectionRequestsChanged
+    );
 
-window.addEventListener(
-  "correctionRequestsChanged",
-  handleCorrectionRequestsChanged
-);
+    if (isLoggedIn) {
+      setupRealtime();
+    }
 
-  if (isLoggedIn) {
-    setupRealtime();
-  }
+    return () => {
+      window.removeEventListener(
+        "correctionRequestsChanged",
+        handleCorrectionRequestsChanged
+      );
 
-  return () => {
-  window.removeEventListener(
-    "correctionRequestsChanged",
-    handleCorrectionRequestsChanged
-  );
-
-  if (channel) {
-    supabase.removeChannel(channel);
-  }
-};
-}, [isLoggedIn]);
+      if (channel) {
+        supabase.removeChannel(channel);
+      }
+    };
+  }, [isLoggedIn]);
 
   async function handleLogout() {
     await supabase.auth.signOut();
     window.location.href = "/login";
   }
 
-   async function handleOpenBillingPortal() {
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
+  async function handleOpenBillingPortal() {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
 
-  const response = await fetch("/api/stripe/create-portal-session", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${session?.access_token}`,
-    },
-  });
+    const response = await fetch("/api/stripe/create-portal-session", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${session?.access_token}`,
+      },
+    });
 
-  const data = await response.json();
+    const data = await response.json();
 
-  if (!response.ok || !data.url) {
-    alert(data.error || "Das Kundenportal konnte nicht geöffnet werden.");
-    return;
+    if (!response.ok || !data.url) {
+      showDiperaPopup(data.error || "Das Kundenportal konnte nicht geöffnet werden.");
+      return;
+    }
+
+    window.location.href = data.url;
   }
-
-  window.location.href = data.url;
-}
 
   const unreadNotifications = notifications.filter(
     (notification) => !notification.is_read
   );
 
-const navLinks = [
-  {
-    label: "Dashboard",
-    href: "/admin",
-    icon: LayoutDashboard,
-  },
-  {
-    label: "Mitarbeiter",
-    href: "/admin/employees",
-    icon: Users,
-  },
-  {
-    label: "Dienstplan",
-    href: "/admin/schedule",
-    icon: CalendarDays,
-  },
-  {
-  label: "Abwesenheiten",
-  href: "/admin/absences",
-  icon: CalendarX,
-},
-  {
-    label: "Arbeitszeiten",
-    href: "/admin/times",
-    icon: Clock3,
-  },
+  const overviewLinks: NavLink[] = [
+    {
+      label: "Dashboard",
+      href: "/admin",
+      icon: LayoutDashboard,
+    },
+  ];
 
-  {
-  href: "/admin/corrections",
-  label: "Korrekturanträge",
-  icon: FileText,
-},
+  const workspaceLinks: NavLink[] = [
+    {
+      label: "Mitarbeiter",
+      href: "/admin/employees",
+      icon: Users,
+    },
+    {
+      label: "Arbeitszeiten",
+      href: "/admin/times",
+      icon: Clock3,
+    },
+    {
+      label: "Schichtplanung",
+      href: "/admin/schedule",
+      icon: CalendarDays,
+    },
+    {
+      label: "Abwesenheiten",
+      href: "/admin/absences",
+      icon: CalendarX,
+    },
+    {
+      label: "Korrekturanträge",
+      href: "/admin/corrections",
+      icon: FileText,
+    },
+  ];
 
-  {
-    label: "Einstellungen",
-    href: "/admin/settings",
-    icon: Settings,
-  },
-];
+  const adminLinks: NavLink[] = [
+    {
+      label: "Einstellungen",
+      href: "/admin/settings",
+      icon: Settings,
+    },
+  ];
+
+  function getBadgeCount(href: string) {
+    if (href === "/admin/absences") return pendingRequests;
+    if (href === "/admin/corrections") return pendingCorrectionRequests;
+    return 0;
+  }
+
+  function renderNavLink(link: NavLink, options?: { mobile?: boolean }) {
+    const Icon = link.icon;
+    const badgeCount = getBadgeCount(link.href);
+    const isActive = pathname === link.href;
+    const isCollapsed = sidebarCollapsed && !options?.mobile;
+
+    return (
+      <a
+        key={link.href}
+        href={link.href}
+        title={isCollapsed ? link.label : undefined}
+        onClick={() => options?.mobile && setMenuOpen(false)}
+        className={`group relative flex items-center rounded-2xl px-4 py-3 text-sm font-medium transition ${
+          isCollapsed ? "justify-center" : "justify-between"
+        } ${
+          isActive
+            ? "bg-[#EFF6FF] text-[#2563EB]"
+            : "text-[#6B7280] hover:bg-[#F8FAFC] hover:text-[#111827]"
+        }`}
+      >
+        <div className="flex min-w-0 items-center gap-3">
+          <Icon className="h-5 w-5 shrink-0" />
+
+          {!isCollapsed && <span className="truncate">{link.label}</span>}
+        </div>
+
+        {!isCollapsed && badgeCount > 0 && (
+          <span className="rounded-full bg-[#2563EB] px-2 py-0.5 text-xs font-medium text-white">
+            {badgeCount}
+          </span>
+        )}
+
+        {isCollapsed && badgeCount > 0 && (
+          <span className="absolute right-2 top-2 h-2.5 w-2.5 rounded-full bg-[#2563EB]" />
+        )}
+      </a>
+    );
+  }
+
+  function renderNotificationsButton(options?: { mobile?: boolean }) {
+    const isCollapsed = sidebarCollapsed && !options?.mobile;
+
+    return (
+      <button
+        type="button"
+        title={isCollapsed ? "Benachrichtigungen" : undefined}
+        onClick={() => {
+          setNotificationsOpen(!notificationsOpen);
+          if (options?.mobile) setMenuOpen(false);
+        }}
+        className={`group relative flex w-full items-center rounded-2xl px-4 py-3 text-sm font-medium text-[#6B7280] transition hover:bg-[#F8FAFC] hover:text-[#111827] ${
+          isCollapsed ? "justify-center" : "justify-between"
+        }`}
+      >
+        <div className="flex min-w-0 items-center gap-3">
+          <Bell className="h-5 w-5 shrink-0" />
+          {!isCollapsed && <span>Benachrichtigungen</span>}
+        </div>
+
+        {!isCollapsed && unreadNotifications.length > 0 && (
+          <span className="rounded-full bg-[#2563EB] px-2 py-0.5 text-xs font-medium text-white">
+            {unreadNotifications.length}
+          </span>
+        )}
+
+        {isCollapsed && unreadNotifications.length > 0 && (
+          <span className="absolute right-2 top-2 h-2.5 w-2.5 rounded-full bg-[#2563EB]" />
+        )}
+      </button>
+    );
+  }
+
+  function renderBillingButton(options?: { mobile?: boolean }) {
+    const isCollapsed = sidebarCollapsed && !options?.mobile;
+
+    return (
+      <button
+        type="button"
+        title={isCollapsed ? "Abonnement verwalten" : undefined}
+        onClick={() => {
+          if (options?.mobile) setMenuOpen(false);
+          handleOpenBillingPortal();
+        }}
+        className={`flex w-full items-center rounded-2xl px-4 py-3 text-sm font-medium text-[#6B7280] transition hover:bg-[#F8FAFC] hover:text-[#111827] ${
+          isCollapsed ? "justify-center" : "gap-3"
+        }`}
+      >
+        <CreditCard className="h-5 w-5 shrink-0" />
+        {!isCollapsed && <span>Abonnement verwalten</span>}
+      </button>
+    );
+  }
 
   if (checkingAuth) {
     return (
-      <main className="min-h-screen bg-gray-100 flex items-center justify-center">
-        <p className="text-blue-950 font-semibold">
+      <main className="flex min-h-screen items-center justify-center bg-[#F8FAFC]">
+        <div className="rounded-3xl border border-[#E5E7EB] bg-white px-8 py-6 text-[#6B7280] shadow-[0_10px_24px_rgba(17,24,39,0.06)]">
           Login wird geprüft...
-        </p>
+        </div>
       </main>
     );
   }
 
-if (accessBlocked) {
+  if (accessBlocked) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-[#F8FAFC] p-6">
+        <div className="w-full max-w-lg rounded-3xl border border-[#E5E7EB] bg-white p-8 text-center shadow-[0_24px_70px_rgba(17,24,39,0.12)]">
+          <img
+            src="/logo/dipera-logo-dark.png"
+            alt="Dipera"
+            className="mx-auto mb-8 h-auto w-40"
+          />
+
+          <h1 className="mb-4 text-3xl font-light tracking-[-0.04em] text-[#111827]">
+            Abonnement nicht aktiv
+          </h1>
+
+          <p className="mb-8 leading-relaxed text-[#6B7280]">
+            Dein Dipera-Abonnement ist derzeit nicht aktiv. Bitte aktualisiere deine Zahlung oder reaktiviere dein Abonnement, um Dipera weiter zu nutzen.
+          </p>
+
+          <Button
+            type="button"
+            onClick={handleOpenBillingPortal}
+            size="lg"
+            fullWidth
+          >
+            Abonnement verwalten
+          </Button>
+
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={handleLogout}
+            className="mt-4 w-full text-red-600 hover:text-red-700"
+          >
+            Abmelden
+          </Button>
+        </div>
+      </main>
+    );
+  }
+
+  if (!isLoggedIn) {
+    return null;
+  }
+
   return (
-    <main className="min-h-screen bg-[#f7f7f8] flex items-center justify-center p-6">
-      <div className="max-w-lg w-full bg-white rounded-3xl shadow-2xl p-8 text-center">
+    <main className="flex h-screen flex-col overflow-hidden bg-[#F8FAFC] text-[#111827] lg:flex-row">
+      <div className="flex items-center justify-between border-b border-[#E5E7EB] bg-white px-4 py-3 lg:hidden">
         <img
           src="/logo/dipera-logo-dark.png"
           alt="Dipera"
-          className="w-40 h-auto mx-auto mb-8"
+          className="h-auto w-32"
         />
 
-        <h1 className="text-3xl font-light tracking-[-0.04em] text-blue-950 mb-4">
-          Abonnement nicht aktiv
-        </h1>
-
-        <p className="text-slate-500 mb-8 leading-relaxed">
-          Dein Dipera-Abonnement ist derzeit nicht aktiv. Bitte aktualisiere deine Zahlung oder reaktiviere dein Abonnement, um Dipera weiter zu nutzen.
-        </p>
-
-        <button
-          type="button"
-          onClick={handleOpenBillingPortal}
-          className="w-full bg-blue-700 text-white py-3 rounded-xl font-semibold hover:bg-blue-800 transition"
-        >
-          Abonnement verwalten
-        </button>
-
-        <button
-          type="button"
-          onClick={handleLogout}
-          className="w-full mt-3 text-slate-500 font-semibold hover:text-blue-950 transition"
-        >
-          Abmelden
-        </button>
-      </div>
-    </main>
-  );
-}
-
-if (!isLoggedIn) {
-  return null;
-}
-
-  return (
-    <main className="min-h-screen bg-gray-100 lg:flex overflow-x-hidden">
-      <div className="lg:hidden bg-blue-950 text-white px-4 py-2 flex items-center justify-between">
-        <div>
-<img
-  src="/logo/dipera-logo-light.png"
-  alt="Dipera"
-  className="w-48 h-auto"
-/>
-
-        </div>
-
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
           <button
             type="button"
             onClick={() => setNotificationsOpen(!notificationsOpen)}
-            className="relative text-2xl"
+            className="relative rounded-2xl p-3 text-[#6B7280] transition hover:bg-[#F8FAFC] hover:text-[#111827]"
           >
-            🔔
+            <Bell className="h-5 w-5" />
 
             {unreadNotifications.length > 0 && (
-              <span className="absolute -top-2 -right-2 bg-red-600 text-white text-xs rounded-full px-2 py-0.5">
-                {unreadNotifications.length}
-              </span>
+              <span className="absolute right-2 top-2 h-2.5 w-2.5 rounded-full bg-[#2563EB]" />
             )}
           </button>
 
           <button
             type="button"
             onClick={() => setMenuOpen(true)}
-            className="text-white text-3xl px-2 py-1"
+            className="rounded-2xl p-3 text-[#111827] transition hover:bg-[#F8FAFC]"
           >
-            ☰
+            <Menu className="h-6 w-6" />
           </button>
         </div>
       </div>
 
       {notificationsOpen && (
-        <div className="fixed top-20 right-4 z-50 bg-white text-black rounded-2xl shadow-2xl border w-[calc(100%-2rem)] max-w-md p-4">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="font-bold text-blue-950">
-              Benachrichtigungen
-            </h2>
+        <div className="fixed right-4 top-20 z-50 w-[calc(100%-2rem)] max-w-md rounded-3xl border border-[#E5E7EB] bg-white p-4 shadow-[0_24px_70px_rgba(17,24,39,0.16)]">
+          <div className="mb-4 flex items-center justify-between gap-4">
+            <div>
+              <h2 className="text-lg font-medium text-[#111827]">
+                Benachrichtigungen
+              </h2>
+              <p className="text-xs text-[#6B7280]">
+                Aktuelle Hinweise aus deinem Betrieb
+              </p>
+            </div>
 
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
               <button
                 type="button"
                 onClick={markAllNotificationsAsRead}
-                className="text-sm text-blue-700 font-semibold hover:text-blue-900"
+                className="rounded-xl px-3 py-2 text-xs font-medium text-[#2563EB] transition hover:bg-[#EFF6FF]"
               >
                 Alle gelesen
               </button>
@@ -535,15 +638,15 @@ if (!isLoggedIn) {
               <button
                 type="button"
                 onClick={() => setNotificationsOpen(false)}
-                className="text-2xl text-gray-500 hover:text-black leading-none"
+                className="rounded-xl p-2 text-[#6B7280] transition hover:bg-[#F8FAFC] hover:text-[#111827]"
               >
-                ×
+                <X className="h-4 w-4" />
               </button>
             </div>
           </div>
 
           {notifications.length > 0 ? (
-            <div className="flex flex-col gap-3 max-h-96 overflow-y-auto">
+            <div className="flex max-h-96 flex-col gap-3 overflow-y-auto pr-1">
               {notifications.map((notification) => (
                 <button
                   type="button"
@@ -558,26 +661,28 @@ if (!isLoggedIn) {
 
                     window.location.href = "/admin";
                   }}
-                  className={`text-left rounded-xl p-3 border w-full hover:bg-blue-100 transition ${
-                    notification.is_read ? "bg-gray-50" : "bg-blue-50"
+                  className={`w-full rounded-2xl border p-4 text-left transition hover:bg-[#F8FAFC] ${
+                    notification.is_read
+                      ? "border-[#E5E7EB] bg-white"
+                      : "border-[#BFDBFE] bg-[#EFF6FF]"
                   }`}
                 >
-                  <p className="font-bold text-blue-950">
+                  <p className="text-sm font-medium text-[#111827]">
                     {notification.title}
                   </p>
 
-                  <p className="text-sm text-gray-700 mt-1">
+                  <p className="mt-1 text-sm text-[#6B7280]">
                     {notification.message}
                   </p>
 
-                  <p className="text-xs text-gray-400 mt-2">
+                  <p className="mt-3 text-xs text-[#94A3B8]">
                     {formatNotificationDate(notification.created_at)}
                   </p>
                 </button>
               ))}
             </div>
           ) : (
-            <p className="text-gray-500">
+            <p className="rounded-2xl bg-[#F8FAFC] p-4 text-sm text-[#6B7280]">
               Keine Benachrichtigungen vorhanden.
             </p>
           )}
@@ -585,199 +690,224 @@ if (!isLoggedIn) {
       )}
 
       {menuOpen && (
-        <div className="fixed inset-0 z-50 bg-black/40 lg:hidden">
-          <div className="bg-blue-950 text-white w-72 h-full p-6 shadow-xl">
-            <div className="flex items-start justify-between mb-10">
-              <div>
-<img
-  src="/logo/dipera-logo-light.png"
-  alt="Dipera"
-  className="w-48 h-auto"
-/>
-
-              </div>
+        <div className="fixed inset-0 z-50 bg-[#111827]/35 backdrop-blur-sm lg:hidden">
+          <div className="flex h-full w-80 max-w-[86vw] flex-col border-r border-[#E5E7EB] bg-white p-4 shadow-[0_24px_70px_rgba(17,24,39,0.18)]">
+            <div className="mb-6 flex items-center justify-between px-2 py-2">
+              <img
+                src="/logo/dipera-logo-dark.png"
+                alt="Dipera"
+                className="h-auto w-32"
+              />
 
               <button
                 type="button"
                 onClick={() => setMenuOpen(false)}
-                className="text-white text-4xl px-2 py-1"
+                className="rounded-2xl p-2 text-[#6B7280] transition hover:bg-[#F8FAFC] hover:text-[#111827]"
               >
-                ×
+                <X className="h-6 w-6" />
               </button>
             </div>
 
-            <nav className="flex flex-col gap-5">
-{navLinks.map((link) => {
-  const Icon = link.icon;
+            <nav className="min-h-0 flex-1 overflow-y-auto">
+              <div className="flex flex-col gap-6">
+              <div className="flex flex-col gap-1">
+                {overviewLinks.map((link) => renderNavLink(link, { mobile: true }))}
+                {renderNotificationsButton({ mobile: true })}
+              </div>
 
-  return (
-    <a
-      key={link.href}
-      href={link.href}
-      onClick={() => setMenuOpen(false)}
-      className="flex items-center gap-3 text-lg hover:text-blue-300"
-    >
-      <Icon size={22} />
-      <span>{link.label}</span>
-    </a>
-  );
-})}
+              <div className="h-px bg-[#E5E7EB]" />
 
-<button
-  type="button"
-  onClick={handleLogout}
-  className="flex items-center gap-3 text-left text-lg text-red-300 hover:text-red-200 mt-4"
->
-  <LogOut size={22} />
-  <span>Ausloggen</span>
-</button>
+              <div className="flex flex-col gap-1">
+                {workspaceLinks.map((link) => renderNavLink(link, { mobile: true }))}
+              </div>
 
-              <a
-  href="/kiosk"
-  onClick={() => setMenuOpen(false)}
-  className="
-    mt-10
-    flex
-    items-center
-    justify-between
-    gap-3
-    rounded-2xl
-    bg-white/10
-    border
-    border-white/10
-    px-4
-    py-4
-    text-white
-    text-lg
-    font-bold
-    hover:bg-white/20
-    transition
-  "
->
-  <span>Stempelterminal öffnen</span>
-  <ArrowUpRight size={24} />
-</a>
+              <div className="h-px bg-[#E5E7EB]" />
+
+              <div className="flex flex-col gap-1">
+                {adminLinks.map((link) => renderNavLink(link, { mobile: true }))}
+                {renderBillingButton({ mobile: true })}
+              </div>
+              </div>
             </nav>
+
+            <div className="mt-auto border-t border-[#E5E7EB] pt-4">
+              <a
+                href="/kiosk"
+                onClick={() => setMenuOpen(false)}
+                className="mb-3 flex items-center justify-between rounded-3xl border border-[#E5E7EB] bg-white p-4 shadow-[0_10px_24px_rgba(17,24,39,0.04)]"
+              >
+                <div>
+                  <p className="text-sm text-[#6B7280]">Terminal</p>
+                  <p className="text-sm font-medium text-[#111827]">
+                    Stempelterminal öffnen
+                  </p>
+                </div>
+
+                <ArrowUpRight className="h-5 w-5 text-[#2563EB]" />
+              </a>
+
+              <Button
+                variant="ghost"
+                onClick={handleLogout}
+                className="w-full justify-start text-red-600 hover:text-red-700"
+              >
+                <LogOut className="h-5 w-5" />
+                Abmelden
+              </Button>
+            </div>
           </div>
         </div>
       )}
 
-      <aside className="hidden lg:flex w-64 shrink-0 bg-blue-950 text-white p-6 min-h-screen flex-col">
-        <div>
-          <div className="mb-10">
-<img
-  src="/logo/dipera-logo-light.png"
-  alt="Dipera"
-  className="w-48 h-auto"
-/>
-          </div>
+      <aside
+        className={`hidden h-screen shrink-0 flex-col overflow-hidden border-r border-[#E5E7EB] bg-white px-4 pt-10 pb-5 transition-[width] duration-200 ease-in-out lg:flex ${
+          sidebarCollapsed ? "w-20" : "w-72"
+        }`}
+      >
+        <div className="mb-9 flex items-center justify-between px-2">
+          {sidebarCollapsed ? (
+            <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#EFF6FF] text-lg font-semibold text-[#2563EB]">
+              D
+            </div>
+          ) : (
+            <img
+              src="/logo/dipera-logo-dark.png"
+              alt="Dipera"
+              className="h-auto w-36"
+            />
+          )}
 
-          <div className="mb-8 relative">
-            <button
-              type="button"
-              onClick={() => setNotificationsOpen(!notificationsOpen)}
-              className="w-full bg-blue-900 text-white rounded-xl p-3 flex items-center justify-between hover:bg-blue-800 transition"
-            >
-              <span>🔔 Benachrichtigungen</span>
-
-              {unreadNotifications.length > 0 && (
-                <span className="bg-red-600 text-white text-xs rounded-full px-2 py-1">
-                  {unreadNotifications.length}
-                </span>
-              )}
-            </button>
-          </div>
-
-          <nav className="flex flex-col gap-4">
-          {navLinks.map((link) => {
-            const Icon = link.icon;
-
-            const badgeCount =
-              link.href === "/admin/absences"
-                ? pendingRequests
-                : link.href === "/admin/corrections"
-                ? pendingCorrectionRequests
-                : 0;
-
-            return (
-              <a
-                key={link.href}
-                href={link.href}
-                className="flex items-center justify-between gap-3 hover:text-blue-300"
-              >
-                <div className="flex items-center gap-3">
-                  <Icon size={20} />
-                  <span>{link.label}</span>
-                </div>
-
-                {badgeCount > 0 && (
-                  <span className="min-w-6 h-6 px-2 rounded-full bg-red-500 text-white text-xs font-bold flex items-center justify-center">
-                    {badgeCount}
-                  </span>
-                )}
-              </a>
-            );
-          })}
-          </nav>
-<button
-  type="button"
-  onClick={handleLogout}
-  className="flex items-center gap-3 text-left text-lg text-red-300 hover:text-red-200 mt-4"
->
-  <LogOut size={22} />
-  <span>Ausloggen</span>
-</button>
-
-<a
-  href="/kiosk"
-  className="
-    mt-10
-    flex
-    items-center
-    justify-between
-    gap-3
-    rounded-2xl
-    bg-white/10
-    border
-    border-white/10
-    px-4
-    py-4
-    text-white
-    font-bold
-    hover:bg-white/20
-    transition
-  "
->
-  <span>Stempelterminal öffnen</span>
-  <ArrowUpRight size={22} />
-</a>
+          <button
+            type="button"
+            onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+            className="rounded-2xl p-2 text-[#6B7280] transition hover:bg-[#F8FAFC] hover:text-[#111827]"
+            title={sidebarCollapsed ? "Sidebar ausklappen" : "Sidebar einklappen"}
+          >
+            {sidebarCollapsed ? (
+              <ChevronRight className="h-5 w-5" />
+            ) : (
+              <ChevronLeft className="h-5 w-5" />
+            )}
+          </button>
         </div>
 
+        <nav className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden pr-1">
+          <div className="flex flex-col gap-6">
+          <div className="flex flex-col gap-1">
+            {overviewLinks.map((link) => renderNavLink(link))}
+            {renderNotificationsButton()}
+          </div>
+
+          <div className="h-px bg-[#E5E7EB]" />
+
+          <div className="flex flex-col gap-1">
+            {workspaceLinks.map((link) => renderNavLink(link))}
+          </div>
+
+          <div className="h-px bg-[#E5E7EB]" />
+
+          <div className="flex flex-col gap-1">
+            {adminLinks.map((link) => renderNavLink(link))}
+            {renderBillingButton()}
+          </div>
+          </div>
+        </nav>
+
+        <div className="mt-auto border-t border-[#E5E7EB] bg-white pt-4 space-y-3">
+          {!sidebarCollapsed && (
+            <a
+              href="/kiosk"
+              className="flex items-center justify-between rounded-3xl border border-[#E5E7EB] bg-white p-4 shadow-[0_10px_24px_rgba(17,24,39,0.04)] transition hover:bg-[#F8FAFC]"
+            >
+              <div>
+                <p className="text-sm text-[#6B7280]">Terminal</p>
+                <p className="text-sm font-medium text-[#111827]">
+                  Stempelterminal öffnen
+                </p>
+              </div>
+
+              <ArrowUpRight className="h-5 w-5 text-[#2563EB]" />
+            </a>
+          )}
+
+          {sidebarCollapsed && (
+            <a
+              href="/kiosk"
+              title="Stempelterminal öffnen"
+              className="flex items-center justify-center rounded-2xl p-3 text-[#6B7280] transition hover:bg-[#F8FAFC] hover:text-[#111827]"
+            >
+              <ArrowUpRight className="h-5 w-5" />
+            </a>
+          )}
+
+          <div
+            className={`rounded-3xl border border-[#E5E7EB] bg-[#F8FAFC] ${
+              sidebarCollapsed ? "p-2" : "p-4"
+            }`}
+          >
+            <div
+              className={`flex items-center ${
+                sidebarCollapsed ? "justify-center" : "gap-3"
+              }`}
+            >
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-[#EFF6FF] text-sm font-semibold text-[#2563EB]">
+                {businessName ? businessName.charAt(0).toUpperCase() : "D"}
+              </div>
+
+              {!sidebarCollapsed && (
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium text-[#111827]">
+                    {businessName || "Dipera"}
+                  </p>
+                  <p className="text-xs text-[#6B7280]">Administrator</p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <Button
+            variant="ghost"
+            onClick={handleLogout}
+            title={sidebarCollapsed ? "Abmelden" : undefined}
+            className={`w-full text-red-600 hover:text-red-700 ${
+              sidebarCollapsed ? "justify-center px-0" : "justify-start"
+            }`}
+          >
+            <LogOut className="h-5 w-5" />
+            {!sidebarCollapsed && <span>Abmelden</span>}
+          </Button>
+        </div>
       </aside>
 
-      <section className="flex-1 min-w-0 w-full p-4 lg:p-10 overflow-x-auto">
-        {children}
+      <section className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-auto">
+        <div className="mx-auto w-full max-w-7xl px-4 py-6 md:px-6 lg:px-10 lg:py-10">
+          {children}
+        </div>
       </section>
+
       {showPopup && (
-  <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-6 z-50">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#111827]/35 p-6 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-[28px] border border-[#E5E7EB] bg-white p-6 text-center shadow-[0_24px_70px_rgba(17,24,39,0.18)]">
+            <div className="mx-auto mb-5 flex h-12 w-12 items-center justify-center rounded-2xl bg-[#EFF6FF] text-[#2563EB]">
+              !
+            </div>
 
-    <div className="max-w-lg w-full text-center rounded-3xl bg-[#0B1220]/95 p-8">
+            <p className="text-xl font-light leading-8 tracking-[-0.02em] text-[#111827]">
+              {popupMessage}
+            </p>
 
-      <p className="text-2xl font-bold text-white mb-8">
-        {popupMessage}
-      </p>
-
-      <button
-        onClick={() => setShowPopup(false)}
-        className="bg-blue-600 text-white px-10 py-4 rounded-2xl"
-      >
-        OK
-      </button>
-
-    </div>
-
-  </div>
-)}
+            <div className="mt-8 flex justify-center">
+              <Button
+                type="button"
+                variant="primary"
+                onClick={() => setShowPopup(false)}
+              >
+                OK
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }

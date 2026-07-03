@@ -4,7 +4,15 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { getBusinessId } from "@/lib/getBusinessId";
 import DiperaPopup from "@/components/DiperaPopup";
-import { calculateSurcharges } from "@/lib/payroll/calculateSurcharges";
+import PageHeader from "@/components/ui/PageHeader";
+import Section from "@/components/ui/Section";
+import StatCard from "@/components/ui/StatCard";
+import Input from "@/components/ui/Input";
+import Select from "@/components/ui/Select";
+import Button from "@/components/ui/Button";
+import Badge from "@/components/ui/Badge";
+import PageActions from "@/components/ui/PageActions";
+
 
 type PayRule = {
   id: string;
@@ -30,79 +38,127 @@ type WorkType = {
   name: string;
 };
 
+type SupabaseLikeError = {
+  message?: string;
+  details?: string;
+  hint?: string;
+  code?: string;
+};
+
+const federalStateOptions = [
+  { value: "BW", label: "Baden-Württemberg" },
+  { value: "BY", label: "Bayern" },
+  { value: "BE", label: "Berlin" },
+  { value: "BB", label: "Brandenburg" },
+  { value: "HB", label: "Bremen" },
+  { value: "HH", label: "Hamburg" },
+  { value: "HE", label: "Hessen" },
+  { value: "MV", label: "Mecklenburg-Vorpommern" },
+  { value: "NI", label: "Niedersachsen" },
+  { value: "NW", label: "Nordrhein-Westfalen" },
+  { value: "RP", label: "Rheinland-Pfalz" },
+  { value: "SL", label: "Saarland" },
+  { value: "SN", label: "Sachsen" },
+  { value: "ST", label: "Sachsen-Anhalt" },
+  { value: "SH", label: "Schleswig-Holstein" },
+  { value: "TH", label: "Thüringen" },
+];
+
+const payRuleTypeOptions = [
+  { value: "night", label: "Nacht" },
+  { value: "sunday", label: "Sonntag" },
+  { value: "holiday", label: "Feiertag" },
+];
+
+function formatError(error: unknown) {
+  const supabaseError = error as SupabaseLikeError;
+
+  if (supabaseError?.message) {
+    return [
+      supabaseError.message,
+      supabaseError.details,
+      supabaseError.hint,
+      supabaseError.code ? `Code: ${supabaseError.code}` : "",
+    ]
+      .filter(Boolean)
+      .join(" ");
+  }
+
+  try {
+    return JSON.stringify(error);
+  } catch {
+    return "Unbekannter Fehler.";
+  }
+}
+
+function formatRuleType(ruleType: string) {
+  if (ruleType === "night") return "Nacht";
+  if (ruleType === "sunday") return "Sonntag";
+  if (ruleType === "holiday") return "Feiertag";
+  return ruleType;
+}
+
+function getFederalStateLabel(value: string) {
+  return federalStateOptions.find((state) => state.value === value)?.label ?? value;
+}
+
+function getInitials(name: string) {
+  return name
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0])
+    .join("")
+    .toUpperCase();
+}
+
 export default function SettingsPage() {
   const [shiftTemplates, setShiftTemplates] = useState<ShiftTemplate[]>([]);
-
   const [templateName, setTemplateName] = useState("");
   const [templateStart, setTemplateStart] = useState("");
   const [templateEnd, setTemplateEnd] = useState("");
+
   const [workTypes, setWorkTypes] = useState<WorkType[]>([]);
   const [workTypeName, setWorkTypeName] = useState("");
+
+  const [payRules, setPayRules] = useState<PayRule[]>([]);
   const [payRuleName, setPayRuleName] = useState("");
   const [payRuleType, setPayRuleType] = useState("night");
   const [payRuleStart, setPayRuleStart] = useState("");
   const [payRuleEnd, setPayRuleEnd] = useState("");
   const [payRulePercentage, setPayRulePercentage] = useState("");
   const [payRuleDatevType, setPayRuleDatevType] = useState("");
-  const [payRules, setPayRules] =
-  useState<PayRule[]>([]);
-  const [federalState, setFederalState] =
-  useState("BW");
-  const [
-  datevRegularHoursWageType,
-  setDatevRegularHoursWageType
-] = useState("100");
-const [
-  datevSalaryWageType,
-  setDatevSalaryWageType
-] = useState("101");
 
-const [
-  datevOvertimeWageType,
-  setDatevOvertimeWageType
-] = useState("130");
+  const [federalState, setFederalState] = useState("BW");
+  const [datevRegularHoursWageType, setDatevRegularHoursWageType] =
+    useState("100");
+  const [datevSalaryWageType, setDatevSalaryWageType] = useState("101");
+  const [datevOvertimeWageType, setDatevOvertimeWageType] = useState("130");
+  const [datevVacationWageType, setDatevVacationWageType] = useState("140");
+  const [datevSickWageType, setDatevSickWageType] = useState("141");
 
   const [popupMessage, setPopupMessage] = useState("");
   const [showPopup, setShowPopup] = useState(false);
-  
-
   const [confirmMessage, setConfirmMessage] = useState("");
+  const [confirmAction, setConfirmAction] = useState<(() => void) | null>(null);
+  const [showConfirmPopup, setShowConfirmPopup] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
-  const [confirmAction, setConfirmAction] =
-  useState<(() => void) | null>(null);
+  const activePayRules = payRules.filter((rule) => rule.active);
 
-  const [showConfirmPopup, setShowConfirmPopup] =
-  useState(false);
+  function showDiperaPopup(text: string) {
+    setPopupMessage(text);
+    setShowPopup(true);
+  }
 
-  const [
-  datevVacationWageType,
-  setDatevVacationWageType
-] = useState("140");
-
-const [
-  datevSickWageType,
-  setDatevSickWageType
-] = useState("141");
-
-  function showDiperaPopup(text:string){
-  setPopupMessage(text);
-  setShowPopup(true);
-}
-
-function showConfirm(
-  text:string,
-  action:()=>void
-){
-  setConfirmMessage(text);
-
-  setConfirmAction(()=>action);
-
-  setShowConfirmPopup(true);
-}
+  function showConfirm(text: string, action: () => void) {
+    setConfirmMessage(text);
+    setConfirmAction(() => action);
+    setShowConfirmPopup(true);
+  }
 
   async function loadShiftTemplates() {
     const businessId = await getBusinessId();
-
     if (!businessId) return;
 
     const { data, error } = await supabase
@@ -112,10 +168,10 @@ function showConfirm(
       .order("name", { ascending: true });
 
     if (error) {
-      console.error(error);
+      console.error("LOAD SHIFT TEMPLATES ERROR:", error);
       showDiperaPopup(
-"Es ist ein Fehler aufgetreten."
-);
+        `Schichtvorlagen konnten nicht geladen werden. ${formatError(error)}`
+      );
       return;
     }
 
@@ -123,36 +179,36 @@ function showConfirm(
   }
 
   async function createShiftTemplate() {
-    if (!templateName || !templateStart || !templateEnd) {
-      showDiperaPopup(
-"Bitte Name, Beginn und Ende ausfüllen."
-);
+    if (!templateName.trim() || !templateStart || !templateEnd) {
+      showDiperaPopup("Bitte Name, Beginn und Ende ausfüllen.");
       return;
     }
 
     const businessId = await getBusinessId();
 
     if (!businessId) {
-      showDiperaPopup(
-"Keine Business-ID gefunden."
-);
+      showDiperaPopup("Keine Business-ID gefunden.");
       return;
     }
+
+    setIsSaving(true);
 
     const { error } = await supabase.from("shift_templates").insert([
       {
         business_id: businessId,
-        name: templateName,
+        name: templateName.trim(),
         start_time: templateStart,
         end_time: templateEnd,
       },
     ]);
 
+    setIsSaving(false);
+
     if (error) {
-      console.error(error);
+      console.error("CREATE SHIFT TEMPLATE ERROR:", error);
       showDiperaPopup(
-"Es ist ein Fehler aufgetreten."
-);
+        `Schichtvorlage konnte nicht gespeichert werden. ${formatError(error)}`
+      );
       return;
     }
 
@@ -161,10 +217,10 @@ function showConfirm(
     setTemplateEnd("");
 
     await loadShiftTemplates();
+    showDiperaPopup("Schichtvorlage wurde gespeichert.");
   }
 
   async function deleteShiftTemplate(id: string) {
-
     const businessId = await getBusinessId();
 
     if (!businessId) {
@@ -179,890 +235,732 @@ function showConfirm(
       .eq("business_id", businessId);
 
     if (error) {
-      console.error(error);
+      console.error("DELETE SHIFT TEMPLATE ERROR:", error);
       showDiperaPopup(
-"Es ist ein Fehler aufgetreten."
-);
+        `Schichtvorlage konnte nicht gelöscht werden. ${formatError(error)}`
+      );
       return;
     }
 
     await loadShiftTemplates();
+    showDiperaPopup("Schichtvorlage wurde gelöscht.");
   }
 
   async function loadWorkTypes() {
-  const businessId = await getBusinessId();
+    const businessId = await getBusinessId();
 
-  if (!businessId) return;
+    if (!businessId) return;
 
-  const { data, error } = await supabase
-    .from("work_types")
-    .select("id,name")
-    .eq("business_id", businessId)
-    .order("name");
+    const { data, error } = await supabase
+      .from("work_types")
+      .select("id, name")
+      .eq("business_id", businessId)
+      .order("name", { ascending: true });
 
-  if (error) {
-    console.error(error);
-    return;
+    if (error) {
+      console.error("LOAD WORK TYPES ERROR:", error);
+      showDiperaPopup(
+        `Arbeitstypen konnten nicht geladen werden. ${formatError(error)}`
+      );
+      return;
+    }
+
+    setWorkTypes((data || []) as WorkType[]);
   }
 
-  setWorkTypes((data || []) as WorkType[]);
-}
+  async function createWorkType() {
+    if (!workTypeName.trim()) {
+      showDiperaPopup("Bitte einen Namen für den Arbeitstyp eintragen.");
+      return;
+    }
 
-async function createWorkType() {
-  if (!workTypeName) return;
+    const businessId = await getBusinessId();
 
-  const businessId = await getBusinessId();
+    if (!businessId) {
+      showDiperaPopup("Keine Business-ID gefunden.");
+      return;
+    }
 
-  if (!businessId) return;
+    setIsSaving(true);
 
-  const { error } = await supabase
-    .from("work_types")
-    .insert([
+    const { error } = await supabase.from("work_types").insert([
       {
         business_id: businessId,
-        name: workTypeName,
+        name: workTypeName.trim(),
       },
     ]);
 
-  if (error) {
-    console.error(error);
-    return;
+    setIsSaving(false);
+
+    if (error) {
+      console.error("CREATE WORK TYPE ERROR:", error);
+      showDiperaPopup(
+        `Arbeitstyp konnte nicht gespeichert werden. ${formatError(error)}`
+      );
+      return;
+    }
+
+    setWorkTypeName("");
+    await loadWorkTypes();
+    showDiperaPopup("Arbeitstyp wurde gespeichert.");
   }
 
-  setWorkTypeName("");
+  async function deleteWorkType(id: string) {
+    const businessId = await getBusinessId();
 
-  await loadWorkTypes();
-}
+    if (!businessId) {
+      showDiperaPopup("Keine Business-ID gefunden.");
+      return;
+    }
 
-async function deleteWorkType(id:string) {
+    const { error } = await supabase
+      .from("work_types")
+      .delete()
+      .eq("id", id)
+      .eq("business_id", businessId);
 
-await supabase
-.from("work_types")
-.delete()
-.eq("id",id);
+    if (error) {
+      console.error("DELETE WORK TYPE ERROR:", error);
+      showDiperaPopup(
+        `Arbeitstyp konnte nicht gelöscht werden. ${formatError(error)}`
+      );
+      return;
+    }
 
-await loadWorkTypes();
-
-}
-
-async function loadPayRules() {
-  const businessId = await getBusinessId();
-
-  if (!businessId) return;
-
-  const { data } = await supabase
-    .from("pay_rules")
-    .select("*")
-    .eq("business_id", businessId)
-    .order("created_at", { ascending: false });
-
-  if (data) {
-    setPayRules(data);
-  }
-}
-
-async function handleCreatePayRule() {
-  const businessId = await getBusinessId();
-
-  if (!businessId) return;
-
-  if (
-    !payRuleName.trim() ||
-    !payRulePercentage
-  ) {
-    return;
+    await loadWorkTypes();
+    showDiperaPopup("Arbeitstyp wurde gelöscht.");
   }
 
-  const { error } =
-    await supabase
+  async function loadPayRules() {
+    const businessId = await getBusinessId();
+
+    if (!businessId) return;
+
+    const { data, error } = await supabase
       .from("pay_rules")
-      .insert([
-        {
-          business_id: businessId,
-          name: payRuleName.trim(),
-          rule_type: payRuleType,
-          starts_at:
-            payRuleStart || null,
-          ends_at:
-            payRuleEnd || null,
-          percentage:
-            Number(
-              payRulePercentage
-            ),
-          datev_wage_type:
-            payRuleDatevType.trim()
-            || null
-        }
-      ]);
+      .select("*")
+      .eq("business_id", businessId)
+      .order("created_at", { ascending: false });
 
-  if (error) {
-    console.error(error);
-    return;
+    if (error) {
+      console.error("LOAD PAY RULES ERROR:", error);
+      showDiperaPopup(
+        `Zuschläge konnten nicht geladen werden. ${formatError(error)}`
+      );
+      return;
+    }
+
+    setPayRules((data || []) as PayRule[]);
   }
 
-  setPayRuleName("");
-  setPayRuleType("night");
-  setPayRuleStart("");
-  setPayRuleEnd("");
-  setPayRulePercentage("");
-  setPayRuleDatevType("");
+  async function handleCreatePayRule() {
+    const businessId = await getBusinessId();
 
-  await loadPayRules();
+    if (!businessId) {
+      showDiperaPopup("Keine Business-ID gefunden.");
+      return;
+    }
 
-  showDiperaPopup(
-  "Zuschlag wurde erfolgreich erstellt."
-);
-}
+    if (!payRuleName.trim() || !payRulePercentage) {
+      showDiperaPopup("Bitte Name und Zuschlag ausfüllen.");
+      return;
+    }
+
+    setIsSaving(true);
+
+    const { error } = await supabase.from("pay_rules").insert([
+      {
+        business_id: businessId,
+        name: payRuleName.trim(),
+        rule_type: payRuleType,
+        starts_at: payRuleStart || null,
+        ends_at: payRuleEnd || null,
+        percentage: Number(payRulePercentage),
+        datev_wage_type: payRuleDatevType.trim() || null,
+      },
+    ]);
+
+    setIsSaving(false);
+
+    if (error) {
+      console.error("CREATE PAY RULE ERROR:", error);
+      showDiperaPopup(
+        `Zuschlag konnte nicht gespeichert werden. ${formatError(error)}`
+      );
+      return;
+    }
+
+    setPayRuleName("");
+    setPayRuleType("night");
+    setPayRuleStart("");
+    setPayRuleEnd("");
+    setPayRulePercentage("");
+    setPayRuleDatevType("");
+
+    await loadPayRules();
+    showDiperaPopup("Zuschlag wurde erfolgreich erstellt.");
+  }
 
   async function handleDeletePayRule(ruleId: string) {
-  const { error } = await supabase
-    .from("pay_rules")
-    .delete()
-    .eq("id", ruleId);
+    const businessId = await getBusinessId();
 
-  if (error) {
-    console.error(error);
-    return;
+    if (!businessId) {
+      showDiperaPopup("Keine Business-ID gefunden.");
+      return;
+    }
+
+    const { error } = await supabase
+      .from("pay_rules")
+      .delete()
+      .eq("id", ruleId)
+      .eq("business_id", businessId);
+
+    if (error) {
+      console.error("DELETE PAY RULE ERROR:", error);
+      showDiperaPopup(
+        `Zuschlag konnte nicht gelöscht werden. ${formatError(error)}`
+      );
+      return;
+    }
+
+    await loadPayRules();
+    showDiperaPopup("Zuschlag wurde erfolgreich gelöscht.");
   }
 
- await loadPayRules();
+  async function handleTogglePayRuleActive(ruleId: string, currentActive: boolean) {
+    const businessId = await getBusinessId();
 
-  showDiperaPopup(
-  "Zuschlag wurde erfolgreich gelöscht."
-);
-}
+    if (!businessId) {
+      showDiperaPopup("Keine Business-ID gefunden.");
+      return;
+    }
 
-async function handleTogglePayRuleActive(
-  ruleId: string,
-  currentActive: boolean
-) {
-  const { error } = await supabase
-    .from("pay_rules")
-    .update({
-      active: !currentActive,
-    })
-    .eq("id", ruleId);
+    const { error } = await supabase
+      .from("pay_rules")
+      .update({ active: !currentActive })
+      .eq("id", ruleId)
+      .eq("business_id", businessId);
 
-  if (error) {
-    console.error(error);
-    return;
-  }
+    if (error) {
+      console.error("TOGGLE PAY RULE ERROR:", error);
+      showDiperaPopup(
+        `Zuschlag konnte nicht geändert werden. ${formatError(error)}`
+      );
+      return;
+    }
 
-  await loadPayRules();
+    await loadPayRules();
 
-  showDiperaPopup(
-    currentActive
-      ? "Zuschlag wurde deaktiviert."
-      : "Zuschlag wurde aktiviert."
-  );
-}
-
-async function loadBusiness() {
-  const businessId =
-    await getBusinessId();
-
-  if (!businessId) return;
-
-  const { data, error } =
-    await supabase
-      .from("businesses")
-      .select(
-  "federal_state, datev_regular_hours_wage_type, datev_salary_wage_type, datev_overtime_wage_type, datev_vacation_wage_type, datev_sick_wage_type"
-)
-      .eq("id", businessId)
-      .single();
-
-      if (data?.datev_vacation_wage_type) {
-  setDatevVacationWageType(data.datev_vacation_wage_type);
-}
-
-if (data?.datev_sick_wage_type) {
-  setDatevSickWageType(data.datev_sick_wage_type);
-}
-
-      if (data?.datev_overtime_wage_type) {
-  setDatevOvertimeWageType(
-    data.datev_overtime_wage_type
-  );
-}
-
-      if (data?.datev_salary_wage_type) {
-  setDatevSalaryWageType(
-    data.datev_salary_wage_type
-  );
-}
-
-  if (error) {
-    console.error(error);
-    return;
-  }
-
-  if (data?.federal_state) {
-    setFederalState(
-      data.federal_state
+    showDiperaPopup(
+      currentActive ? "Zuschlag wurde deaktiviert." : "Zuschlag wurde aktiviert."
     );
   }
 
-  if (
-  data?.datev_regular_hours_wage_type
-) {
-  setDatevRegularHoursWageType(
-    data.datev_regular_hours_wage_type
-  );
-}
-}
+  async function loadBusiness() {
+    const businessId = await getBusinessId();
 
+    if (!businessId) return;
 
+    const { data, error } = await supabase
+      .from("businesses")
+      .select(
+        "federal_state, datev_regular_hours_wage_type, datev_salary_wage_type, datev_overtime_wage_type, datev_vacation_wage_type, datev_sick_wage_type"
+      )
+      .eq("id", businessId)
+      .single();
 
-async function saveFederalState() {
-  console.log("SAVE FEDERAL STATE CLICKED", federalState);
+    if (error) {
+      console.error("LOAD BUSINESS ERROR:", error);
+      showDiperaPopup(
+        `Betriebseinstellungen konnten nicht geladen werden. ${formatError(error)}`
+      );
+      return;
+    }
 
-  const businessId = await getBusinessId();
-
-  console.log("BUSINESS ID", businessId);
-
-  if (!businessId) return;
-
-  const { error } = await supabase
-    .from("businesses")
-    .update({
-  federal_state: federalState,
-  datev_regular_hours_wage_type:
-    datevRegularHoursWageType.trim() || null,
-    datev_salary_wage_type:
-  datevSalaryWageType.trim() || null,
-  datev_overtime_wage_type:
-  datevOvertimeWageType.trim() || null,
-  datev_vacation_wage_type:
-  datevVacationWageType.trim() || null,
-
-datev_sick_wage_type:
-  datevSickWageType.trim() || null,
-})
-    .eq("id", businessId);
-
-  if (error) {
-    console.error("FEDERAL STATE SAVE ERROR:", error);
-    showDiperaPopup("Bundesland konnte nicht gespeichert werden.");
-    return;
+    if (data?.federal_state) setFederalState(data.federal_state);
+    if (data?.datev_regular_hours_wage_type) {
+      setDatevRegularHoursWageType(data.datev_regular_hours_wage_type);
+    }
+    if (data?.datev_salary_wage_type) {
+      setDatevSalaryWageType(data.datev_salary_wage_type);
+    }
+    if (data?.datev_overtime_wage_type) {
+      setDatevOvertimeWageType(data.datev_overtime_wage_type);
+    }
+    if (data?.datev_vacation_wage_type) {
+      setDatevVacationWageType(data.datev_vacation_wage_type);
+    }
+    if (data?.datev_sick_wage_type) {
+      setDatevSickWageType(data.datev_sick_wage_type);
+    }
   }
 
-  console.log("FEDERAL STATE SAVED");
+  async function saveFederalState() {
+    const businessId = await getBusinessId();
 
-  showDiperaPopup("Daten gespeichert.");
-}
+    if (!businessId) {
+      showDiperaPopup("Keine Business-ID gefunden.");
+      return;
+    }
 
-useEffect(() => {
-  loadShiftTemplates();
-  loadWorkTypes();
-  loadPayRules();
-  loadBusiness();
-}, []);
+    setIsSaving(true);
+
+    const { error } = await supabase
+      .from("businesses")
+      .update({
+        federal_state: federalState,
+        datev_regular_hours_wage_type: datevRegularHoursWageType.trim() || null,
+        datev_salary_wage_type: datevSalaryWageType.trim() || null,
+        datev_overtime_wage_type: datevOvertimeWageType.trim() || null,
+        datev_vacation_wage_type: datevVacationWageType.trim() || null,
+        datev_sick_wage_type: datevSickWageType.trim() || null,
+      })
+      .eq("id", businessId);
+
+    setIsSaving(false);
+
+    if (error) {
+      console.error("SAVE BUSINESS SETTINGS ERROR:", error);
+      showDiperaPopup(
+        `Bundesland und Lohnarten konnten nicht gespeichert werden. ${formatError(error)}`
+      );
+      return;
+    }
+
+    showDiperaPopup("Daten gespeichert.");
+  }
+
+  useEffect(() => {
+    loadShiftTemplates();
+    loadWorkTypes();
+    loadPayRules();
+    loadBusiness();
+  }, []);
 
   return (
-    <div>
-      <h1 className="text-3xl md:text-4xl font-bold text-blue-950 mb-6">
-        Einstellungen
-      </h1>
+    <div className="space-y-8">
+      <PageHeader
+        title="Einstellungen"
+        description="Verwalte Unternehmensdaten, Arbeitstypen, Schichtvorlagen und Zuschläge."
+      />
 
-      <div className="bg-white rounded-2xl shadow p-4 md:p-6 mb-8">
-        <h2 className="text-2xl font-bold text-blue-950 mb-2">
-          Schichtvorlagen
-        </h2>
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-4">
+        <StatCard
+          title="Arbeitstypen"
+          value={workTypes.length}
+          badge="Planung"
+          badgeVariant="primary"
+        />
 
-        <p className="text-gray-500 mb-6">
-          Lege eigene Vorlagen wie Frühschicht, Mittelschicht oder Spätschicht
-          fest. Diese können später im Dienstplan automatisch Zeiten ausfüllen.
-        </p>
+        <StatCard
+          title="Schichtvorlagen"
+          value={shiftTemplates.length}
+          badge="Vorlagen"
+          badgeVariant="muted"
+        />
 
-        <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 mb-5">
-          <div className="flex flex-col gap-1">
-            <label className="text-sm font-semibold text-gray-600">
-              Name
-            </label>
+        <StatCard
+          title="Aktive Zuschläge"
+          value={activePayRules.length}
+          badge="Lohn"
+          badgeVariant={activePayRules.length > 0 ? "success" : "muted"}
+        />
 
-            <input
+        <StatCard
+          title="Bundesland"
+          value={federalState}
+          subtitle={getFederalStateLabel(federalState)}
+        />
+      </div>
+
+      <Section
+        title="Unternehmensdaten & DATEV"
+        description="Diese Daten steuern Feiertage, Exporte und Standard-Lohnarten."
+        action={<Badge variant="primary">Basis</Badge>}
+      >
+        <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
+          <Select
+            label="Bundesland"
+            value={federalState}
+            onChange={(event) => setFederalState(event.target.value)}
+            options={federalStateOptions}
+          />
+
+          <Input
+            label="Reguläre Arbeitsstunden"
+            value={datevRegularHoursWageType}
+            onChange={(event) => setDatevRegularHoursWageType(event.target.value)}
+            placeholder="z. B. 100"
+          />
+
+          <Input
+            label="Monatsgehalt"
+            value={datevSalaryWageType}
+            onChange={(event) => setDatevSalaryWageType(event.target.value)}
+            placeholder="z. B. 101"
+          />
+
+          <Input
+            label="Überstunden"
+            value={datevOvertimeWageType}
+            onChange={(event) => setDatevOvertimeWageType(event.target.value)}
+            placeholder="z. B. 130"
+          />
+
+          <Input
+            label="Urlaubstage"
+            value={datevVacationWageType}
+            onChange={(event) => setDatevVacationWageType(event.target.value)}
+            placeholder="z. B. 140"
+          />
+
+          <Input
+            label="Krankheitstage"
+            value={datevSickWageType}
+            onChange={(event) => setDatevSickWageType(event.target.value)}
+            placeholder="z. B. 141"
+          />
+        </div>
+
+        <div className="mt-6 flex flex-col gap-3 border-t border-[#E5E7EB] pt-5 md:flex-row md:items-center md:justify-between">
+          <p className="text-sm leading-6 text-[#6B7280]">
+            Tipp: Diese Lohnarten werden später für Excel- und DATEV-Exporte verwendet.
+          </p>
+
+          <Button
+            type="button"
+            onClick={saveFederalState}
+            loading={isSaving}
+          >
+            Einstellungen speichern
+          </Button>
+        </div>
+      </Section>
+
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+        <Section
+          title="Arbeitstypen"
+          description="Bereiche wie Service, Küche oder Counter. Diese Auswahl erscheint in der Schichtplanung."
+          action={<Badge variant="primary">{workTypes.length}</Badge>}
+        >
+          <div className="flex flex-col gap-3 md:flex-row">
+            <Input
+              label="Neuer Arbeitstyp"
+              value={workTypeName}
+              onChange={(event) => setWorkTypeName(event.target.value)}
+              placeholder="z. B. Service"
+              className="md:min-w-[280px]"
+            />
+
+            <div className="md:pt-[30px]">
+              <Button
+                type="button"
+                onClick={createWorkType}
+                loading={isSaving}
+              >
+                Hinzufügen
+              </Button>
+            </div>
+          </div>
+
+          <div className="mt-6 flex flex-col gap-3">
+            {workTypes.length > 0 ? (
+              workTypes.map((type) => (
+                <div
+                  key={type.id}
+                  className="flex flex-col gap-3 rounded-2xl border border-[#E5E7EB] bg-[#F8FAFC] p-4 md:flex-row md:items-center md:justify-between"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-[#EFF6FF] text-sm font-medium text-[#2563EB]">
+                      {getInitials(type.name)}
+                    </div>
+
+                    <div>
+                      <p className="text-sm font-medium text-[#111827]">
+                        {type.name}
+                      </p>
+                      <p className="mt-0.5 text-xs text-[#6B7280]">
+                        In der Schichtplanung auswählbar
+                      </p>
+                    </div>
+                  </div>
+
+                  <Button
+                    type="button"
+                    variant="danger"
+                    size="sm"
+                    onClick={() =>
+                      showConfirm("Arbeitstyp wirklich löschen?", () =>
+                        deleteWorkType(type.id)
+                      )
+                    }
+                  >
+                    Löschen
+                  </Button>
+                </div>
+              ))
+            ) : (
+              <div className="rounded-2xl border border-dashed border-[#CBD5E1] bg-[#F8FAFC] p-5 text-sm text-[#6B7280]">
+                Noch keine Arbeitstypen vorhanden. Lege zuerst deine wichtigsten Arbeitsbereiche an.
+              </div>
+            )}
+          </div>
+        </Section>
+
+        <Section
+          title="Schichtvorlagen"
+          description="Wiederkehrende Zeiten wie Früh-, Mittel- oder Spätschicht."
+          action={<Badge variant="muted">{shiftTemplates.length}</Badge>}
+        >
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+            <Input
+              label="Name"
               value={templateName}
               onChange={(event) => setTemplateName(event.target.value)}
               placeholder="z. B. Frühschicht"
-              className="border p-3 rounded-lg bg-white text-black"
             />
-          </div>
 
-          <div className="flex flex-col gap-1">
-            <label className="text-sm font-semibold text-gray-600">
-              Beginn
-            </label>
-
-            <input
+            <Input
+              label="Beginn"
               type="time"
               value={templateStart}
               onChange={(event) => setTemplateStart(event.target.value)}
-              className="border p-3 rounded-lg bg-white text-black"
             />
-          </div>
 
-          <div className="flex flex-col gap-1">
-            <label className="text-sm font-semibold text-gray-600">
-              Ende
-            </label>
-
-            <input
+            <Input
+              label="Ende"
               type="time"
               value={templateEnd}
               onChange={(event) => setTemplateEnd(event.target.value)}
-              className="border p-3 rounded-lg bg-white text-black"
             />
+          </div>
+
+          <div className="mt-5">
+            <Button
+              type="button"
+              onClick={createShiftTemplate}
+              loading={isSaving}
+            >
+              Vorlage speichern
+            </Button>
+          </div>
+
+          <div className="mt-6 grid grid-cols-1 gap-3">
+            {shiftTemplates.length > 0 ? (
+              shiftTemplates.map((template) => (
+                <div
+                  key={template.id}
+                  className="flex flex-col gap-3 rounded-2xl border border-[#E5E7EB] bg-[#F8FAFC] p-4 md:flex-row md:items-center md:justify-between"
+                >
+                  <div>
+                    <p className="text-sm font-medium text-[#111827]">
+                      {template.name}
+                    </p>
+                    <p className="mt-1 text-sm text-[#6B7280]">
+                      {template.start_time.slice(0, 5)} – {template.end_time.slice(0, 5)}
+                    </p>
+                  </div>
+
+                  <Button
+                    type="button"
+                    variant="danger"
+                    size="sm"
+                    onClick={() =>
+                      showConfirm(
+                        "Möchtest du diese Schichtvorlage wirklich löschen?",
+                        () => deleteShiftTemplate(template.id)
+                      )
+                    }
+                  >
+                    Löschen
+                  </Button>
+                </div>
+              ))
+            ) : (
+              <div className="rounded-2xl border border-dashed border-[#CBD5E1] bg-[#F8FAFC] p-5 text-sm text-[#6B7280]">
+                Noch keine Schichtvorlagen vorhanden. Vorlagen beschleunigen die Wochenplanung deutlich.
+              </div>
+            )}
+          </div>
+        </Section>
+      </div>
+
+      <Section
+        title="Lohn & Zuschläge"
+        description="Lege Nacht-, Sonn- oder Feiertagszuschläge inklusive DATEV-Lohnart fest."
+        action={
+          <PageActions>
+            <Badge variant="success">{activePayRules.length} aktiv</Badge>
+            <Badge variant="muted">{payRules.length} gesamt</Badge>
+          </PageActions>
+        }
+      >
+        <div className="rounded-3xl border border-[#E5E7EB] bg-[#F8FAFC] p-5">
+          <div className="mb-5 flex flex-col gap-1">
+            <h3 className="text-base font-medium text-[#111827]">
+              Neuen Zuschlag anlegen
+            </h3>
+            <p className="text-sm text-[#6B7280]">
+              Beispiel: Nachtzuschlag 25 % von 22:00 bis 06:00 Uhr.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
+            <Input
+              label="Name"
+              value={payRuleName}
+              onChange={(event) => setPayRuleName(event.target.value)}
+              placeholder="z. B. Nachtzuschlag"
+            />
+
+            <Select
+              label="Typ"
+              value={payRuleType}
+              onChange={(event) => setPayRuleType(event.target.value)}
+              options={payRuleTypeOptions}
+            />
+
+            <Input
+              label="Zuschlag %"
+              type="number"
+              value={payRulePercentage}
+              onChange={(event) => setPayRulePercentage(event.target.value)}
+              placeholder="25"
+            />
+
+            <Input
+              label="Von"
+              type="time"
+              value={payRuleStart}
+              onChange={(event) => setPayRuleStart(event.target.value)}
+            />
+
+            <Input
+              label="Bis"
+              type="time"
+              value={payRuleEnd}
+              onChange={(event) => setPayRuleEnd(event.target.value)}
+            />
+
+            <Input
+              label="DATEV-Lohnart"
+              value={payRuleDatevType}
+              onChange={(event) => setPayRuleDatevType(event.target.value)}
+              placeholder="z. B. 150"
+            />
+          </div>
+
+          <div className="mt-5">
+            <Button
+              type="button"
+              onClick={handleCreatePayRule}
+              loading={isSaving}
+            >
+              Zuschlag speichern
+            </Button>
           </div>
         </div>
 
-        <button
-          type="button"
-          onClick={createShiftTemplate}
-          className="w-full xl:w-auto bg-blue-950 text-white px-5 py-3 rounded-xl hover:bg-blue-900 transition"
-        >
-          Schichtvorlage speichern
-        </button>
-      </div>
-
-      <div className="bg-white rounded-2xl shadow p-4 md:p-6">
-        <h2 className="text-2xl font-bold text-blue-950 mb-5">
-          Gespeicherte Vorlagen
-        </h2>
-
-        {shiftTemplates.length > 0 ? (
-          <div className="flex flex-col gap-3">
-            {shiftTemplates.map((template) => (
+        <div className="mt-6 grid grid-cols-1 gap-4 xl:grid-cols-2">
+          {payRules.length > 0 ? (
+            payRules.map((rule) => (
               <div
-                key={template.id}
-                className="bg-gray-50 rounded-xl p-4 border flex flex-col xl:flex-row xl:items-center xl:justify-between gap-3"
+                key={rule.id}
+                className="rounded-3xl border border-[#E5E7EB] bg-white p-5 shadow-[0_10px_24px_rgba(17,24,39,0.03)]"
               >
-                <div>
-                  <p className="font-bold text-blue-950">
-                    {template.name}
-                  </p>
+                <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                  <div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="text-base font-medium text-[#111827]">
+                        {rule.name}
+                      </p>
+                      <Badge variant={rule.active ? "success" : "danger"}>
+                        {rule.active ? "Aktiv" : "Inaktiv"}
+                      </Badge>
+                      <Badge variant="muted">
+                        {formatRuleType(rule.rule_type)}
+                      </Badge>
+                    </div>
 
-                  <p className="text-gray-600">
-                    {template.start_time.slice(0, 5)} -{" "}
-                    {template.end_time.slice(0, 5)}
-                  </p>
+                    <div className="mt-3 flex flex-wrap gap-2 text-sm text-[#6B7280]">
+                      <span className="rounded-full bg-[#F8FAFC] px-3 py-1">
+                        {rule.percentage}% Zuschlag
+                      </span>
+
+                      {rule.starts_at && rule.ends_at && (
+                        <span className="rounded-full bg-[#F8FAFC] px-3 py-1">
+                          {rule.starts_at.slice(0, 5)} – {rule.ends_at.slice(0, 5)}
+                        </span>
+                      )}
+
+                      {rule.datev_wage_type && (
+                        <span className="rounded-full bg-[#F8FAFC] px-3 py-1">
+                          DATEV {rule.datev_wage_type}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  <PageActions className="shrink-0">
+                    <Button
+                      type="button"
+                      variant={rule.active ? "secondary" : "primary"}
+                      size="sm"
+                      onClick={() =>
+                        handleTogglePayRuleActive(rule.id, rule.active)
+                      }
+                    >
+                      {rule.active ? "Deaktivieren" : "Aktivieren"}
+                    </Button>
+
+                    <Button
+                      type="button"
+                      variant="danger"
+                      size="sm"
+                      onClick={() =>
+                        showConfirm("Zuschlag wirklich löschen?", () =>
+                          handleDeletePayRule(rule.id)
+                        )
+                      }
+                    >
+                      Löschen
+                    </Button>
+                  </PageActions>
                 </div>
-
-                <button
-                  type="button"
-                  onClick={()=>
-                  showConfirm(
-                  "Möchtest du diese Schichtvorlage wirklich löschen?",
-                  ()=>deleteShiftTemplate(template.id)
-                  )
-                  }
-                  className="w-full xl:w-auto bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition"
-                >
-                  Löschen
-                </button>
               </div>
-            ))}
-          </div>
-        ) : (
-          <p className="text-gray-500">
-            Noch keine Schichtvorlagen vorhanden.
-          </p>
-        )}
-      </div>
-
-      <div className="bg-white rounded-2xl shadow p-4 md:p-6 mt-8">
-
-<h2 className="text-2xl font-bold text-blue-950 mb-2">
-Lohn & Zuschläge
-</h2>
-
-<div className="bg-white rounded-2xl shadow p-6 mb-8">
-  <h2 className="text-2xl font-semibold text-blue-950 mb-4">
-    Standort
-  </h2>
-
-  <div className="flex flex-col gap-4 max-w-md">
-
-    <select
-      value={federalState}
-      onChange={(event) =>
-        setFederalState(
-          event.target.value
-        )
-      }
-      className="border p-3 rounded-xl bg-white text-black"
-    >
-<option value="BW">Baden-Württemberg</option>
-<option value="BY">Bayern</option>
-<option value="BE">Berlin</option>
-<option value="BB">Brandenburg</option>
-<option value="HB">Bremen</option>
-<option value="HH">Hamburg</option>
-<option value="HE">Hessen</option>
-<option value="MV">Mecklenburg-Vorpommern</option>
-<option value="NI">Niedersachsen</option>
-<option value="NW">Nordrhein-Westfalen</option>
-<option value="RP">Rheinland-Pfalz</option>
-<option value="SL">Saarland</option>
-<option value="SN">Sachsen</option>
-<option value="ST">Sachsen-Anhalt</option>
-<option value="SH">Schleswig-Holstein</option>
-<option value="TH">Thüringen</option>
-    </select>
-
-    <div className="flex flex-col gap-1">
-  <label className="text-sm font-semibold text-gray-600">
-    DATEV-Lohnart für reguläre Arbeitsstunden
-  </label>
-
-  <input
-    type="text"
-    value={datevRegularHoursWageType}
-    onChange={(event) =>
-      setDatevRegularHoursWageType(event.target.value)
-    }
-    placeholder="z. B. 100"
-    className="border p-3 rounded-xl bg-white text-black"
-  />
-</div>
-
-<div className="flex flex-col gap-1">
-  <label className="text-sm font-semibold text-gray-600">
-    DATEV-Lohnart Monatsgehalt
-  </label>
-
-  <input
-    type="text"
-    value={datevSalaryWageType}
-    onChange={(event) =>
-      setDatevSalaryWageType(event.target.value)
-    }
-    placeholder="z. B. 101"
-    className="border p-3 rounded-xl bg-white text-black"
-  />
-</div>
-
-<div className="flex flex-col gap-1">
-  <label className="text-sm font-semibold text-gray-600">
-    DATEV-Lohnart Überstunden
-  </label>
-
-  <input
-    type="text"
-    value={datevOvertimeWageType}
-    onChange={(event) =>
-      setDatevOvertimeWageType(event.target.value)
-    }
-    placeholder="z. B. 130"
-    className="border p-3 rounded-xl bg-white text-black"
-  />
-</div>
-
-<div className="flex flex-col gap-1">
-  <label className="text-sm font-semibold text-gray-600">
-    DATEV-Lohnart Urlaubstage
-  </label>
-
-  <input
-    type="text"
-    value={datevVacationWageType}
-    onChange={(event) =>
-      setDatevVacationWageType(event.target.value)
-    }
-    placeholder="z. B. 140"
-    className="border p-3 rounded-xl bg-white text-black"
-  />
-</div>
-
-<div className="flex flex-col gap-1">
-  <label className="text-sm font-semibold text-gray-600">
-    DATEV-Lohnart Krankheitstage
-  </label>
-
-  <input
-    type="text"
-    value={datevSickWageType}
-    onChange={(event) =>
-      setDatevSickWageType(event.target.value)
-    }
-    placeholder="z. B. 141"
-    className="border p-3 rounded-xl bg-white text-black"
-  />
-</div>
-
-    <button
-      type="button"
-      onClick={saveFederalState}
-      className="bg-blue-600 text-white px-5 py-3 rounded-xl hover:bg-blue-700 transition"
-    >
-      Bundesland & Lohnart speichern
-    </button>
-
-  </div>
-</div>
-
-<p className="text-gray-500 mb-6">
-Lege Nacht-, Sonn- oder Feiertagszuschläge fest.
-</p>
-
-<div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
-
-<div className="flex flex-col gap-1">
-<label className="text-sm font-semibold text-gray-600">
-Name
-</label>
-
-<input
-value={payRuleName}
-onChange={(e)=>setPayRuleName(e.target.value)}
-placeholder="z.B. Nachtzuschlag"
-className="border p-3 rounded-lg bg-white text-black"
-/>
-</div>
-
-<div className="flex flex-col gap-1">
-<label className="text-sm font-semibold text-gray-600">
-Typ
-</label>
-
-<select
-value={payRuleType}
-onChange={(e)=>setPayRuleType(e.target.value)}
-className="border p-3 rounded-lg bg-white text-black"
->
-<option value="night">Nacht</option>
-<option value="sunday">Sonntag</option>
-<option value="holiday">Feiertag</option>
-</select>
-</div>
-
-<div className="flex flex-col gap-1">
-<label className="text-sm font-semibold text-gray-600">
-Zuschlag %
-</label>
-
-<input
-type="number"
-value={payRulePercentage}
-onChange={(e)=>setPayRulePercentage(e.target.value)}
-placeholder="25"
-className="border p-3 rounded-lg bg-white text-black"
-/>
-</div>
-
-<div className="flex flex-col gap-1">
-<label className="text-sm font-semibold text-gray-600">
-Von
-</label>
-
-<input
-type="time"
-value={payRuleStart}
-onChange={(e)=>setPayRuleStart(e.target.value)}
-className="border p-3 rounded-lg bg-white text-black"
-/>
-</div>
-
-<div className="flex flex-col gap-1">
-<label className="text-sm font-semibold text-gray-600">
-Bis
-</label>
-
-<input
-type="time"
-value={payRuleEnd}
-onChange={(e)=>setPayRuleEnd(e.target.value)}
-className="border p-3 rounded-lg bg-white text-black"
-/>
-</div>
-
-<div className="flex flex-col gap-1">
-<label className="text-sm font-semibold text-gray-600">
-DATEV-Lohnart
-</label>
-
-<input
-value={payRuleDatevType}
-onChange={(e)=>setPayRuleDatevType(e.target.value)}
-placeholder="z.B. 150"
-className="border p-3 rounded-lg bg-white text-black"
-/>
-</div>
-
-</div>
-
-<button
-type="button"
-onClick={handleCreatePayRule}
-className="mt-5 w-full xl:w-auto bg-blue-950 text-white px-5 py-3 rounded-xl"
->
-Zuschlag speichern
-</button>
-
-<div className="mt-6 flex flex-col gap-3">
-
-{payRules.map((rule)=>(
-
-<div
-key={rule.id}
-className="border rounded-xl p-4"
->
-
-<div className="font-bold text-blue-950">
-  {rule.name}
-</div>
-
-<div
-  className={`text-sm font-bold ${
-    rule.active
-      ? "text-green-600"
-      : "text-red-600"
-  }`}
->
-  {rule.active
-    ? "Aktiv"
-    : "Inaktiv"}
-</div>
-
-<div className="text-sm text-gray-600">
-
-{rule.rule_type === "night"
- ? "Nacht"
- : rule.rule_type === "sunday"
- ? "Sonntag"
- : rule.rule_type === "holiday"
- ? "Feiertag"
- : rule.rule_type}
-
-{" • "}
-
-{rule.percentage}%
-
-{rule.starts_at &&
-rule.ends_at &&
-` • ${rule.starts_at} - ${rule.ends_at}`}
-
-</div>
-
-{rule.datev_wage_type && (
-
-<div className="text-sm text-gray-500 mt-1">
-
-DATEV:
-{rule.datev_wage_type}
-
-</div>
-
-
-)}
-
-<button
-  type="button"
-  onClick={() =>
-    handleTogglePayRuleActive(
-      rule.id,
-      rule.active
-    )
-  }
-  className={`mt-3 mr-2 px-3 py-2 rounded-lg text-white transition ${
-    rule.active
-      ? "bg-yellow-500 hover:bg-yellow-600"
-      : "bg-green-600 hover:bg-green-700"
-  }`}
->
-  {rule.active ? "Deaktivieren" : "Aktivieren"}
-</button>
-
-<button
-  type="button"
-  onClick={() => handleDeletePayRule(rule.id)}
-  className="mt-3 bg-red-600 text-white px-3 py-2 rounded-lg hover:bg-red-700 transition"
->
-  Löschen
-</button>
-
-</div>
-
-
-))}
-
-</div>
-
-
-</div>
-      <div className="bg-white rounded-2xl shadow p-4 md:p-6 mt-8">
-
-<h2 className="text-2xl font-bold text-blue-950 mb-2">
-Arbeitstypen
-</h2>
-
-<p className="text-gray-500 mb-5">
-Lege Bereiche wie Küche, Service oder Information fest.
-</p>
-
-<div className="flex flex-col md:flex-row gap-3">
-  <input
-    type="text"
-    placeholder="z.B. Service"
-    value={workTypeName}
-    onChange={(e) => setWorkTypeName(e.target.value)}
-    className="
-      flex-1
-      border
-      p-3
-      rounded-xl
-      bg-white
-      text-black
-      min-w-0
-    "
-  />
-
-  <button
-    type="button"
-    onClick={createWorkType}
-    className="
-      w-full
-      md:w-auto
-      bg-blue-950
-      text-white
-      px-6
-      py-3
-      rounded-xl
-      hover:bg-blue-900
-      transition
-    "
-  >
-    Hinzufügen
-  </button>
-</div>
-
-<div className="flex flex-col gap-3">
-
-{workTypes.map(type=>(
-
-<div
-key={type.id}
-className="
-bg-gray-50
-rounded-xl
-p-4
-border
-flex
-justify-between
-items-center
-"
->
-
-<p className="font-bold text-blue-950">
-
-{type.name}
-
-</p>
-
-<button
-onClick={()=>
-showConfirm(
-"Arbeitstyp wirklich löschen?",
-()=>deleteWorkType(type.id)
-)
-}
-className="
-bg-red-600
-text-white
-px-4 py-2
-rounded-lg
-"
->
-
-Löschen
-
-</button>
-
-</div>
-
-))}
-
-</div>
-
-</div>
-{showPopup && (
-<div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-6 z-50">
-
-<div className="max-w-lg w-full text-center rounded-3xl bg-[#0B1220]/95 p-8">
-
-<p className="text-2xl font-bold text-white mb-8">
-
-{popupMessage}
-
-</p>
-
-<button
-onClick={()=>setShowPopup(false)}
-className="bg-blue-600 text-white px-10 py-4 rounded-2xl"
->
-
-OK
-
-</button>
-
-</div>
-
-</div>
-)}
-
-{showConfirmPopup && (
-
-<div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-6 z-50">
-
-<div className="max-w-lg w-full text-center rounded-3xl bg-[#0B1220]/95 p-8">
-
-<p className="text-2xl font-bold text-white mb-8">
-
-{confirmMessage}
-
-</p>
-
-<div className="flex gap-3 justify-center">
-
-<button
-onClick={()=>
-setShowConfirmPopup(false)
-}
-className="bg-gray-600 text-white px-8 py-4 rounded-xl"
->
-
-Abbrechen
-
-</button>
-
-<button
-onClick={()=>{
-confirmAction?.();
-
-setShowConfirmPopup(false);
-}}
-className="bg-red-600 text-white px-8 py-4 rounded-xl"
->
-
-Löschen
-
-</button>
-
-</div>
-
-</div>
-
-</div>
-
-)}
-<DiperaPopup
-  open={showPopup}
-  message={popupMessage}
-  onClose={() => {
-    setShowPopup(false);
-    setPopupMessage("");
-  }}
-/>
+            ))
+          ) : (
+            <div className="rounded-2xl border border-dashed border-[#CBD5E1] bg-[#F8FAFC] p-6 text-sm text-[#6B7280] xl:col-span-2">
+              Noch keine Zuschläge vorhanden. Für viele Betriebe reicht zunächst ein Nachtzuschlag.
+            </div>
+          )}
+        </div>
+      </Section>
+
+      <DiperaPopup
+        open={showPopup}
+        message={popupMessage}
+        onClose={() => {
+          setShowPopup(false);
+          setPopupMessage("");
+        }}
+      />
+
+      <DiperaPopup
+        open={showConfirmPopup}
+        message={confirmMessage}
+        cancelText="Abbrechen"
+        confirmText="Löschen"
+        onClose={() => {
+          setShowConfirmPopup(false);
+          setConfirmAction(null);
+        }}
+        onConfirm={() => {
+          confirmAction?.();
+          setShowConfirmPopup(false);
+          setConfirmAction(null);
+        }}
+      />
     </div>
   );
 }
