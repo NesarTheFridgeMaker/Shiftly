@@ -13,6 +13,10 @@ import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
 import Select from "@/components/ui/Select";
 import Badge from "@/components/ui/Badge";
+import EmptyState from "@/components/ui/EmptyState";
+import { useToast } from "@/components/ui/ToastProvider";
+import TableSkeleton from "@/components/skeletons/TableSkeleton";
+import StatsSkeleton from "@/components/skeletons/StatsSkeleton";
 import {
   buildWorkSessions
 } from "@/lib/payroll/buildWorkSessions";
@@ -23,6 +27,7 @@ import {
 import {
   calculatePayrollPreview
 } from "@/lib/payroll/calculatePayrollPreview";
+import TimeInput from "@/components/ui/TimeInput";
 
 type TimeEntry = {
   id: string;
@@ -323,6 +328,9 @@ function buildPeriodSummaries(
 }
 
 export default function TimesPage() {
+  const { showToast } = useToast();
+
+  const [isLoading, setIsLoading] = useState(true);
   const [timeEntries, setTimeEntries] = useState<TimeEntry[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [targetHours, setTargetHours] = useState<EmployeeTargetHour[]>([]);
@@ -437,8 +445,10 @@ function showDiperaPopup(text: string) {
 }
 
 function showSuccess(text: string) {
-  setSuccessMessage(text);
-  setShowSuccessPopup(true);
+  showToast({
+    type: "success",
+    title: text,
+  });
 }
 
 function changeMonth(direction: number) {
@@ -515,9 +525,11 @@ async function handleSaveEditedSummary() {
 
   if (startError) {
     console.error(startError);
-    showDiperaPopup(
-      "Arbeitsbeginn konnte nicht gespeichert werden."
-    );
+    showToast({
+      type: "error",
+      title: "Arbeitsbeginn konnte nicht gespeichert werden",
+      description: startError.message,
+    });
     return;
   }
 
@@ -531,9 +543,11 @@ async function handleSaveEditedSummary() {
 
   if (endError) {
     console.error(endError);
-    showDiperaPopup(
-      "Arbeitsende konnte nicht gespeichert werden."
-    );
+    showToast({
+      type: "error",
+      title: "Arbeitsende konnte nicht gespeichert werden",
+      description: endError.message,
+    });
     return;
   }
 
@@ -554,7 +568,11 @@ async function handleConfirmDeleteSummary() {
   );
 
   if (entryIds.length === 0) {
-    showDiperaPopup("Keine Stempelungen zum Löschen gefunden.");
+    showToast({
+    type: "warning",
+    title: "Keine Stempelungen gefunden",
+    description: "Für diese Arbeitszeit konnten keine Einträge gefunden werden.",
+  });
     return;
   }
 
@@ -565,7 +583,11 @@ async function handleConfirmDeleteSummary() {
 
   if (error) {
     console.error(error);
-    showDiperaPopup("Arbeitszeit konnte nicht gelöscht werden.");
+    showToast({
+    type: "error",
+    title: "Arbeitszeit konnte nicht gelöscht werden",
+    description: error.message,
+  });
     return;
   }
 
@@ -574,7 +596,11 @@ async function handleConfirmDeleteSummary() {
 
   await loadTimeEntries();
 
-  showDiperaPopup("Arbeitszeit wurde gelöscht.");
+  showToast({
+    type: "success",
+    title: "Arbeitszeit gelöscht",
+    description: "Die Stempelungen wurden entfernt.",
+  });
 }
 
 
@@ -594,9 +620,11 @@ async function handleConfirmDeleteSummary() {
 
     if (error) {
       console.error(error);
-      showDiperaPopup(
-  "Es ist ein Fehler aufgetreten. Bitte versuche es erneut."
-);
+      showToast({
+      type: "error",
+      title: "Fehler",
+      description: "Bitte versuche es erneut.",
+    });
       return;
     }
 
@@ -683,12 +711,24 @@ if (data.datev_sick_wage_type) {
 
 
 useEffect(() => {
-  loadTimeEntries();
-  loadEmployees();
-  loadBusiness();
-  loadTargetHours();
-  loadPayRules();
-  loadAbsences();
+  async function loadInitialData() {
+    setIsLoading(true);
+
+    try {
+      await Promise.all([
+        loadTimeEntries(),
+        loadEmployees(),
+        loadBusiness(),
+        loadTargetHours(),
+        loadPayRules(),
+        loadAbsences(),
+      ]);
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  loadInitialData();
 }, []);
 
   async function loadTargetHours() {
@@ -758,16 +798,22 @@ async function loadAbsences() {
 
   async function handleAddTimeEntry(skipNightCheck = false) {
     if (!selectedEmployeeId || !selectedAction || !selectedDate || !selectedTime) {
-      showDiperaPopup(
-  "Bitte Mitarbeiter, Aktion, Datum und Uhrzeit auswählen."
-);
+      showToast({
+        type: "warning",
+        title: "Angaben fehlen",
+        description: "Bitte wähle Mitarbeiter, Aktion, Datum und Uhrzeit aus.",
+      });
       return;
     }
 
     const businessId = await getBusinessId();
 
     if (!businessId) {
-      showDiperaPopup("Keine Business-ID gefunden.");
+      showToast({
+        type: "error",
+        title: "Betrieb nicht gefunden",
+        description: "Die Aktion konnte nicht ausgeführt werden.",
+      });
       return;
     }
 
@@ -777,7 +823,11 @@ async function loadAbsences() {
     
 
     if (!selectedEmployee) {
-      showDiperaPopup("Mitarbeiter nicht gefunden.");
+      showToast({
+        type: "error",
+        title: "Mitarbeiter nicht gefunden",
+        description: "Bitte lade die Seite neu und versuche es erneut.",
+      });
       return;
     }
 
@@ -831,9 +881,11 @@ entryDate = formatDateForDatabase(nextDay);
 
     if (error) {
       console.error(error);
-      showDiperaPopup(
-  "Es ist ein Fehler aufgetreten. Bitte versuche es erneut."
-);
+      showToast({
+      type: "error",
+      title: "Fehler",
+      description: "Bitte versuche es erneut.",
+    });
       return;
     }
 
@@ -864,9 +916,11 @@ if (newEmployeeStatus) {
 
   if (statusError) {
     console.error(statusError);
-    showDiperaPopup(
-  "Es ist ein Fehler aufgetreten. Bitte versuche es erneut."
-);
+    showToast({
+      type: "error",
+      title: "Fehler",
+      description: "Bitte versuche es erneut.",
+    });
     return;
   }
 }
@@ -898,7 +952,11 @@ async function handleExportExcel() {
   );
 
   if (selectedSummaries.length === 0) {
-    showDiperaPopup("Für diesen Monat gibt es keine Arbeitszeiten.");
+    showToast({
+    type: "warning",
+    title: "Keine Arbeitszeiten vorhanden",
+    description: "Für diesen Monat gibt es keine Daten zum Exportieren.",
+  });
     return;
   }
 
@@ -1546,6 +1604,12 @@ csvLink.download =
 csvLink.click();
 
 window.URL.revokeObjectURL(csvUrl);
+
+  showToast({
+    type: "success",
+    title: "Export erstellt",
+    description: "Excel-Datei und DATEV-CSV wurden heruntergeladen.",
+  });
 }
   const dailySummaries = buildDailySummaries(timeEntries);
   const monthSummaries = dailySummaries.filter(
@@ -1600,6 +1664,26 @@ const employeeMonthGroups = monthSummaries.reduce(
     (sum, summary) => sum + summary.workMinutes,
     0
   );
+
+  if (isLoading) {
+    return (
+      <div className="space-y-8">
+        <PageHeader
+          title="Arbeitszeiten"
+          description="Prüfe Stempelungen, ergänze fehlende Zeiten und exportiere Monatsdaten."
+        />
+
+        <StatsSkeleton />
+
+        <Section
+          title="Monatsübersicht"
+          description="Arbeitszeiten pro Mitarbeiter im ausgewählten Monat."
+        >
+          <TableSkeleton rows={7} columns={7} />
+        </Section>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8">
@@ -1707,11 +1791,10 @@ const employeeMonthGroups = monthSummaries.reduce(
               onChange={(event) => setSelectedDate(event.target.value)}
             />
 
-            <Input
+            <TimeInput
               label="Uhrzeit"
-              type="time"
               value={selectedTime}
-              onChange={(event) => setSelectedTime(event.target.value)}
+              onChange={setSelectedTime}
             />
           </div>
 
@@ -1762,16 +1845,17 @@ const employeeMonthGroups = monthSummaries.reduce(
         }
       >
         {Object.keys(employeeMonthGroups).length === 0 ? (
-          <div className="rounded-2xl border border-[#E5E7EB] bg-[#F8FAFC] p-8 text-center text-sm text-[#6B7280]">
-            In diesem Monat wurden noch keine Arbeitszeiten erfasst.
-          </div>
+          <EmptyState
+            title="Keine Arbeitszeiten im Monat"
+            description="Für den ausgewählten Monat wurden noch keine Arbeitszeiten erfasst."
+          />
         ) : (
           <div className="space-y-4">
             {Object.entries(employeeMonthGroups).map(
               ([employeeId, group]) => (
                 <details
                   key={employeeId}
-                  className="rounded-3xl border border-[#E5E7EB] bg-[#F8FAFC] p-4 transition open:bg-white"
+                  className="rounded-3xl border border-[#E2E8F0] bg-[#F8FAFC] p-4 transition hover:border-[#CBD5E1] open:bg-white open:shadow-sm"
                 >
                   <summary className="cursor-pointer list-none">
                     <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
@@ -1875,7 +1959,7 @@ const employeeMonthGroups = monthSummaries.reduce(
 
       {editingSummary && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#111827]/35 p-6 backdrop-blur-sm">
-          <div className="w-full max-w-lg rounded-[28px] border border-[#E5E7EB] bg-white p-6 shadow-[0_24px_70px_rgba(17,24,39,0.18)]">
+          <div className="w-full max-w-lg rounded-[28px] border border-[#E2E8F0] bg-white p-6 shadow-[0_24px_70px_rgba(15,23,42,0.18)]">
             <h2 className="text-2xl font-light tracking-[-0.03em] text-[#111827]">
               Arbeitszeit bearbeiten
             </h2>
@@ -1885,18 +1969,16 @@ const employeeMonthGroups = monthSummaries.reduce(
             </p>
 
             <div className="mt-6 grid grid-cols-1 gap-4">
-              <Input
+              <TimeInput
                 label="Arbeitsbeginn"
-                type="time"
                 value={editStartTime === "Offen" ? "" : editStartTime}
-                onChange={(event) => setEditStartTime(event.target.value)}
+                onChange={setEditStartTime}
               />
 
-              <Input
+              <TimeInput
                 label="Arbeitsende"
-                type="time"
                 value={editEndTime === "Offen" ? "" : editEndTime}
-                onChange={(event) => setEditEndTime(event.target.value)}
+                onChange={setEditEndTime}
               />
             </div>
 
@@ -1949,12 +2031,6 @@ const employeeMonthGroups = monthSummaries.reduce(
         open={showPopup}
         message={popupMessage}
         onClose={() => setShowPopup(false)}
-      />
-
-      <DiperaPopup
-        open={showSuccessPopup}
-        message={successMessage}
-        onClose={() => setShowSuccessPopup(false)}
       />
 
       <DiperaPopup

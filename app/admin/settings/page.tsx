@@ -3,7 +3,9 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { getBusinessId } from "@/lib/getBusinessId";
+
 import DiperaPopup from "@/components/DiperaPopup";
+
 import PageHeader from "@/components/ui/PageHeader";
 import Section from "@/components/ui/Section";
 import StatCard from "@/components/ui/StatCard";
@@ -12,7 +14,11 @@ import Select from "@/components/ui/Select";
 import Button from "@/components/ui/Button";
 import Badge from "@/components/ui/Badge";
 import PageActions from "@/components/ui/PageActions";
+import { useToast } from "@/components/ui/ToastProvider";
 
+import StatsSkeleton from "@/components/skeletons/StatsSkeleton";
+import FormSkeleton from "@/components/skeletons/FormSkeleton";
+import TimeInput from "@/components/ui/TimeInput";
 
 type PayRule = {
   id: string;
@@ -113,6 +119,11 @@ function getInitials(name: string) {
 }
 
 export default function SettingsPage() {
+  const { showToast } = useToast();
+
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+
   const [shiftTemplates, setShiftTemplates] = useState<ShiftTemplate[]>([]);
   const [templateName, setTemplateName] = useState("");
   const [templateStart, setTemplateStart] = useState("");
@@ -130,26 +141,17 @@ export default function SettingsPage() {
   const [payRuleDatevType, setPayRuleDatevType] = useState("");
 
   const [federalState, setFederalState] = useState("BW");
-  const [datevRegularHoursWageType, setDatevRegularHoursWageType] =
-    useState("100");
+  const [datevRegularHoursWageType, setDatevRegularHoursWageType] = useState("100");
   const [datevSalaryWageType, setDatevSalaryWageType] = useState("101");
   const [datevOvertimeWageType, setDatevOvertimeWageType] = useState("130");
   const [datevVacationWageType, setDatevVacationWageType] = useState("140");
   const [datevSickWageType, setDatevSickWageType] = useState("141");
 
-  const [popupMessage, setPopupMessage] = useState("");
-  const [showPopup, setShowPopup] = useState(false);
   const [confirmMessage, setConfirmMessage] = useState("");
   const [confirmAction, setConfirmAction] = useState<(() => void) | null>(null);
   const [showConfirmPopup, setShowConfirmPopup] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
 
   const activePayRules = payRules.filter((rule) => rule.active);
-
-  function showDiperaPopup(text: string) {
-    setPopupMessage(text);
-    setShowPopup(true);
-  }
 
   function showConfirm(text: string, action: () => void) {
     setConfirmMessage(text);
@@ -159,7 +161,15 @@ export default function SettingsPage() {
 
   async function loadShiftTemplates() {
     const businessId = await getBusinessId();
-    if (!businessId) return;
+
+    if (!businessId) {
+      showToast({
+        type: "error",
+        title: "Betrieb nicht gefunden",
+        description: "Schichtvorlagen konnten nicht geladen werden.",
+      });
+      return;
+    }
 
     const { data, error } = await supabase
       .from("shift_templates")
@@ -169,9 +179,11 @@ export default function SettingsPage() {
 
     if (error) {
       console.error("LOAD SHIFT TEMPLATES ERROR:", error);
-      showDiperaPopup(
-        `Schichtvorlagen konnten nicht geladen werden. ${formatError(error)}`
-      );
+      showToast({
+        type: "error",
+        title: "Schichtvorlagen konnten nicht geladen werden",
+        description: formatError(error),
+      });
       return;
     }
 
@@ -180,53 +192,78 @@ export default function SettingsPage() {
 
   async function createShiftTemplate() {
     if (!templateName.trim() || !templateStart || !templateEnd) {
-      showDiperaPopup("Bitte Name, Beginn und Ende ausfüllen.");
+      showToast({
+        type: "warning",
+        title: "Angaben fehlen",
+        description: "Bitte fülle Name, Beginn und Ende der Schichtvorlage aus.",
+      });
       return;
     }
 
     const businessId = await getBusinessId();
 
     if (!businessId) {
-      showDiperaPopup("Keine Business-ID gefunden.");
+      showToast({
+        type: "error",
+        title: "Betrieb nicht gefunden",
+        description: "Die Schichtvorlage konnte nicht gespeichert werden.",
+      });
       return;
     }
 
     setIsSaving(true);
 
-    const { error } = await supabase.from("shift_templates").insert([
-      {
-        business_id: businessId,
-        name: templateName.trim(),
-        start_time: templateStart,
-        end_time: templateEnd,
-      },
-    ]);
+    try {
+      const { error } = await supabase.from("shift_templates").insert([
+        {
+          business_id: businessId,
+          name: templateName.trim(),
+          start_time: templateStart,
+          end_time: templateEnd,
+        },
+      ]);
 
-    setIsSaving(false);
+      if (error) {
+        console.error("CREATE SHIFT TEMPLATE ERROR:", error);
+        showToast({
+          type: "error",
+          title: "Schichtvorlage konnte nicht gespeichert werden",
+          description: formatError(error),
+        });
+        return;
+      }
 
-    if (error) {
-      console.error("CREATE SHIFT TEMPLATE ERROR:", error);
-      showDiperaPopup(
-        `Schichtvorlage konnte nicht gespeichert werden. ${formatError(error)}`
-      );
-      return;
+      const savedName = templateName.trim();
+
+      setTemplateName("");
+      setTemplateStart("");
+      setTemplateEnd("");
+
+      await loadShiftTemplates();
+
+      showToast({
+        type: "success",
+        title: "Schichtvorlage gespeichert",
+        description: `${savedName} wurde hinzugefügt.`,
+      });
+    } finally {
+      setIsSaving(false);
     }
-
-    setTemplateName("");
-    setTemplateStart("");
-    setTemplateEnd("");
-
-    await loadShiftTemplates();
-    showDiperaPopup("Schichtvorlage wurde gespeichert.");
   }
 
   async function deleteShiftTemplate(id: string) {
     const businessId = await getBusinessId();
 
     if (!businessId) {
-      showDiperaPopup("Keine Business-ID gefunden.");
+      showToast({
+        type: "error",
+        title: "Betrieb nicht gefunden",
+        description: "Die Schichtvorlage konnte nicht gelöscht werden.",
+      });
       return;
     }
+
+    const template = shiftTemplates.find((item) => item.id === id);
 
     const { error } = await supabase
       .from("shift_templates")
@@ -236,20 +273,34 @@ export default function SettingsPage() {
 
     if (error) {
       console.error("DELETE SHIFT TEMPLATE ERROR:", error);
-      showDiperaPopup(
-        `Schichtvorlage konnte nicht gelöscht werden. ${formatError(error)}`
-      );
+      showToast({
+        type: "error",
+        title: "Schichtvorlage konnte nicht gelöscht werden",
+        description: formatError(error),
+      });
       return;
     }
 
     await loadShiftTemplates();
-    showDiperaPopup("Schichtvorlage wurde gelöscht.");
+
+    showToast({
+      type: "success",
+      title: "Schichtvorlage gelöscht",
+      description: template ? `${template.name} wurde entfernt.` : "Die Vorlage wurde entfernt.",
+    });
   }
 
   async function loadWorkTypes() {
     const businessId = await getBusinessId();
 
-    if (!businessId) return;
+    if (!businessId) {
+      showToast({
+        type: "error",
+        title: "Betrieb nicht gefunden",
+        description: "Arbeitstypen konnten nicht geladen werden.",
+      });
+      return;
+    }
 
     const { data, error } = await supabase
       .from("work_types")
@@ -259,9 +310,11 @@ export default function SettingsPage() {
 
     if (error) {
       console.error("LOAD WORK TYPES ERROR:", error);
-      showDiperaPopup(
-        `Arbeitstypen konnten nicht geladen werden. ${formatError(error)}`
-      );
+      showToast({
+        type: "error",
+        title: "Arbeitstypen konnten nicht geladen werden",
+        description: formatError(error),
+      });
       return;
     }
 
@@ -270,48 +323,73 @@ export default function SettingsPage() {
 
   async function createWorkType() {
     if (!workTypeName.trim()) {
-      showDiperaPopup("Bitte einen Namen für den Arbeitstyp eintragen.");
+      showToast({
+        type: "warning",
+        title: "Name fehlt",
+        description: "Bitte gib einen Namen für den Arbeitstyp ein.",
+      });
       return;
     }
 
     const businessId = await getBusinessId();
 
     if (!businessId) {
-      showDiperaPopup("Keine Business-ID gefunden.");
+      showToast({
+        type: "error",
+        title: "Betrieb nicht gefunden",
+        description: "Der Arbeitstyp konnte nicht gespeichert werden.",
+      });
       return;
     }
 
     setIsSaving(true);
 
-    const { error } = await supabase.from("work_types").insert([
-      {
-        business_id: businessId,
-        name: workTypeName.trim(),
-      },
-    ]);
+    try {
+      const { error } = await supabase.from("work_types").insert([
+        {
+          business_id: businessId,
+          name: workTypeName.trim(),
+        },
+      ]);
 
-    setIsSaving(false);
+      if (error) {
+        console.error("CREATE WORK TYPE ERROR:", error);
+        showToast({
+          type: "error",
+          title: "Arbeitstyp konnte nicht gespeichert werden",
+          description: formatError(error),
+        });
+        return;
+      }
 
-    if (error) {
-      console.error("CREATE WORK TYPE ERROR:", error);
-      showDiperaPopup(
-        `Arbeitstyp konnte nicht gespeichert werden. ${formatError(error)}`
-      );
-      return;
+      const savedName = workTypeName.trim();
+
+      setWorkTypeName("");
+      await loadWorkTypes();
+
+      showToast({
+        type: "success",
+        title: "Arbeitstyp gespeichert",
+        description: `${savedName} wurde hinzugefügt.`,
+      });
+    } finally {
+      setIsSaving(false);
     }
-
-    setWorkTypeName("");
-    await loadWorkTypes();
-    showDiperaPopup("Arbeitstyp wurde gespeichert.");
   }
 
   async function deleteWorkType(id: string) {
     const businessId = await getBusinessId();
 
     if (!businessId) {
-      showDiperaPopup("Keine Business-ID gefunden.");
+      showToast({
+        type: "error",
+        title: "Betrieb nicht gefunden",
+        description: "Der Arbeitstyp konnte nicht gelöscht werden.",
+      });
       return;
     }
+
+    const workType = workTypes.find((item) => item.id === id);
 
     const { error } = await supabase
       .from("work_types")
@@ -321,20 +399,34 @@ export default function SettingsPage() {
 
     if (error) {
       console.error("DELETE WORK TYPE ERROR:", error);
-      showDiperaPopup(
-        `Arbeitstyp konnte nicht gelöscht werden. ${formatError(error)}`
-      );
+      showToast({
+        type: "error",
+        title: "Arbeitstyp konnte nicht gelöscht werden",
+        description: formatError(error),
+      });
       return;
     }
 
     await loadWorkTypes();
-    showDiperaPopup("Arbeitstyp wurde gelöscht.");
+
+    showToast({
+      type: "success",
+      title: "Arbeitstyp gelöscht",
+      description: workType ? `${workType.name} wurde entfernt.` : "Der Arbeitstyp wurde entfernt.",
+    });
   }
 
   async function loadPayRules() {
     const businessId = await getBusinessId();
 
-    if (!businessId) return;
+    if (!businessId) {
+      showToast({
+        type: "error",
+        title: "Betrieb nicht gefunden",
+        description: "Zuschläge konnten nicht geladen werden.",
+      });
+      return;
+    }
 
     const { data, error } = await supabase
       .from("pay_rules")
@@ -344,9 +436,11 @@ export default function SettingsPage() {
 
     if (error) {
       console.error("LOAD PAY RULES ERROR:", error);
-      showDiperaPopup(
-        `Zuschläge konnten nicht geladen werden. ${formatError(error)}`
-      );
+      showToast({
+        type: "error",
+        title: "Zuschläge konnten nicht geladen werden",
+        description: formatError(error),
+      });
       return;
     }
 
@@ -357,57 +451,93 @@ export default function SettingsPage() {
     const businessId = await getBusinessId();
 
     if (!businessId) {
-      showDiperaPopup("Keine Business-ID gefunden.");
+      showToast({
+        type: "error",
+        title: "Betrieb nicht gefunden",
+        description: "Der Zuschlag konnte nicht gespeichert werden.",
+      });
       return;
     }
 
     if (!payRuleName.trim() || !payRulePercentage) {
-      showDiperaPopup("Bitte Name und Zuschlag ausfüllen.");
+      showToast({
+        type: "warning",
+        title: "Angaben fehlen",
+        description: "Bitte gib Name und Zuschlag ein.",
+      });
+      return;
+    }
+
+    const percentage = Number(payRulePercentage);
+
+    if (Number.isNaN(percentage) || percentage <= 0) {
+      showToast({
+        type: "warning",
+        title: "Ungültiger Zuschlag",
+        description: "Bitte gib einen gültigen Prozentwert ein.",
+      });
       return;
     }
 
     setIsSaving(true);
 
-    const { error } = await supabase.from("pay_rules").insert([
-      {
-        business_id: businessId,
-        name: payRuleName.trim(),
-        rule_type: payRuleType,
-        starts_at: payRuleStart || null,
-        ends_at: payRuleEnd || null,
-        percentage: Number(payRulePercentage),
-        datev_wage_type: payRuleDatevType.trim() || null,
-      },
-    ]);
+    try {
+      const { error } = await supabase.from("pay_rules").insert([
+        {
+          business_id: businessId,
+          name: payRuleName.trim(),
+          rule_type: payRuleType,
+          starts_at: payRuleStart || null,
+          ends_at: payRuleEnd || null,
+          percentage,
+          datev_wage_type: payRuleDatevType.trim() || null,
+        },
+      ]);
 
-    setIsSaving(false);
+      if (error) {
+        console.error("CREATE PAY RULE ERROR:", error);
+        showToast({
+          type: "error",
+          title: "Zuschlag konnte nicht gespeichert werden",
+          description: formatError(error),
+        });
+        return;
+      }
 
-    if (error) {
-      console.error("CREATE PAY RULE ERROR:", error);
-      showDiperaPopup(
-        `Zuschlag konnte nicht gespeichert werden. ${formatError(error)}`
-      );
-      return;
+      const savedName = payRuleName.trim();
+
+      setPayRuleName("");
+      setPayRuleType("night");
+      setPayRuleStart("");
+      setPayRuleEnd("");
+      setPayRulePercentage("");
+      setPayRuleDatevType("");
+
+      await loadPayRules();
+
+      showToast({
+        type: "success",
+        title: "Zuschlag gespeichert",
+        description: `${savedName} wurde hinzugefügt.`,
+      });
+    } finally {
+      setIsSaving(false);
     }
-
-    setPayRuleName("");
-    setPayRuleType("night");
-    setPayRuleStart("");
-    setPayRuleEnd("");
-    setPayRulePercentage("");
-    setPayRuleDatevType("");
-
-    await loadPayRules();
-    showDiperaPopup("Zuschlag wurde erfolgreich erstellt.");
   }
 
   async function handleDeletePayRule(ruleId: string) {
     const businessId = await getBusinessId();
 
     if (!businessId) {
-      showDiperaPopup("Keine Business-ID gefunden.");
+      showToast({
+        type: "error",
+        title: "Betrieb nicht gefunden",
+        description: "Der Zuschlag konnte nicht gelöscht werden.",
+      });
       return;
     }
+
+    const rule = payRules.find((item) => item.id === ruleId);
 
     const { error } = await supabase
       .from("pay_rules")
@@ -417,23 +547,36 @@ export default function SettingsPage() {
 
     if (error) {
       console.error("DELETE PAY RULE ERROR:", error);
-      showDiperaPopup(
-        `Zuschlag konnte nicht gelöscht werden. ${formatError(error)}`
-      );
+      showToast({
+        type: "error",
+        title: "Zuschlag konnte nicht gelöscht werden",
+        description: formatError(error),
+      });
       return;
     }
 
     await loadPayRules();
-    showDiperaPopup("Zuschlag wurde erfolgreich gelöscht.");
+
+    showToast({
+      type: "success",
+      title: "Zuschlag gelöscht",
+      description: rule ? `${rule.name} wurde entfernt.` : "Der Zuschlag wurde entfernt.",
+    });
   }
 
   async function handleTogglePayRuleActive(ruleId: string, currentActive: boolean) {
     const businessId = await getBusinessId();
 
     if (!businessId) {
-      showDiperaPopup("Keine Business-ID gefunden.");
+      showToast({
+        type: "error",
+        title: "Betrieb nicht gefunden",
+        description: "Der Zuschlag konnte nicht geändert werden.",
+      });
       return;
     }
+
+    const rule = payRules.find((item) => item.id === ruleId);
 
     const { error } = await supabase
       .from("pay_rules")
@@ -443,23 +586,36 @@ export default function SettingsPage() {
 
     if (error) {
       console.error("TOGGLE PAY RULE ERROR:", error);
-      showDiperaPopup(
-        `Zuschlag konnte nicht geändert werden. ${formatError(error)}`
-      );
+      showToast({
+        type: "error",
+        title: "Zuschlag konnte nicht geändert werden",
+        description: formatError(error),
+      });
       return;
     }
 
     await loadPayRules();
 
-    showDiperaPopup(
-      currentActive ? "Zuschlag wurde deaktiviert." : "Zuschlag wurde aktiviert."
-    );
+    showToast({
+      type: "success",
+      title: currentActive ? "Zuschlag deaktiviert" : "Zuschlag aktiviert",
+      description: rule
+        ? `${rule.name} wurde ${currentActive ? "deaktiviert" : "aktiviert"}.`
+        : "Die Änderung wurde übernommen.",
+    });
   }
 
   async function loadBusiness() {
     const businessId = await getBusinessId();
 
-    if (!businessId) return;
+    if (!businessId) {
+      showToast({
+        type: "error",
+        title: "Betrieb nicht gefunden",
+        description: "Betriebseinstellungen konnten nicht geladen werden.",
+      });
+      return;
+    }
 
     const { data, error } = await supabase
       .from("businesses")
@@ -471,9 +627,11 @@ export default function SettingsPage() {
 
     if (error) {
       console.error("LOAD BUSINESS ERROR:", error);
-      showDiperaPopup(
-        `Betriebseinstellungen konnten nicht geladen werden. ${formatError(error)}`
-      );
+      showToast({
+        type: "error",
+        title: "Betriebseinstellungen konnten nicht geladen werden",
+        description: formatError(error),
+      });
       return;
     }
 
@@ -499,43 +657,85 @@ export default function SettingsPage() {
     const businessId = await getBusinessId();
 
     if (!businessId) {
-      showDiperaPopup("Keine Business-ID gefunden.");
+      showToast({
+        type: "error",
+        title: "Betrieb nicht gefunden",
+        description: "Die Einstellungen konnten nicht gespeichert werden.",
+      });
       return;
     }
 
     setIsSaving(true);
 
-    const { error } = await supabase
-      .from("businesses")
-      .update({
-        federal_state: federalState,
-        datev_regular_hours_wage_type: datevRegularHoursWageType.trim() || null,
-        datev_salary_wage_type: datevSalaryWageType.trim() || null,
-        datev_overtime_wage_type: datevOvertimeWageType.trim() || null,
-        datev_vacation_wage_type: datevVacationWageType.trim() || null,
-        datev_sick_wage_type: datevSickWageType.trim() || null,
-      })
-      .eq("id", businessId);
+    try {
+      const { error } = await supabase
+        .from("businesses")
+        .update({
+          federal_state: federalState,
+          datev_regular_hours_wage_type: datevRegularHoursWageType.trim() || null,
+          datev_salary_wage_type: datevSalaryWageType.trim() || null,
+          datev_overtime_wage_type: datevOvertimeWageType.trim() || null,
+          datev_vacation_wage_type: datevVacationWageType.trim() || null,
+          datev_sick_wage_type: datevSickWageType.trim() || null,
+        })
+        .eq("id", businessId);
 
-    setIsSaving(false);
+      if (error) {
+        console.error("SAVE BUSINESS SETTINGS ERROR:", error);
+        showToast({
+          type: "error",
+          title: "Einstellungen konnten nicht gespeichert werden",
+          description: formatError(error),
+        });
+        return;
+      }
 
-    if (error) {
-      console.error("SAVE BUSINESS SETTINGS ERROR:", error);
-      showDiperaPopup(
-        `Bundesland und Lohnarten konnten nicht gespeichert werden. ${formatError(error)}`
-      );
-      return;
+      showToast({
+        type: "success",
+        title: "Einstellungen gespeichert",
+        description: "Bundesland und DATEV-Lohnarten wurden aktualisiert.",
+      });
+    } finally {
+      setIsSaving(false);
     }
+  }
 
-    showDiperaPopup("Daten gespeichert.");
+  async function loadSettings() {
+    setIsLoading(true);
+
+    try {
+      await Promise.all([
+        loadShiftTemplates(),
+        loadWorkTypes(),
+        loadPayRules(),
+        loadBusiness(),
+      ]);
+    } finally {
+      setIsLoading(false);
+    }
   }
 
   useEffect(() => {
-    loadShiftTemplates();
-    loadWorkTypes();
-    loadPayRules();
-    loadBusiness();
+    loadSettings();
   }, []);
+
+  if (isLoading) {
+    return (
+      <div className="space-y-8">
+        <PageHeader
+          title="Einstellungen"
+          description="Verwalte Unternehmensdaten, Arbeitstypen, Schichtvorlagen und Zuschläge."
+        />
+
+        <StatsSkeleton />
+
+        <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+          <FormSkeleton />
+          <FormSkeleton />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8">
@@ -622,16 +822,12 @@ export default function SettingsPage() {
           />
         </div>
 
-        <div className="mt-6 flex flex-col gap-3 border-t border-[#E5E7EB] pt-5 md:flex-row md:items-center md:justify-between">
-          <p className="text-sm leading-6 text-[#6B7280]">
+        <div className="mt-6 flex flex-col gap-3 border-t border-[#E2E8F0] pt-5 md:flex-row md:items-center md:justify-between">
+          <p className="text-sm leading-6 text-[#64748B]">
             Tipp: Diese Lohnarten werden später für Excel- und DATEV-Exporte verwendet.
           </p>
 
-          <Button
-            type="button"
-            onClick={saveFederalState}
-            loading={isSaving}
-          >
+          <Button type="button" onClick={saveFederalState} loading={isSaving}>
             Einstellungen speichern
           </Button>
         </div>
@@ -653,11 +849,7 @@ export default function SettingsPage() {
             />
 
             <div className="md:pt-[30px]">
-              <Button
-                type="button"
-                onClick={createWorkType}
-                loading={isSaving}
-              >
+              <Button type="button" onClick={createWorkType} loading={isSaving}>
                 Hinzufügen
               </Button>
             </div>
@@ -668,18 +860,18 @@ export default function SettingsPage() {
               workTypes.map((type) => (
                 <div
                   key={type.id}
-                  className="flex flex-col gap-3 rounded-2xl border border-[#E5E7EB] bg-[#F8FAFC] p-4 md:flex-row md:items-center md:justify-between"
+                  className="flex flex-col gap-3 rounded-2xl border border-[#E2E8F0] bg-[#F8FAFC] p-4 transition hover:border-[#CBD5E1] md:flex-row md:items-center md:justify-between"
                 >
                   <div className="flex items-center gap-3">
-                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-[#EFF6FF] text-sm font-medium text-[#2563EB]">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-[#EFF6FF] text-sm font-semibold text-[#2563EB]">
                       {getInitials(type.name)}
                     </div>
 
                     <div>
-                      <p className="text-sm font-medium text-[#111827]">
+                      <p className="text-sm font-semibold text-[#0F172A]">
                         {type.name}
                       </p>
-                      <p className="mt-0.5 text-xs text-[#6B7280]">
+                      <p className="mt-0.5 text-xs text-[#64748B]">
                         In der Schichtplanung auswählbar
                       </p>
                     </div>
@@ -700,7 +892,7 @@ export default function SettingsPage() {
                 </div>
               ))
             ) : (
-              <div className="rounded-2xl border border-dashed border-[#CBD5E1] bg-[#F8FAFC] p-5 text-sm text-[#6B7280]">
+              <div className="rounded-2xl border border-dashed border-[#CBD5E1] bg-[#F8FAFC] p-5 text-sm leading-6 text-[#64748B]">
                 Noch keine Arbeitstypen vorhanden. Lege zuerst deine wichtigsten Arbeitsbereiche an.
               </div>
             )}
@@ -720,27 +912,23 @@ export default function SettingsPage() {
               placeholder="z. B. Frühschicht"
             />
 
-            <Input
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <TimeInput
               label="Beginn"
-              type="time"
               value={templateStart}
-              onChange={(event) => setTemplateStart(event.target.value)}
+              onChange={setTemplateStart}
             />
 
-            <Input
+            <TimeInput
               label="Ende"
-              type="time"
               value={templateEnd}
-              onChange={(event) => setTemplateEnd(event.target.value)}
+              onChange={setTemplateEnd}
             />
+          </div>
           </div>
 
           <div className="mt-5">
-            <Button
-              type="button"
-              onClick={createShiftTemplate}
-              loading={isSaving}
-            >
+            <Button type="button" onClick={createShiftTemplate} loading={isSaving}>
               Vorlage speichern
             </Button>
           </div>
@@ -750,13 +938,13 @@ export default function SettingsPage() {
               shiftTemplates.map((template) => (
                 <div
                   key={template.id}
-                  className="flex flex-col gap-3 rounded-2xl border border-[#E5E7EB] bg-[#F8FAFC] p-4 md:flex-row md:items-center md:justify-between"
+                  className="flex flex-col gap-3 rounded-2xl border border-[#E2E8F0] bg-[#F8FAFC] p-4 transition hover:border-[#CBD5E1] md:flex-row md:items-center md:justify-between"
                 >
                   <div>
-                    <p className="text-sm font-medium text-[#111827]">
+                    <p className="text-sm font-semibold text-[#0F172A]">
                       {template.name}
                     </p>
-                    <p className="mt-1 text-sm text-[#6B7280]">
+                    <p className="mt-1 text-sm text-[#64748B]">
                       {template.start_time.slice(0, 5)} – {template.end_time.slice(0, 5)}
                     </p>
                   </div>
@@ -777,7 +965,7 @@ export default function SettingsPage() {
                 </div>
               ))
             ) : (
-              <div className="rounded-2xl border border-dashed border-[#CBD5E1] bg-[#F8FAFC] p-5 text-sm text-[#6B7280]">
+              <div className="rounded-2xl border border-dashed border-[#CBD5E1] bg-[#F8FAFC] p-5 text-sm leading-6 text-[#64748B]">
                 Noch keine Schichtvorlagen vorhanden. Vorlagen beschleunigen die Wochenplanung deutlich.
               </div>
             )}
@@ -790,17 +978,19 @@ export default function SettingsPage() {
         description="Lege Nacht-, Sonn- oder Feiertagszuschläge inklusive DATEV-Lohnart fest."
         action={
           <PageActions>
-            <Badge variant="success">{activePayRules.length} aktiv</Badge>
+            <Badge variant="success" dot>
+              {activePayRules.length} aktiv
+            </Badge>
             <Badge variant="muted">{payRules.length} gesamt</Badge>
           </PageActions>
         }
       >
-        <div className="rounded-3xl border border-[#E5E7EB] bg-[#F8FAFC] p-5">
+        <div className="rounded-3xl border border-[#E2E8F0] bg-[#F8FAFC] p-5">
           <div className="mb-5 flex flex-col gap-1">
-            <h3 className="text-base font-medium text-[#111827]">
+            <h3 className="text-base font-semibold text-[#0F172A]">
               Neuen Zuschlag anlegen
             </h3>
-            <p className="text-sm text-[#6B7280]">
+            <p className="text-sm text-[#64748B]">
               Beispiel: Nachtzuschlag 25 % von 22:00 bis 06:00 Uhr.
             </p>
           </div>
@@ -828,19 +1018,19 @@ export default function SettingsPage() {
               placeholder="25"
             />
 
-            <Input
-              label="Von"
-              type="time"
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <TimeInput
+              label="Beginn"
               value={payRuleStart}
-              onChange={(event) => setPayRuleStart(event.target.value)}
+              onChange={setPayRuleStart}
             />
 
-            <Input
-              label="Bis"
-              type="time"
+            <TimeInput
+              label="Ende"
               value={payRuleEnd}
-              onChange={(event) => setPayRuleEnd(event.target.value)}
+              onChange={setPayRuleEnd}
             />
+          </div>
 
             <Input
               label="DATEV-Lohnart"
@@ -851,11 +1041,7 @@ export default function SettingsPage() {
           </div>
 
           <div className="mt-5">
-            <Button
-              type="button"
-              onClick={handleCreatePayRule}
-              loading={isSaving}
-            >
+            <Button type="button" onClick={handleCreatePayRule} loading={isSaving}>
               Zuschlag speichern
             </Button>
           </div>
@@ -866,23 +1052,21 @@ export default function SettingsPage() {
             payRules.map((rule) => (
               <div
                 key={rule.id}
-                className="rounded-3xl border border-[#E5E7EB] bg-white p-5 shadow-[0_10px_24px_rgba(17,24,39,0.03)]"
+                className="rounded-3xl border border-[#E2E8F0] bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-[#CBD5E1] hover:shadow-[0_16px_40px_rgba(15,23,42,0.08)]"
               >
                 <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
                   <div>
                     <div className="flex flex-wrap items-center gap-2">
-                      <p className="text-base font-medium text-[#111827]">
+                      <p className="text-base font-semibold text-[#0F172A]">
                         {rule.name}
                       </p>
-                      <Badge variant={rule.active ? "success" : "danger"}>
+                      <Badge variant={rule.active ? "success" : "danger"} dot>
                         {rule.active ? "Aktiv" : "Inaktiv"}
                       </Badge>
-                      <Badge variant="muted">
-                        {formatRuleType(rule.rule_type)}
-                      </Badge>
+                      <Badge variant="muted">{formatRuleType(rule.rule_type)}</Badge>
                     </div>
 
-                    <div className="mt-3 flex flex-wrap gap-2 text-sm text-[#6B7280]">
+                    <div className="mt-3 flex flex-wrap gap-2 text-sm text-[#64748B]">
                       <span className="rounded-full bg-[#F8FAFC] px-3 py-1">
                         {rule.percentage}% Zuschlag
                       </span>
@@ -906,9 +1090,7 @@ export default function SettingsPage() {
                       type="button"
                       variant={rule.active ? "secondary" : "primary"}
                       size="sm"
-                      onClick={() =>
-                        handleTogglePayRuleActive(rule.id, rule.active)
-                      }
+                      onClick={() => handleTogglePayRuleActive(rule.id, rule.active)}
                     >
                       {rule.active ? "Deaktivieren" : "Aktivieren"}
                     </Button>
@@ -930,21 +1112,12 @@ export default function SettingsPage() {
               </div>
             ))
           ) : (
-            <div className="rounded-2xl border border-dashed border-[#CBD5E1] bg-[#F8FAFC] p-6 text-sm text-[#6B7280] xl:col-span-2">
+            <div className="rounded-2xl border border-dashed border-[#CBD5E1] bg-[#F8FAFC] p-6 text-sm leading-6 text-[#64748B] xl:col-span-2">
               Noch keine Zuschläge vorhanden. Für viele Betriebe reicht zunächst ein Nachtzuschlag.
             </div>
           )}
         </div>
       </Section>
-
-      <DiperaPopup
-        open={showPopup}
-        message={popupMessage}
-        onClose={() => {
-          setShowPopup(false);
-          setPopupMessage("");
-        }}
-      />
 
       <DiperaPopup
         open={showConfirmPopup}

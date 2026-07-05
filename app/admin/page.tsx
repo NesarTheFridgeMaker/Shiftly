@@ -21,7 +21,12 @@ import CardHeader from "@/components/ui/CardHeader";
 import CardBody from "@/components/ui/CardBody";
 import Badge from "@/components/ui/Badge";
 import Button from "@/components/ui/Button";
+import Skeleton from "@/components/ui/Skeleton";
+import StatsSkeleton from "@/components/skeletons/StatsSkeleton";
+import { useToast } from "@/components/ui/ToastProvider";
 
+// Dashboard data is intentionally lightweight: it gives the admin a fast daily overview
+// without turning the dashboard into a reporting module.
 type Employee = {
   id: string;
   name: string;
@@ -39,6 +44,9 @@ type Shift = {
 };
 
 export default function AdminPage() {
+  const { showToast } = useToast();
+
+  const [isLoading, setIsLoading] = useState(true);
   const [businessName, setBusinessName] = useState("");
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [shifts, setShifts] = useState<Shift[]>([]);
@@ -72,11 +80,16 @@ export default function AdminPage() {
       setAdminEmployeeId(data.employee_id);
       await loadMyShifts(data.employee_id);
 
-      const { data: employeeData } = await supabase
+      const { data: employeeData, error: employeeError } = await supabase
         .from("employees")
         .select("name")
         .eq("id", data.employee_id)
         .single();
+
+      if (employeeError) {
+        console.error(employeeError);
+        return;
+      }
 
       if (employeeData?.name) {
         setAdminName(employeeData.name);
@@ -155,11 +168,16 @@ export default function AdminPage() {
 
     if (!businessId) return;
 
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("businesses")
       .select("name")
       .eq("id", businessId)
       .single();
+
+    if (error) {
+      console.error(error);
+      return;
+    }
 
     if (data) {
       setBusinessName(data.name);
@@ -212,12 +230,31 @@ export default function AdminPage() {
     }
   }
 
+  async function loadDashboard() {
+    setIsLoading(true);
+
+    try {
+      await Promise.all([
+        loadEmployees(),
+        loadShifts(),
+        loadAdminProfile(),
+        loadBusinessName(),
+        loadOnboardingStatus(),
+      ]);
+    } catch (error) {
+      console.error(error);
+      showToast({
+        type: "error",
+        title: "Dashboard konnte nicht geladen werden",
+        description: "Bitte lade die Seite neu oder versuche es später erneut.",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
   useEffect(() => {
-    loadEmployees();
-    loadShifts();
-    loadAdminProfile();
-    loadBusinessName();
-    loadOnboardingStatus();
+    loadDashboard();
   }, []);
 
   function formatShiftDate(dateString: string) {
@@ -243,6 +280,14 @@ export default function AdminPage() {
       day: "2-digit",
       month: "long",
       year: "numeric",
+    });
+  }
+
+  function showPlaceholderToast(title: string) {
+    showToast({
+      type: "info",
+      title,
+      description: "Diese Verknüpfung wird später mit dem Hilfecenter verbunden.",
     });
   }
 
@@ -294,40 +339,48 @@ export default function AdminPage() {
     (completedChecklistItems / checklistItems.length) * 100
   );
 
+  if (isLoading) {
+    return <DashboardSkeleton />;
+  }
+
   return (
     <div className="space-y-8">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div>
-          <h1 className="text-[2.4rem] font-light leading-tight tracking-[-0.04em] text-[#111827]">
+          <p className="mb-2 text-sm font-semibold uppercase tracking-[0.08em] text-[#2563EB]">
+            Dashboard
+          </p>
+
+          <h1 className="text-[2.4rem] font-light leading-tight tracking-[-0.04em] text-[#0F172A]">
             {getGreeting()}{adminName ? `, ${adminName.split(" ")[0]}` : ""}! 👋
           </h1>
 
-          <p className="mt-2 text-sm leading-6 text-[#6B7280]">
+          <p className="mt-3 max-w-2xl text-sm leading-7 text-[#64748B]">
             {businessName
               ? `Hier ist die Übersicht für ${businessName}.`
               : "Hier ist alles im Überblick."}
           </p>
         </div>
 
-        <div className="inline-flex items-center gap-2 rounded-2xl border border-[#E5E7EB] bg-white px-4 py-3 text-sm text-[#6B7280] shadow-[0_10px_24px_rgba(17,24,39,0.04)]">
+        <div className="inline-flex w-fit items-center gap-2 rounded-2xl border border-[#E2E8F0] bg-white px-4 py-3 text-sm text-[#64748B] shadow-sm">
           <CalendarDays className="h-4 w-4 text-[#2563EB]" />
           {getTodayLabel()}
         </div>
       </div>
 
-      <section className="relative overflow-hidden rounded-[32px] border border-[#BFDBFE] bg-white shadow-[0_20px_60px_rgba(37,99,235,0.10)]">
+      <section className="relative overflow-hidden rounded-[32px] border border-[#BFDBFE] bg-white shadow-[0_20px_60px_rgba(37,99,235,0.10)] transition hover:shadow-[0_24px_70px_rgba(37,99,235,0.14)]">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_70%_20%,rgba(37,99,235,0.18),transparent_35%),linear-gradient(120deg,#FFFFFF_0%,#EFF6FF_100%)]" />
         <div className="relative grid grid-cols-1 gap-8 p-8 lg:grid-cols-[1.1fr_0.9fr] lg:p-10">
           <div className="flex flex-col justify-center">
-            <Badge variant="primary" className="w-fit">
+            <Badge variant="primary" className="w-fit" dot>
               Willkommen bei Dipera
             </Badge>
 
-            <h2 className="mt-5 max-w-2xl text-4xl font-light leading-tight tracking-[-0.04em] text-[#111827] lg:text-5xl">
+            <h2 className="mt-5 max-w-2xl text-4xl font-light leading-tight tracking-[-0.04em] text-[#0F172A] lg:text-5xl">
               Vereinfache deine Personalplanung & Zeiterfassung
             </h2>
 
-            <p className="mt-5 max-w-xl text-base leading-7 text-[#4B5563]">
+            <p className="mt-5 max-w-xl text-base leading-7 text-[#475569]">
               Verwalte Mitarbeiter, Schichten und Arbeitszeiten effizient an einem
               Ort – ruhig, übersichtlich und startklar für deinen Betrieb.
             </p>
@@ -336,7 +389,7 @@ export default function AdminPage() {
               <Button
                 type="button"
                 variant="primary"
-                onClick={() => {}}
+                onClick={() => showPlaceholderToast("Anleitungen & Video-Tutorials")}
                 className="h-12 rounded-2xl px-6"
               >
                 <Video className="h-5 w-5" />
@@ -347,7 +400,7 @@ export default function AdminPage() {
               <Button
                 type="button"
                 variant="secondary"
-                onClick={() => {}}
+                onClick={() => showPlaceholderToast("Kontakt & Support")}
                 className="h-12 rounded-2xl px-6"
               >
                 <Headphones className="h-5 w-5 text-[#2563EB]" />
@@ -366,7 +419,7 @@ export default function AdminPage() {
                 <div className="mb-4 flex items-center justify-between">
                   <div>
                     <div className="h-3 w-20 rounded-full bg-[#2563EB]" />
-                    <div className="mt-2 h-2 w-32 rounded-full bg-[#E5E7EB]" />
+                    <div className="mt-2 h-2 w-32 rounded-full bg-[#E2E8F0]" />
                   </div>
                   <div className="flex gap-1">
                     <span className="h-2 w-2 rounded-full bg-[#CBD5E1]" />
@@ -390,7 +443,7 @@ export default function AdminPage() {
                   </div>
                 </div>
 
-                <div className="mt-4 rounded-2xl border border-[#E5E7EB] p-3">
+                <div className="mt-4 rounded-2xl border border-[#E2E8F0] p-3">
                   <div className="mb-3 flex items-end gap-2">
                     {[36, 54, 42, 68, 58, 82, 74].map((height, index) => (
                       <div
@@ -400,15 +453,15 @@ export default function AdminPage() {
                       />
                     ))}
                   </div>
-                  <div className="h-2 w-full rounded-full bg-[#E5E7EB]" />
+                  <div className="h-2 w-full rounded-full bg-[#E2E8F0]" />
                 </div>
               </div>
             </div>
 
             <div className="absolute bottom-6 right-0 w-28 rounded-[24px] border border-[#DBEAFE] bg-white p-3 shadow-[0_20px_45px_rgba(37,99,235,0.18)]">
               <div className="mx-auto h-9 w-9 rounded-2xl bg-[#2563EB]" />
-              <div className="mt-3 h-2 rounded-full bg-[#E5E7EB]" />
-              <div className="mt-2 h-2 w-16 rounded-full bg-[#E5E7EB]" />
+              <div className="mt-3 h-2 rounded-full bg-[#E2E8F0]" />
+              <div className="mt-2 h-2 w-16 rounded-full bg-[#E2E8F0]" />
             </div>
           </div>
         </div>
@@ -450,7 +503,7 @@ export default function AdminPage() {
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
         {adminEmployeeId && (
-          <Card>
+          <Card hover>
             <CardHeader
               title="Meine Schichten"
               description="Deine nächsten geplanten Einsätze."
@@ -458,17 +511,17 @@ export default function AdminPage() {
 
             <CardBody>
               {myShifts.length > 0 ? (
-                <div className="divide-y divide-[#E5E7EB]">
+                <div className="divide-y divide-[#E2E8F0]">
                   {myShifts.map((shift) => (
                     <div
                       key={shift.id}
                       className="flex flex-col gap-1 py-4 first:pt-0 last:pb-0 xl:flex-row xl:items-center xl:justify-between"
                     >
-                      <span className="text-sm font-medium text-[#111827]">
+                      <span className="text-sm font-medium text-[#0F172A]">
                         {formatShiftDate(shift.shift_date)}
                       </span>
 
-                      <span className="text-sm text-[#6B7280]">
+                      <span className="text-sm text-[#64748B]">
                         {shift.start_time.slice(0, 5)} – {" "}
                         {shift.end_time.slice(0, 5)}
                       </span>
@@ -476,15 +529,15 @@ export default function AdminPage() {
                   ))}
                 </div>
               ) : (
-                <p className="text-sm text-[#6B7280]">
+                <EmptyDashboardText>
                   Für dich sind keine kommenden Schichten eingetragen.
-                </p>
+                </EmptyDashboardText>
               )}
             </CardBody>
           </Card>
         )}
 
-        <Card>
+        <Card hover>
           <CardHeader
             title="Wer arbeitet heute?"
             description="Alle für heute geplanten Schichten."
@@ -492,17 +545,17 @@ export default function AdminPage() {
 
           <CardBody>
             {shifts.length > 0 ? (
-              <div className="divide-y divide-[#E5E7EB]">
+              <div className="divide-y divide-[#E2E8F0]">
                 {shifts.map((shift) => (
                   <div
                     key={shift.id}
                     className="flex flex-col gap-1 py-4 first:pt-0 last:pb-0 xl:flex-row xl:items-center xl:justify-between"
                   >
-                    <span className="text-sm font-medium text-[#111827]">
+                    <span className="text-sm font-medium text-[#0F172A]">
                       {shift.employee_name}
                     </span>
 
-                    <span className="text-sm text-[#6B7280]">
+                    <span className="text-sm text-[#64748B]">
                       {shift.start_time.slice(0, 5)} – {" "}
                       {shift.end_time.slice(0, 5)}
                     </span>
@@ -510,16 +563,16 @@ export default function AdminPage() {
                 ))}
               </div>
             ) : (
-              <p className="text-sm text-[#6B7280]">
+              <EmptyDashboardText>
                 Für heute sind keine Schichten eingetragen.
-              </p>
+              </EmptyDashboardText>
             )}
           </CardBody>
         </Card>
       </div>
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-        <Card>
+        <Card hover>
           <CardHeader
             title="Anleitungen & Video-Tutorials"
             description="Lerne Dipera Schritt für Schritt kennen."
@@ -529,22 +582,25 @@ export default function AdminPage() {
             <div className="mb-5 rounded-2xl bg-[#F8FAFC] p-4">
               <div className="flex items-center justify-between gap-4">
                 <div>
-                  <p className="text-sm font-medium text-[#111827]">
+                  <p className="text-sm font-semibold text-[#0F172A]">
                     Einrichtung: {completedChecklistItems} von {checklistItems.length} Schritten erledigt
                   </p>
-                  <p className="mt-1 text-xs text-[#6B7280]">
+                  <p className="mt-1 text-xs leading-5 text-[#64748B]">
                     Die Liste aktualisiert sich automatisch anhand deiner echten Betriebsdaten.
                   </p>
                 </div>
 
-                <Badge variant={onboardingProgress === 100 ? "success" : "primary"}>
+                <Badge
+                  variant={onboardingProgress === 100 ? "success" : "primary"}
+                  dot={onboardingProgress === 100}
+                >
                   {onboardingProgress} %
                 </Badge>
               </div>
 
-              <div className="mt-4 h-2 overflow-hidden rounded-full bg-[#E5E7EB]">
+              <div className="mt-4 h-2 overflow-hidden rounded-full bg-[#E2E8F0]">
                 <div
-                  className="h-full rounded-full bg-[#2563EB] transition-all"
+                  className="h-full rounded-full bg-[#2563EB] transition-all duration-500 ease-out"
                   style={{ width: `${onboardingProgress}%` }}
                 />
               </div>
@@ -558,10 +614,10 @@ export default function AdminPage() {
                   onClick={() => {
                     window.location.href = item.href;
                   }}
-                  className="flex w-full items-center gap-4 rounded-2xl border border-[#E5E7EB] bg-white px-4 py-3 text-left transition hover:bg-[#F8FAFC]"
+                  className="flex w-full items-center gap-4 rounded-2xl border border-[#E2E8F0] bg-white px-4 py-3 text-left transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#F8FAFC] hover:shadow-sm"
                 >
                   <span
-                    className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full border ${
+                    className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full border text-sm font-semibold ${
                       item.done
                         ? "border-[#16A34A] bg-[#DCFCE7] text-[#16A34A]"
                         : "border-[#CBD5E1] bg-white text-[#94A3B8]"
@@ -571,15 +627,15 @@ export default function AdminPage() {
                   </span>
 
                   <span className="min-w-0 flex-1">
-                    <span className="block text-sm font-medium text-[#111827]">
+                    <span className="block text-sm font-semibold text-[#0F172A]">
                       {item.title}
                     </span>
-                    <span className="block truncate text-xs text-[#6B7280]">
+                    <span className="block truncate text-xs text-[#64748B]">
                       {item.description}
                     </span>
                   </span>
 
-                  <Badge variant={item.done ? "success" : "muted"}>
+                  <Badge variant={item.done ? "success" : "muted"} dot={item.done}>
                     {item.done ? "Erledigt" : "Ausstehend"}
                   </Badge>
 
@@ -590,7 +646,7 @@ export default function AdminPage() {
 
             <button
               type="button"
-              onClick={() => {}}
+              onClick={() => showPlaceholderToast("Alle Anleitungen & Videos")}
               className="mt-5 inline-flex items-center gap-2 text-sm font-medium text-[#2563EB] transition hover:text-[#1D4ED8]"
             >
               Alle Anleitungen & Videos ansehen
@@ -599,7 +655,7 @@ export default function AdminPage() {
           </CardBody>
         </Card>
 
-        <Card>
+        <Card hover>
           <CardHeader
             title="Kontakt & Support"
             description="Wir sind für dich da."
@@ -611,31 +667,34 @@ export default function AdminPage() {
                 icon={<BookOpen className="h-5 w-5" />}
                 title="Dokumentation"
                 description="Detaillierte Anleitungen und häufige Fragen."
+                onClick={() => showPlaceholderToast("Dokumentation")}
               />
               <SupportAction
                 icon={<PlayCircle className="h-5 w-5" />}
                 title="Video-Tutorials"
                 description="Kurze Videos zu allen wichtigen Funktionen."
+                onClick={() => showPlaceholderToast("Video-Tutorials")}
               />
               <SupportAction
                 icon={<Mail className="h-5 w-5" />}
                 title="E-Mail Support"
                 description="support@dipera.de"
+                onClick={() => showPlaceholderToast("E-Mail Support")}
               />
               <SupportAction
                 icon={<MessageSquare className="h-5 w-5" />}
                 title="Feedback senden"
                 description="Deine Meinung hilft uns, Dipera zu verbessern."
+                onClick={() => showPlaceholderToast("Feedback senden")}
               />
             </div>
 
-            <div className="mt-5 rounded-2xl bg-[#EFF6FF] px-4 py-3 text-sm text-[#1E40AF]">
+            <div className="mt-5 rounded-2xl bg-[#EFF6FF] px-4 py-3 text-sm leading-6 text-[#1E40AF]">
               Support-Zeiten: Mo – Fr, 09:00 – 18:00 Uhr
             </div>
           </CardBody>
         </Card>
       </div>
-
     </div>
   );
 }
@@ -650,7 +709,7 @@ type KpiCardProps = {
 
 function KpiCard({ icon, title, value, subtitle, iconClassName }: KpiCardProps) {
   return (
-    <Card>
+    <Card hover>
       <CardBody>
         <div className="flex items-center justify-between gap-4">
           <div className="flex items-center gap-4">
@@ -661,15 +720,15 @@ function KpiCard({ icon, title, value, subtitle, iconClassName }: KpiCardProps) 
             </div>
 
             <div>
-              <p className="text-sm font-medium text-[#374151]">{title}</p>
-              <p className="mt-1 text-3xl font-light tracking-[-0.04em] text-[#111827]">
+              <p className="text-sm font-semibold text-[#334155]">{title}</p>
+              <p className="mt-1 text-3xl font-light tracking-[-0.04em] text-[#0F172A]">
                 {value}
               </p>
-              <p className="mt-1 text-xs text-[#6B7280]">{subtitle}</p>
+              <p className="mt-1 text-xs text-[#64748B]">{subtitle}</p>
             </div>
           </div>
 
-          <ArrowRight className="hidden h-5 w-5 text-[#94A3B8] sm:block" />
+          <ArrowRight className="hidden h-5 w-5 text-[#94A3B8] transition group-hover:translate-x-0.5 sm:block" />
         </div>
       </CardBody>
     </Card>
@@ -680,29 +739,98 @@ type SupportActionProps = {
   icon: ReactNode;
   title: string;
   description: string;
+  onClick: () => void;
 };
 
-function SupportAction({ icon, title, description }: SupportActionProps) {
+function SupportAction({ icon, title, description, onClick }: SupportActionProps) {
   return (
     <button
       type="button"
-      onClick={() => {}}
-      className="flex w-full items-center gap-4 rounded-2xl border border-[#E5E7EB] bg-white px-4 py-3 text-left transition hover:bg-[#F8FAFC]"
+      onClick={onClick}
+      className="flex w-full items-center gap-4 rounded-2xl border border-[#E2E8F0] bg-white px-4 py-3 text-left transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#F8FAFC] hover:shadow-sm"
     >
       <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-[#EFF6FF] text-[#2563EB]">
         {icon}
       </span>
 
       <span className="min-w-0 flex-1">
-        <span className="block text-sm font-medium text-[#111827]">
+        <span className="block text-sm font-semibold text-[#0F172A]">
           {title}
         </span>
-        <span className="block truncate text-xs text-[#6B7280]">
+        <span className="block truncate text-xs text-[#64748B]">
           {description}
         </span>
       </span>
 
       <ArrowRight className="h-4 w-4 text-[#94A3B8]" />
     </button>
+  );
+}
+
+function EmptyDashboardText({ children }: { children: ReactNode }) {
+  return (
+    <div className="rounded-2xl border border-dashed border-[#CBD5E1] bg-[#F8FAFC] px-4 py-8 text-center text-sm leading-6 text-[#64748B]">
+      {children}
+    </div>
+  );
+}
+
+function DashboardSkeleton() {
+  return (
+    <div className="space-y-8">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div>
+          <Skeleton className="h-4 w-28" />
+          <Skeleton className="mt-3 h-12 w-80 max-w-full" />
+          <Skeleton className="mt-4 h-5 w-[32rem] max-w-full" />
+        </div>
+
+        <Skeleton className="h-12 w-56 rounded-2xl" />
+      </div>
+
+      <Card>
+        <CardBody>
+          <div className="grid grid-cols-1 gap-8 lg:grid-cols-[1.1fr_0.9fr]">
+            <div>
+              <Skeleton className="h-7 w-44 rounded-full" />
+              <Skeleton className="mt-6 h-12 w-full" />
+              <Skeleton className="mt-3 h-12 w-3/4" />
+              <Skeleton className="mt-6 h-5 w-full" />
+              <Skeleton className="mt-3 h-5 w-2/3" />
+              <div className="mt-8 flex gap-3">
+                <Skeleton className="h-12 w-56 rounded-2xl" />
+                <Skeleton className="h-12 w-44 rounded-2xl" />
+              </div>
+            </div>
+
+            <div className="hidden lg:block">
+              <Skeleton className="h-64 w-full rounded-[28px]" />
+            </div>
+          </div>
+        </CardBody>
+      </Card>
+
+      <StatsSkeleton />
+
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+        <Card>
+          <CardBody>
+            <Skeleton className="h-8 w-48" />
+            <Skeleton className="mt-4 h-5 w-full" />
+            <Skeleton className="mt-3 h-5 w-full" />
+            <Skeleton className="mt-3 h-5 w-2/3" />
+          </CardBody>
+        </Card>
+
+        <Card>
+          <CardBody>
+            <Skeleton className="h-8 w-48" />
+            <Skeleton className="mt-4 h-5 w-full" />
+            <Skeleton className="mt-3 h-5 w-full" />
+            <Skeleton className="mt-3 h-5 w-2/3" />
+          </CardBody>
+        </Card>
+      </div>
+    </div>
   );
 }

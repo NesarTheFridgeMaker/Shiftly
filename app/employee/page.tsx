@@ -4,9 +4,20 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { getBusinessId } from "@/lib/getBusinessId";
 import { getBusiness } from "@/lib/getBusiness";
-import { LogOut } from "lucide-react";
+import { Bell, CalendarDays, Clock, LogOut, Umbrella, Users } from "lucide-react";
 import DiperaPopup from "@/components/DiperaPopup";
+import Badge from "@/components/ui/Badge";
+import Button from "@/components/ui/Button";
+import Card from "@/components/ui/Card";
+import CardBody from "@/components/ui/CardBody";
+import CardHeader from "@/components/ui/CardHeader";
+import Input from "@/components/ui/Input";
+import Section from "@/components/ui/Section";
+import StatCard from "@/components/ui/StatCard";
+import Textarea from "@/components/ui/Textarea";
 import { BUSINESS_TIME_ZONE } from "@/lib/config/businessTime";
+import TimeInput from "@/components/ui/TimeInput";
+import { useToast } from "@/components/ui/ToastProvider";
 
 type Employee = {
   id: string;
@@ -94,6 +105,30 @@ function getRequestStatusColor(status: string) {
   if (status === "approved") return "text-green-600";
   if (status === "rejected") return "text-red-600";
   return "text-black";
+}
+
+function getInitials(name: string) {
+  return name
+    .split(" ")
+    .filter(Boolean)
+    .map((part) => part[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
+}
+
+function getShiftDurationText(startTime: string, endTime: string) {
+  const [startHour, startMinute] = startTime.split(":").map(Number);
+  const [endHour, endMinute] = endTime.split(":").map(Number);
+
+  let startTotal = startHour * 60 + startMinute;
+  let endTotal = endHour * 60 + endMinute;
+
+  if (endTotal <= startTotal) {
+    endTotal += 24 * 60;
+  }
+
+  return formatMinutes(endTotal - startTotal);
 }
 
 function formatMinutes(totalMinutes: number) {
@@ -304,12 +339,18 @@ function getWeekDays(weekStart: Date) {
     return {
       label,
       date: formatDateForDatabase(date),
-      displayDate: formatShiftDate(formatDateForDatabase(date)),
+      displayDate: date.toLocaleDateString("de-DE", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+      }),
     };
   });
 }
 
 export default function EmployeePage() {
+  const { showToast } = useToast();
+
   const [checkingAuth, setCheckingAuth] = useState(true);
   const [employee, setEmployee] = useState<Employee | null>(null);
   const [employeeId, setEmployeeId] = useState("");
@@ -519,9 +560,11 @@ async function loadShifts(selectedEmployeeId: string) {
   setCorrectionEndTime("");
   setCorrectionReason("");
 
-  showDiperaPopup(
-    "Dein Korrekturantrag wurde gesendet."
-  );
+  showToast({
+    type: "success",
+    title: "Korrekturantrag gesendet",
+    description: "Dein Antrag wurde an die Verwaltung übermittelt.",
+  });
 }
 
 async function loadTeamShifts(weekStartDate = selectedWeekStart) {
@@ -611,7 +654,11 @@ async function loadTeamShifts(weekStartDate = selectedWeekStart) {
 
   if (error) {
     console.error(error);
-    showDiperaPopup("Der Antrag konnte nicht entfernt werden.");
+    showToast({
+      type: "error",
+      title: "Antrag konnte nicht entfernt werden",
+      description: "Bitte versuche es erneut.",
+    });
     return;
   }
 
@@ -619,7 +666,11 @@ async function loadTeamShifts(weekStartDate = selectedWeekStart) {
     currentAbsences.filter((absence) => absence.id !== absenceId)
   );
 
-  showDiperaPopup("Der Antrag wurde aus deiner Übersicht entfernt.");
+  showToast({
+    type: "success",
+    title: "Antrag ausgeblendet",
+    description: "Der Antrag wurde aus deiner Übersicht entfernt.",
+  });
 }
 
   async function loadNotifications(selectedEmployeeId: string) {
@@ -681,10 +732,21 @@ async function loadTeamShifts(weekStartDate = selectedWeekStart) {
 
     if (error) {
       console.error(error);
+      showToast({
+        type: "error",
+        title: "Benachrichtigungen konnten nicht aktualisiert werden",
+        description: "Bitte versuche es erneut.",
+      });
       return;
     }
 
     await loadNotifications(employeeId);
+
+    showToast({
+      type: "success",
+      title: "Benachrichtigungen aktualisiert",
+      description: "Alle Hinweise wurden als gelesen markiert.",
+    });
   }
 
   useEffect(() => {
@@ -865,7 +927,11 @@ showDiperaPopup(
 
     await loadAbsences(employeeId);
 
-    showDiperaPopup("Dein Urlaubsantrag wurde erfolgreich gesendet.");
+    showToast({
+      type: "success",
+      title: "Urlaubsantrag gesendet",
+      description: "Dein Antrag wurde an die Verwaltung übermittelt.",
+    });
   }
 
   const unreadNotifications = notifications.filter(
@@ -1056,473 +1122,562 @@ approvedVacationDays;
 
   if (checkingAuth) {
     return (
-      <main className="min-h-screen bg-gray-100 flex items-center justify-center">
-        <p className="text-blue-950 font-semibold">
-          Mitarbeiterbereich wird geladen...
-        </p>
+      <main className="min-h-screen bg-[#F8FAFC] flex items-center justify-center px-6">
+        <Card className="max-w-md w-full">
+          <CardBody className="text-center">
+            <div className="mx-auto mb-5 flex h-12 w-12 items-center justify-center rounded-2xl bg-[#EFF6FF] text-[#2563EB]">
+              <Users className="h-5 w-5" />
+            </div>
+
+            <p className="text-xl font-light text-[#111827]">
+              Mitarbeiterbereich wird geladen...
+            </p>
+
+            <p className="mt-2 text-sm text-[#6B7280]">
+              Deine Daten werden vorbereitet.
+            </p>
+          </CardBody>
+        </Card>
       </main>
     );
   }
 
+  const approvedAbsencesCount = absences.filter(
+    (absence) => absence.request_status === "approved"
+  ).length;
+
+  const pendingAbsencesCount = absences.filter(
+    (absence) => absence.request_status === "pending"
+  ).length;
+
+  const nextShift = shifts[0];
+
+  const getAbsenceBadgeVariant = (status: string) => {
+    if (status === "approved") return "success";
+    if (status === "rejected") return "danger";
+    return "warning";
+  };
+
   return (
-    <main className="min-h-screen bg-gray-100 p-4 md:p-10">
-      <div className="max-w-4xl mx-auto">
-        <div className="mb-6 flex flex-col md:flex-row md:items-start md:justify-between gap-4">
-          <div>
-            <h1 className="text-3xl md:text-4xl font-bold text-blue-950">
-              Mitarbeiterbereich
-            </h1>
+    <main className="min-h-screen bg-[#F8FAFC] px-4 py-6 text-[#111827] md:px-8 md:py-10">
+      <div className="mx-auto max-w-7xl space-y-8">
+        <section className="relative overflow-hidden rounded-[32px] border border-[#E5E7EB] bg-white p-6 shadow-[0_18px_50px_rgba(17,24,39,0.06)] md:p-8">
+          <div className="absolute right-0 top-0 h-56 w-56 rounded-full bg-[#EFF6FF] blur-3xl" />
+          <div className="absolute bottom-0 right-24 h-32 w-32 rounded-full bg-[#DBEAFE] blur-3xl" />
 
-            {employee && (
-              <p className="text-gray-500 mt-1">
-                Eingeloggt als {employee.name}
+          <div className="relative flex flex-col gap-8 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <p className="text-sm font-medium text-[#2563EB]">
+                {businessName || "Dipera"}
               </p>
-            )}
-          </div>
 
-<button
-  type="button"
-  onClick={handleLogout}
-  className="bg-red-600 text-white px-4 py-2 rounded-xl hover:bg-red-700 transition self-start flex items-center gap-2"
->
-  <LogOut size={18} />
-  <span>Ausloggen</span>
-</button>
-        </div>
+              <h1 className="mt-3 text-4xl font-light tracking-[-0.04em] text-[#111827] md:text-5xl">
+                Willkommen{employee ? `, ${employee.name}` : ""}.
+              </h1>
 
-        {notifications.length > 0 && (
-          <div className="bg-white rounded-2xl shadow p-4 md:p-6 mb-6">
-            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-4">
-              <h2 className="text-2xl font-semibold text-blue-950">
-                Benachrichtigungen
-              </h2>
+              <p className="mt-4 max-w-2xl text-sm leading-6 text-[#6B7280] md:text-base">
+                Hier findest du deine Schichten, dein Stundenkonto, Urlaubsanträge und Korrekturen.
+              </p>
 
-              {unreadNotifications.length > 0 && (
-                <button
-                  type="button"
-                  onClick={markAllNotificationsAsRead}
-                  className="bg-blue-950 text-white px-4 py-2 rounded-xl hover:bg-blue-900 transition"
-                >
-                  Alle als gelesen markieren ({unreadNotifications.length})
-                </button>
+              {nextShift && (
+                <div className="mt-6 inline-flex flex-col gap-1 rounded-2xl border border-[#BFDBFE] bg-[#EFF6FF] px-4 py-3 text-sm text-[#1D4ED8] sm:flex-row sm:items-center sm:gap-3">
+                  <span className="font-medium">Nächste Schicht</span>
+                  <span>
+                    {formatShiftDate(nextShift.shift_date)} ·{" "}
+                    {nextShift.start_time.slice(0, 5)} –{" "}
+                    {nextShift.end_time.slice(0, 5)}
+                  </span>
+                </div>
               )}
             </div>
 
-            <div className="flex flex-col gap-3">
+            <div className="grid w-full max-w-sm grid-cols-2 gap-3">
+              <div className="rounded-3xl border border-[#E5E7EB] bg-[#F8FAFC] p-4">
+                <Clock className="mb-4 h-5 w-5 text-[#2563EB]" />
+                <p className="text-xs text-[#6B7280]">Heute gearbeitet</p>
+                <p className="mt-2 text-2xl font-light text-[#111827]">
+                  {formatMinutes(todayMinutes)}
+                </p>
+              </div>
+
+              <div className="rounded-3xl border border-[#E5E7EB] bg-[#F8FAFC] p-4">
+                <Umbrella className="mb-4 h-5 w-5 text-[#2563EB]" />
+                <p className="text-xs text-[#6B7280]">Resturlaub</p>
+                <p className="mt-2 text-2xl font-light text-[#111827]">
+                  {remainingVacationDays}
+                </p>
+              </div>
+
+              <div className="col-span-2 rounded-3xl border border-[#E5E7EB] bg-[#2563EB] p-4 text-white">
+                <CalendarDays className="mb-4 h-5 w-5" />
+                <p className="text-xs text-white/75">Aktuelle Woche</p>
+                <p className="mt-2 text-lg font-light">
+                  {weekStartText} – {weekEndText}
+                </p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {notifications.length > 0 && (
+          <Section
+            title="Benachrichtigungen"
+            description="Aktuelle Hinweise und Rückmeldungen deines Betriebs."
+            action={
+              unreadNotifications.length > 0 ? (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={markAllNotificationsAsRead}
+                >
+                  Alle als gelesen markieren ({unreadNotifications.length})
+                </Button>
+              ) : null
+            }
+          >
+            <div className="space-y-3">
               {notifications.map((notification) => (
                 <div
                   key={notification.id}
-                  className="rounded-xl p-4 border bg-blue-50"
+                  className="rounded-2xl border border-[#E5E7EB] bg-[#F8FAFC] px-4 py-4"
                 >
-                  <div className="flex flex-col md:flex-row md:justify-between gap-2">
-                    <div>
-                      <p className="font-bold text-blue-950">
-                        {notification.title}
-                      </p>
+                  <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                    <div className="flex gap-3">
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-[#EFF6FF] text-[#2563EB]">
+                        <Bell className="h-5 w-5" />
+                      </div>
 
-                      <p className="text-sm text-gray-700 mt-1">
-                        {notification.message}
-                      </p>
+                      <div>
+                        <p className="text-sm font-medium text-[#111827]">
+                          {notification.title}
+                        </p>
+
+                        <p className="mt-1 text-sm leading-6 text-[#6B7280]">
+                          {notification.message}
+                        </p>
+                      </div>
                     </div>
 
-                    <p className="text-xs text-gray-400">
+                    <p className="text-xs text-[#94A3B8]">
                       {formatNotificationDate(notification.created_at)}
                     </p>
                   </div>
                 </div>
               ))}
             </div>
-          </div>
+          </Section>
         )}
 
-        <h2 className="text-2xl font-semibold text-blue-950 mb-4">
-          Stundenkonto
-        </h2>
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-5">
+          <StatCard
+            title="Heute"
+            value={formatMinutes(todayMinutes)}
+            badge="Heute"
+            badgeVariant="primary"
+          />
 
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
-          <div className="bg-white rounded-2xl shadow p-4">
-            <p className="text-gray-500 mb-1">Heute</p>
-            <p className="text-2xl font-bold text-green-700">
-              {formatMinutes(todayMinutes)}
-            </p>
-          </div>
+          <StatCard
+            title="Diese Woche"
+            value={formatMinutes(weeklyMinutes)}
+          />
 
-          <div className="bg-white rounded-2xl shadow p-4">
-            <p className="text-gray-500 mb-1">Diese Woche</p>
-            <p className="text-2xl font-bold text-green-700">
-              {formatMinutes(weeklyMinutes)}
-            </p>
-          </div>
+          <StatCard
+            title="Monats-Soll"
+            value={`${monthlyTargetHours} Std.`}
+            badge="Soll"
+            badgeVariant="muted"
+          />
 
-          <div className="bg-white rounded-2xl shadow p-4">
-            <p className="text-gray-500 mb-1">Monats-Soll</p>
-            <p className="text-2xl font-bold text-blue-950">
-              {monthlyTargetHours} Std.
-            </p>
-          </div>
+          <StatCard
+            title="Monats-Saldo"
+            value={getMonthlyDifferenceText()}
+            badge={monthlyDifferenceMinutes >= 0 ? "OK" : "Prüfen"}
+            badgeVariant={monthlyDifferenceMinutes >= 0 ? "success" : "warning"}
+          />
 
-          <div className="bg-white rounded-2xl shadow p-4">
-            <p className="text-gray-500 mb-1">Monats-Saldo</p>
-            <p
-              className={`text-lg xl:text-2xl font-bold leading-snug break-words ${getMonthlyDifferenceColor()}`}
-            >
-              {getMonthlyDifferenceText()}
-            </p>
-          </div>
-
-          <div className="bg-white rounded-2xl shadow p-4">
-            <p className="text-gray-500 mb-1">Dieser Monat</p>
-            <p className="text-2xl font-bold text-green-700">
-              {formatMinutes(monthlyMinutes)}
-            </p>
-          </div>
+          <StatCard
+            title="Dieser Monat"
+            value={formatMinutes(monthlyMinutes)}
+          />
         </div>
 
-        <div className="bg-white rounded-2xl shadow p-4 md:p-6 mb-6">
-          <h2 className="text-2xl font-semibold text-blue-950 mb-4">
-            Meine Schichten
-          </h2>
+        <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+          <Section
+            title="Meine Schichten"
+            description="Deine nächsten geplanten Einsätze."
+          >
+            {shifts.length > 0 ? (
+              <div className="divide-y divide-[#E5E7EB]">
+                {shifts.slice(0, 6).map((shift) => (
+                  <div
+                    key={shift.id}
+                    className="flex flex-col gap-3 py-4 first:pt-0 last:pb-0 sm:flex-row sm:items-center sm:justify-between"
+                  >
+                    <div>
+                      <p className="text-sm font-medium text-[#111827]">
+                        {formatShiftDate(shift.shift_date)}
+                      </p>
 
-          {shifts.length > 0 ? (
-            <div className="flex flex-col gap-3">
-              {shifts.map((shift) => (
-                <div
-                  key={shift.id}
-                  className="bg-blue-50 rounded-xl p-4 text-black flex flex-col md:flex-row md:justify-between gap-2"
-                >
-                  <span className="font-semibold">
-                    {formatShiftDate(shift.shift_date)}
-                  </span>
+                      <p className="mt-1 text-sm text-[#6B7280]">
+                        {shift.start_time.slice(0, 5)} –{" "}
+                        {shift.end_time.slice(0, 5)}
+                      </p>
+                    </div>
 
-                  <span>
-                    {shift.start_time.slice(0, 5)} -{" "}
-                    {shift.end_time.slice(0, 5)}
-                  </span>
+                    <Badge variant="primary">
+                      {shift.work_type_name || "Schicht"}
+                    </Badge>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-[#6B7280]">
+                Für dich sind noch keine Schichten eingetragen.
+              </p>
+            )}
+          </Section>
+
+          <Section
+            title="Urlaubsübersicht"
+            description="Dein Jahresurlaub und aktuelle Anträge."
+          >
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+              <div className="rounded-2xl border border-[#E5E7EB] bg-[#F8FAFC] p-4">
+                <p className="text-xs text-[#6B7280]">Urlaub/Jahr</p>
+                <p className="mt-2 text-3xl font-light text-[#111827]">
+                  {employee?.vacation_days_per_year ?? 24}
+                </p>
+              </div>
+
+              <div className="rounded-2xl border border-[#E5E7EB] bg-[#F8FAFC] p-4">
+                <p className="text-xs text-[#6B7280]">Genehmigt</p>
+                <p className="mt-2 text-3xl font-light text-[#111827]">
+                  {approvedVacationDays}
+                </p>
+              </div>
+
+              <div className="rounded-2xl border border-[#E5E7EB] bg-[#EFF6FF] p-4">
+                <p className="text-xs text-[#2563EB]">Resturlaub</p>
+                <p className="mt-2 text-3xl font-light text-[#111827]">
+                  {remainingVacationDays}
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-5 flex flex-wrap gap-2">
+              <Badge variant="warning">{pendingAbsencesCount} offen</Badge>
+              <Badge variant="success">{approvedAbsencesCount} genehmigt</Badge>
+            </div>
+          </Section>
+        </div>
+
+        <Section
+          title="Wochenplan"
+          description={`${weekStartText} bis ${weekEndText}`}
+          action={
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={goToPreviousWeek}
+              >
+                Vorherige Woche
+              </Button>
+
+              <Button
+                type="button"
+                variant="primary"
+                onClick={goToCurrentWeek}
+              >
+                Aktuelle Woche
+              </Button>
+
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={goToNextWeek}
+              >
+                Nächste Woche
+              </Button>
+            </div>
+          }
+          bodyClassName="overflow-x-auto"
+        >
+          {teamEmployees.length > 0 ? (
+            <div className="min-w-[980px] overflow-hidden rounded-3xl border border-[#E2E8F0] bg-white">
+              <div className="grid grid-cols-[220px_repeat(7,minmax(128px,1fr))] border-b border-[#E2E8F0] bg-[#F8FAFC]">
+                <div className="px-4 py-4 text-xs font-semibold uppercase tracking-[0.08em] text-[#64748B]">
+                  Mitarbeiter
                 </div>
-              ))}
+
+                {weekDays.map((day) => (
+                  <div
+                    key={day.date}
+                    className={[
+                      "px-4 py-4 text-center",
+                      day.date === todayDate ? "bg-[#EFF6FF]" : "",
+                    ].join(" ")}
+                  >
+                    <p
+                      className={[
+                        "text-sm font-semibold text-[#0F172A]",
+                        day.date === todayDate ? "text-[#2563EB]" : "",
+                      ].join(" ")}
+                    >
+                      {day.label.slice(0, 2)}
+                    </p>
+
+                    <p className="mt-1 text-xs text-[#64748B]">
+                      {day.displayDate}
+                    </p>
+
+                    {day.date === todayDate && (
+                      <Badge variant="primary" className="mt-2">
+                        Heute
+                      </Badge>
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              <div>
+                {teamEmployees.map((teamEmployee) => (
+                  <div
+                    key={teamEmployee.id}
+                    className="grid grid-cols-[220px_repeat(7,minmax(128px,1fr))] border-b border-[#F1F5F9] last:border-b-0"
+                  >
+                    <div className="flex items-center gap-3 border-r border-[#F1F5F9] px-4 py-4">
+                      <div
+                        className={[
+                          "flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-semibold text-white",
+                          teamEmployee.id === employeeId
+                            ? "bg-[#2563EB]"
+                            : "bg-[#64748B]",
+                        ].join(" ")}
+                      >
+                        {getInitials(teamEmployee.name)}
+                      </div>
+
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-semibold text-[#0F172A]">
+                          {teamEmployee.name}
+                        </p>
+
+                        {teamEmployee.id === employeeId && (
+                          <p className="text-xs text-[#2563EB]">Du</p>
+                        )}
+                      </div>
+                    </div>
+
+                    {weekDays.map((day) => {
+                      const shiftsForDay = teamShifts.filter(
+                        (shift) =>
+                          shift.employee_id === teamEmployee.id &&
+                          shift.shift_date === day.date
+                      );
+
+                      return (
+                        <div
+                          key={day.date}
+                          className={[
+                            "min-h-[104px] border-r border-[#F1F5F9] px-3 py-4 last:border-r-0",
+                            day.date === todayDate ? "bg-[#EFF6FF]/45" : "",
+                          ].join(" ")}
+                        >
+                          {shiftsForDay.length > 0 ? (
+                            <div className="flex flex-col gap-2">
+                              {shiftsForDay.map((shift) => (
+                                <div
+                                  key={shift.id}
+                                  className="rounded-2xl border border-[#93C5FD] bg-[#2563EB] p-3 text-white shadow-[0_10px_24px_rgba(37,99,235,0.22)] transition hover:-translate-y-0.5 hover:shadow-[0_14px_32px_rgba(37,99,235,0.28)]"
+                                >
+                                  <p className="text-sm font-semibold leading-5">
+                                    {shift.start_time.slice(0, 5)} –{" "}
+                                    {shift.end_time.slice(0, 5)}
+                                  </p>
+
+                                  <p className="mt-1 text-xs font-medium text-white/85">
+                                    {shift.work_type_name || "Schicht"}
+                                  </p>
+
+                                  <p className="mt-2 text-[11px] text-white/70">
+                                    {getShiftDurationText(
+                                      shift.start_time,
+                                      shift.end_time
+                                    )}
+                                  </p>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <div className="flex h-full min-h-[72px] items-center justify-center rounded-2xl border border-dashed border-[#CBD5E1] bg-[#F8FAFC] text-xs text-[#94A3B8]">
+                              Frei
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                ))}
+              </div>
             </div>
           ) : (
-            <p className="text-gray-500">
-              Für dich sind noch keine Schichten eingetragen.
-            </p>
+            <div className="rounded-3xl border border-dashed border-[#CBD5E1] bg-[#F8FAFC] px-6 py-12 text-center">
+              <h3 className="text-xl font-semibold text-[#0F172A]">
+                Kein Wochenplan vorhanden
+              </h3>
+
+              <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-[#64748B]">
+                Für diese Woche wurden noch keine veröffentlichten
+                Team-Schichten eingetragen.
+              </p>
+            </div>
           )}
+        </Section>
+
+        <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+          <Section
+            title="Zeitkorrektur beantragen"
+            description="Falls du eine Stempelung vergessen hast, kannst du hier eine Korrektur beantragen."
+          >
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+              <Input
+                label="Datum"
+                type="date"
+                value={correctionDate}
+                onChange={(event) => setCorrectionDate(event.target.value)}
+              />
+
+              <TimeInput
+                label="Arbeitsbeginn"
+                value={correctionStartTime}
+                onChange={setCorrectionStartTime}
+              />
+
+              <TimeInput
+                label="Arbeitsende"
+                value={correctionEndTime}
+                onChange={setCorrectionEndTime}
+              />
+            </div>
+
+            <Textarea
+              className="mt-4"
+              value={correctionReason}
+              onChange={(event) => setCorrectionReason(event.target.value)}
+              placeholder="Grund / Hinweis für den Admin"
+            />
+
+            <div className="mt-5">
+              <Button
+                type="button"
+                variant="primary"
+                onClick={handleSubmitCorrectionRequest}
+              >
+                Korrekturantrag senden
+              </Button>
+            </div>
+          </Section>
+
+          <Section
+            title="Urlaub beantragen"
+            description="Beantrage Urlaub für einen Zeitraum. Dein Antrag wird an den Admin gesendet."
+          >
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <Input
+                label="Von"
+                type="date"
+                value={startDate}
+                onChange={(event) => setStartDate(event.target.value)}
+              />
+
+              <Input
+                label="Bis"
+                type="date"
+                value={endDate}
+                onChange={(event) => setEndDate(event.target.value)}
+              />
+            </div>
+
+            <div className="mt-5">
+              <Button
+                type="button"
+                variant="primary"
+                onClick={handleVacationRequest}
+              >
+                Urlaubsantrag senden
+              </Button>
+            </div>
+          </Section>
         </div>
 
-<div className="bg-white rounded-2xl shadow p-4 md:p-6 mb-6">
-  <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-4">
-    <div>
-      <h2 className="text-2xl font-semibold text-blue-950">
-        Wochenplan
-      </h2>
-
-      <p className="text-gray-500 mt-1">
-        {weekStartText} bis {weekEndText}
-      </p>
-    </div>
-
-    <div className="flex flex-col md:flex-row gap-2">
-      <button
-        onClick={goToPreviousWeek}
-        className="bg-gray-200 text-blue-950 px-4 py-2 rounded-lg hover:bg-gray-300 transition"
-      >
-        Vorherige Woche
-      </button>
-
-      <button
-        onClick={goToCurrentWeek}
-        className="bg-blue-950 text-white px-4 py-2 rounded-lg hover:bg-blue-900 transition"
-      >
-        Aktuelle Woche
-      </button>
-
-      <button
-        onClick={goToNextWeek}
-        className="bg-gray-200 text-blue-950 px-4 py-2 rounded-lg hover:bg-gray-300 transition"
-      >
-        Nächste Woche
-      </button>
-    </div>
-  </div>
-
-  {teamEmployees.length > 0 ? (
-    <div className="overflow-x-auto max-w-full">
-      <table className="min-w-[900px] w-full text-left border-collapse">
-        <thead>
-          <tr className="border-b text-gray-600">
-            <th className="py-3 px-3">Mitarbeiter</th>
-
-            {weekDays.map((day) => (
-              <th
-                key={day.date}
-                className={`py-3 px-3 ${
-                  day.date === todayDate ? "bg-blue-50 text-blue-950" : ""
-                }`}
-              >
-                <div>{day.label}</div>
-                <div className="text-sm font-normal">{day.displayDate}</div>
-              </th>
-            ))}
-          </tr>
-        </thead>
-
-        <tbody>
-          {teamEmployees.map((teamEmployee) => (
-            <tr key={teamEmployee.id} className="border-b">
-              <td className="py-4 px-3 font-semibold text-black">
-                {teamEmployee.name}
-              </td>
-
-              {weekDays.map((day) => {
-                const shiftForDay = teamShifts.find(
-                  (shift) =>
-                    shift.employee_id === teamEmployee.id &&
-                    shift.shift_date === day.date
-                );
-
-                return (
-                  <td
-                    key={day.date}
-                    className={`py-4 px-3 text-black align-top ${
-                      day.date === todayDate ? "bg-blue-50" : ""
-                    }`}
-                  >
-{shiftForDay ? (
-  <div className="flex flex-col gap-1">
-    {shiftForDay.work_type_name ? (
-      <span className="inline-flex items-center bg-blue-950 text-white text-xs font-semibold px-3 py-1 rounded-full w-fit">
-        {shiftForDay.work_type_name}
-      </span>
-    ) : (
-      <span className="inline-flex items-center bg-gray-200 text-gray-600 text-xs font-semibold px-3 py-1 rounded-full w-fit">
-        Ohne Arbeitstyp
-      </span>
-    )}
-
-    <span className="bg-blue-100 text-blue-950 px-3 py-2 rounded-lg inline-block">
-      {shiftForDay.start_time.slice(0, 5)} -{" "}
-      {shiftForDay.end_time.slice(0, 5)}
-    </span>
-  </div>
-) : (
-                      <span className="text-gray-400">Frei</span>
-                    )}
-                  </td>
-                );
-              })}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  ) : (
-    <p className="text-gray-500">
-      Für diese Woche sind keine Team-Schichten eingetragen.
-    </p>
-  )}
-</div>
-
-<div className="bg-white rounded-2xl shadow p-6 mb-8">
-  <h2 className="text-2xl font-semibold text-blue-950 mb-2">
-    Zeitkorrektur beantragen
-  </h2>
-
-  <p className="text-sm text-gray-500 mb-5">
-    Falls du eine Stempelung vergessen hast, kannst du hier eine Korrektur beantragen.
-  </p>
-
-  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-    <div>
-  <label className="block text-sm font-semibold text-gray-700 mb-1">
-    Datum
-  </label>
-
-  <input
-    type="date"
-    value={correctionDate}
-    onChange={(event) => setCorrectionDate(event.target.value)}
-    className="border p-3 rounded-xl bg-white text-black w-full"
-  />
-</div>
-
-    <div>
-  <label className="block text-sm font-semibold text-gray-700 mb-1">
-    Arbeitsbeginn
-  </label>
-
-  <input
-    type="time"
-    value={correctionStartTime}
-    onChange={(event) => setCorrectionStartTime(event.target.value)}
-    className="border p-3 rounded-xl bg-white text-black w-full"
-  />
-</div>
-
-    <div>
-  <label className="block text-sm font-semibold text-gray-700 mb-1">
-    Arbeitsende
-  </label>
-
-  <input
-    type="time"
-    value={correctionEndTime}
-    onChange={(event) => setCorrectionEndTime(event.target.value)}
-    className="border p-3 rounded-xl bg-white text-black w-full"
-  />
-</div>
-  </div>
-
-  <textarea
-    value={correctionReason}
-    onChange={(event) => setCorrectionReason(event.target.value)}
-    placeholder="Grund / Hinweis für den Admin"
-    className="w-full border p-3 rounded-xl bg-white text-black mt-4 min-h-[100px]"
-  />
-
-  <button
-    type="button"
-    onClick={handleSubmitCorrectionRequest}
-    className="mt-4 bg-blue-950 text-white px-6 py-3 rounded-xl font-semibold hover:bg-blue-900 transition"
-  >
-    Korrekturantrag senden
-  </button>
-</div>
-
-        <div className="bg-white rounded-2xl shadow p-4 md:p-6 mb-6">
-          <h2 className="text-2xl font-semibold text-blue-950 mb-4">
-            Meine Urlaubsanträge
-          </h2>
-
+        <Section
+          title="Meine Urlaubsanträge"
+          description="Alle sichtbaren Urlaubs- und Abwesenheitsanträge."
+        >
           {absences.length > 0 ? (
-            <div className="flex flex-col gap-3">
+            <div className="space-y-3">
               {absences.map((absence) => (
                 <div
                   key={absence.id}
-                  className="bg-gray-50 rounded-xl p-4 border"
+                  className="rounded-2xl border border-[#E5E7EB] bg-[#F8FAFC] px-4 py-4"
                 >
-                  <div className="flex flex-col md:flex-row md:justify-between gap-2">
+                  <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                     <div>
-                      <p className="font-semibold text-blue-950">
+                      <p className="text-sm font-medium text-[#111827]">
                         {formatAbsenceType(absence.type)}
                       </p>
 
-                      <p className="text-sm text-gray-500">
+                      <p className="mt-1 text-sm text-[#6B7280]">
                         {absence.start_date} bis {absence.end_date}
                       </p>
                     </div>
 
-                    <div className="flex flex-col items-start md:items-end gap-2">
-                      <p
-                        className={`font-bold ${getRequestStatusColor(
-                          absence.request_status
-                        )}`}
-                      >
+                    <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center">
+                      <Badge variant={getAbsenceBadgeVariant(absence.request_status)}>
                         {formatRequestStatus(absence.request_status)}
-                      </p>
+                      </Badge>
 
-                      
+                      {absence.request_status !== "pending" && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleHideAbsence(absence.id)}
+                        >
+                          Ausblenden
+                        </Button>
+                      )}
                     </div>
-
-                    {absence.request_status !== "pending" && (
-                      <button
-                        type="button"
-                        onClick={() => handleHideAbsence(absence.id)}
-                        className="text-sm font-semibold text-gray-500 hover:text-red-600 transition"
-                      >
-                        Aus Übersicht entfernen
-                      </button>
-                    )}
                   </div>
                 </div>
               ))}
             </div>
           ) : (
-            <p className="text-gray-500">
+            <p className="text-sm text-[#6B7280]">
               Du hast noch keine Urlaubsanträge gestellt.
             </p>
           )}
-        </div>
+        </Section>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-
-<div className="bg-white rounded-2xl shadow p-4">
-<p className="text-gray-500 mb-1">
-Urlaub/Jahr
-</p>
-
-<p className="text-2xl font-bold text-blue-950">
-{employee?.vacation_days_per_year ?? 24}
-</p>
-</div>
-
-<div className="bg-white rounded-2xl shadow p-4">
-<p className="text-gray-500 mb-1">
-Genehmigt
-</p>
-
-<p className="text-2xl font-bold text-green-700">
-{approvedVacationDays}
-</p>
-</div>
-
-<div className="bg-white rounded-2xl shadow p-4">
-<p className="text-gray-500 mb-1">
-Resturlaub
-</p>
-
-<p className="text-2xl font-bold text-blue-950">
-{remainingVacationDays}
-</p>
-</div>
-
-</div>
-
-        <div className="bg-white rounded-2xl shadow p-4 md:p-6">
-          <h2 className="text-2xl font-semibold text-blue-950 mb-4">
-            Urlaub beantragen
-          </h2>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-5">
-            <div className="flex flex-col gap-1">
-              <label className="text-sm font-semibold text-gray-600">
-                Von
-              </label>
-
-              <input
-                type="date"
-                value={startDate}
-                onChange={(event) => setStartDate(event.target.value)}
-                className="border p-3 rounded-lg bg-white text-black"
-              />
-            </div>
-
-            <div className="flex flex-col gap-1">
-              <label className="text-sm font-semibold text-gray-600">
-                Bis
-              </label>
-
-              <input
-                type="date"
-                value={endDate}
-                onChange={(event) => setEndDate(event.target.value)}
-                className="border p-3 rounded-lg bg-white text-black"
-              />
-            </div>
-          </div>
-
-          <button
-            onClick={handleVacationRequest}
-            className="w-full md:w-auto bg-blue-950 text-white px-5 py-3 rounded-xl hover:bg-blue-900 transition"
+        <div className="flex justify-end">
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={handleLogout}
+            className="text-red-600 hover:text-red-700"
           >
-            Urlaubsantrag senden
-          </button>
+            <LogOut className="h-4 w-4" />
+            Ausloggen
+          </Button>
         </div>
       </div>
 
-<DiperaPopup
-  open={showPopup}
-  message={popupMessage}
-  onClose={() => setShowPopup(false)}
-/>
+      <DiperaPopup
+        open={showPopup}
+        message={popupMessage}
+        onClose={() => setShowPopup(false)}
+      />
     </main>
   );
 }

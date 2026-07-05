@@ -10,6 +10,8 @@ type SectionProps = {
   children: ReactNode;
   className?: string;
   bodyClassName?: string;
+  compact?: boolean;
+  hover?: boolean;
 };
 
 export default function Section({
@@ -19,16 +21,19 @@ export default function Section({
   children,
   className = "",
   bodyClassName = "",
+  compact = false,
+  hover = false,
 }: SectionProps) {
   return (
-    <Card className={className}>
+    <Card className={className} hover={hover}>
       <CardHeader
         title={title}
         description={description}
         action={action}
+        compact={compact}
       />
 
-      <CardBody className={bodyClassName}>
+      <CardBody className={bodyClassName} compact={compact}>
         {children}
       </CardBody>
     </Card>

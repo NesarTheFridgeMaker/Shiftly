@@ -12,6 +12,10 @@ import Button from "@/components/ui/Button";
 import Badge from "@/components/ui/Badge";
 import Input from "@/components/ui/Input";
 import Select from "@/components/ui/Select";
+import { useToast } from "@/components/ui/ToastProvider";
+import StatsSkeleton from "@/components/skeletons/StatsSkeleton";
+import PageSkeleton from "@/components/skeletons/PageSkeleton";
+import TimeInput from "@/components/ui/TimeInput";
 
 type Employee = {
   id: string;
@@ -164,6 +168,9 @@ function addMinutesToTime(time: string, minutesToAdd: number) {
 }
 
 export default function SchedulePage() {
+  const { showToast } = useToast();
+
+  const [isLoading, setIsLoading] = useState(true);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [shifts, setShifts] = useState<Shift[]>([]);
   const [absences, setAbsences] = useState<Absence[]>([]);
@@ -187,21 +194,12 @@ export default function SchedulePage() {
     getMonday(new Date()),
   );
 
-  const [successMessage, setSuccessMessage] = useState("");
-  const [showSuccessPopup, setShowSuccessPopup] = useState(false);
   const [confirmMessage, setConfirmMessage] = useState("");
   const [showConfirmPopup, setShowConfirmPopup] = useState(false);
   const [confirmAction, setConfirmAction] = useState<
     (() => void | Promise<void>) | null
   >(null);
   const [skipOvernightConfirm, setSkipOvernightConfirm] = useState(false);
-  const [popupMessage, setPopupMessage] = useState("");
-  const [showPopup, setShowPopup] = useState(false);
-
-  function showDiperaPopup(text: string) {
-    setPopupMessage(text);
-    setShowPopup(true);
-  }
 
   async function loadEmployees() {
     const businessId = await getBusinessId();
@@ -331,11 +329,23 @@ export default function SchedulePage() {
   }
 
   useEffect(() => {
-    loadEmployees();
-    loadShifts();
-    loadAbsences();
-    loadShiftTemplates();
-    loadWorkTypes();
+    async function loadInitialData() {
+      setIsLoading(true);
+
+      try {
+        await Promise.all([
+          loadEmployees(),
+          loadShifts(),
+          loadAbsences(),
+          loadShiftTemplates(),
+          loadWorkTypes(),
+        ]);
+      } finally {
+        setIsLoading(false);
+      }
+    }
+
+    void loadInitialData();
   }, []);
 
   function resetForm() {
@@ -370,14 +380,36 @@ export default function SchedulePage() {
     setEnd(selectedTemplate.end_time.slice(0, 5));
   }
 
-  function showSuccess(text: string) {
-    setSuccessMessage(text);
-    setShowSuccessPopup(true);
+  function showSuccess(title: string, description?: string) {
+    showToast({
+      type: "success",
+      title,
+      description,
+    });
   }
 
-  function showInfo(text: string) {
-    setSuccessMessage(text);
-    setShowSuccessPopup(true);
+  function showInfo(title: string, description?: string) {
+    showToast({
+      type: "info",
+      title,
+      description,
+    });
+  }
+
+  function showWarning(title: string, description?: string) {
+    showToast({
+      type: "warning",
+      title,
+      description,
+    });
+  }
+
+  function showError(title: string, description?: string) {
+    showToast({
+      type: "error",
+      title,
+      description,
+    });
   }
 
   function showConfirm(text: string, action: () => void | Promise<void>) {
@@ -388,21 +420,23 @@ export default function SchedulePage() {
 
   async function handleSaveShift(forceOvernight = false) {
     if (!employeeId || !date || !start || !end) {
-      showInfo(
+      showWarning(
+        "Angaben fehlen",
         "Bitte Mitarbeiter, Datum, Schichtbeginn und Schichtende ausfüllen.",
       );
       return;
     }
 
     if (!selectedWorkType) {
-      showDiperaPopup(
+      showWarning(
+        "Arbeitstyp fehlt",
         "Bitte wähle einen Arbeitstyp aus, bevor du die Schicht speicherst.",
       );
       return;
     }
 
     if (start === end) {
-      showInfo("Beginn und Ende dürfen nicht identisch sein.");
+      showWarning("Ungültige Uhrzeit", "Beginn und Ende dürfen nicht identisch sein.");
       return;
     }
 
@@ -423,7 +457,7 @@ export default function SchedulePage() {
     const businessId = await getBusinessId();
 
     if (!businessId) {
-      showInfo("Keine Business-ID gefunden.");
+      showError("Betrieb nicht gefunden", "Bitte lade die Seite neu und versuche es erneut.");
       return;
     }
 
@@ -441,7 +475,7 @@ export default function SchedulePage() {
     );
 
     if (existingShift) {
-      showInfo("Diese Schicht existiert für diesen Mitarbeiter bereits.");
+      showWarning("Doppelte Schicht", "Diese Schicht existiert für diesen Mitarbeiter bereits.");
       return;
     }
 
@@ -479,8 +513,9 @@ export default function SchedulePage() {
 
       if (error) {
         console.error("SHIFT UPDATE ERROR", error);
-        showDiperaPopup(
-          `Schicht konnte nicht aktualisiert werden. ${error.message ?? ""} Code: ${error.code ?? ""}`,
+        showError(
+          "Schicht konnte nicht aktualisiert werden",
+          error.message || "Bitte versuche es erneut.",
         );
         return;
       }
@@ -489,8 +524,9 @@ export default function SchedulePage() {
 
       if (error) {
         console.error("SHIFT INSERT ERROR", error);
-        showDiperaPopup(
-          `Schicht konnte nicht gespeichert werden. ${error.message ?? ""} Code: ${error.code ?? ""}`,
+        showError(
+          "Schicht konnte nicht gespeichert werden",
+          error.message || "Bitte versuche es erneut.",
         );
         return;
       }
@@ -502,9 +538,10 @@ export default function SchedulePage() {
     await loadShifts();
 
     showSuccess(
+      wasEditing ? "Schicht aktualisiert" : "Schicht angelegt",
       wasEditing
-        ? "Die Schicht wurde erfolgreich aktualisiert."
-        : "Die Schicht wurde erfolgreich angelegt.",
+        ? "Die Änderungen wurden gespeichert."
+        : "Die Schicht wurde dem Wochenplan hinzugefügt.",
     );
   }
 
@@ -524,7 +561,7 @@ export default function SchedulePage() {
     const businessId = await getBusinessId();
 
     if (!businessId) {
-      showInfo("Keine Business-ID gefunden.");
+      showError("Betrieb nicht gefunden", "Bitte lade die Seite neu und versuche es erneut.");
       return;
     }
 
@@ -536,12 +573,12 @@ export default function SchedulePage() {
 
     if (error) {
       console.error(error);
-      showDiperaPopup("Es ist ein Fehler aufgetreten.");
+      showError("Fehler", "Die Aktion konnte nicht ausgeführt werden.");
       return;
     }
 
     await loadShifts();
-    showSuccess("Schicht wurde gelöscht.");
+    showSuccess("Schicht gelöscht", "Die Schicht wurde aus dem Plan entfernt.");
   }
 
   function findAbsenceForShift(selectedEmployeeId: string, shiftDate: string) {
@@ -569,7 +606,7 @@ export default function SchedulePage() {
     const businessId = await getBusinessId();
 
     if (!businessId) {
-      showInfo("Keine Business-ID gefunden.");
+      showError("Betrieb nicht gefunden", "Bitte lade die Seite neu und versuche es erneut.");
       return;
     }
 
@@ -580,7 +617,7 @@ export default function SchedulePage() {
     );
 
     if (shiftsToCopy.length === 0) {
-      showInfo("In dieser Woche gibt es keine Schichten.");
+      showWarning("Keine Schichten vorhanden", "In dieser Woche gibt es keine Schichten zum Kopieren.");
       return;
     }
 
@@ -615,8 +652,9 @@ export default function SchedulePage() {
     }
 
     if (existingShifts && existingShifts.length > 0) {
-      showInfo(
-        "In der Zielwoche existieren bereits Schichten. Kopieren abgebrochen.",
+      showWarning(
+        "Zielwoche nicht leer",
+        "In der Zielwoche existieren bereits Schichten. Kopieren wurde abgebrochen.",
       );
       return;
     }
@@ -628,12 +666,12 @@ export default function SchedulePage() {
 
         if (error) {
           console.error(error);
-          showInfo("Woche konnte nicht kopiert werden.");
+          showError("Woche konnte nicht kopiert werden", error.message);
           return;
         }
 
         await loadShifts();
-        showSuccess("Woche erfolgreich kopiert.");
+        showSuccess("Woche kopiert", "Die Schichten wurden in die nächste Woche übernommen.");
       },
     );
   }
@@ -642,7 +680,7 @@ export default function SchedulePage() {
     const businessId = await getBusinessId();
 
     if (!businessId) {
-      showInfo("Keine Business-ID gefunden.");
+      showError("Betrieb nicht gefunden", "Bitte lade die Seite neu und versuche es erneut.");
       return;
     }
 
@@ -652,7 +690,7 @@ export default function SchedulePage() {
     );
 
     if (shiftsToPublish.length === 0) {
-      showInfo("In dieser Woche gibt es keine Schichten zum Veröffentlichen.");
+      showWarning("Keine Schichten vorhanden", "In dieser Woche gibt es keine Schichten zum Veröffentlichen.");
       return;
     }
 
@@ -667,12 +705,12 @@ export default function SchedulePage() {
 
         if (error) {
           console.error(error);
-          showInfo("Dienstplan konnte nicht veröffentlicht werden.");
+          showError("Dienstplan konnte nicht veröffentlicht werden", error.message);
           return;
         }
 
         await loadShifts();
-        showSuccess("Dienstplan wurde veröffentlicht.");
+        showSuccess("Dienstplan veröffentlicht", "Die Schichten sind jetzt für Mitarbeiter sichtbar.");
       },
     );
   }
@@ -736,7 +774,7 @@ export default function SchedulePage() {
     const businessId = await getBusinessId();
 
     if (!businessId) {
-      showInfo("Keine Business-ID gefunden.");
+      showError("Betrieb nicht gefunden", "Bitte lade die Seite neu und versuche es erneut.");
       return;
     }
 
@@ -751,14 +789,15 @@ export default function SchedulePage() {
 
     if (error) {
       console.error(error);
-      showDiperaPopup(
-        error.message || "Die Schicht konnte nicht verschoben werden.",
+      showError(
+        "Schicht konnte nicht verschoben werden",
+        error.message || "Bitte versuche es erneut.",
       );
       return;
     }
 
     await loadShifts();
-    showSuccess("Schicht wurde verschoben.");
+    showSuccess("Schicht verschoben", "Die Schicht wurde auf den neuen Tag gesetzt.");
   }
 
   function getDaySummary(dayDate: string) {
@@ -813,6 +852,24 @@ export default function SchedulePage() {
       label: `${template.name} (${formatShiftTime(template.start_time, template.end_time)})`,
     })),
   ];
+
+  if (isLoading) {
+    return (
+      <div className="space-y-8">
+        <PageHeader
+          title="Schichtplanung"
+          description="Plane die Woche mit klaren Tages-Spalten. Ziehe Mitarbeiter auf einen Tag und lege die Details im Dialog fest."
+        />
+
+        <StatsSkeleton />
+
+        <div className="grid grid-cols-1 gap-6 xl:grid-cols-[320px_minmax(0,1fr)]">
+          <PageSkeleton />
+          <PageSkeleton />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8">
@@ -876,7 +933,7 @@ export default function SchedulePage() {
                   className={`w-full cursor-grab rounded-2xl border px-4 py-4 text-left transition active:cursor-grabbing ${
                     employeeId === employee.id
                       ? "border-[#2563EB] bg-[#EFF6FF] shadow-[0_10px_24px_rgba(37,99,235,0.12)]"
-                      : "border-[#E5E7EB] bg-white hover:border-[#BFDBFE] hover:bg-[#F8FAFC]"
+                      : "border-[#E2E8F0] bg-white hover:border-[#BFDBFE] hover:bg-[#F8FAFC]"
                   }`}
                 >
                   <div className="flex items-center gap-3">
@@ -884,10 +941,10 @@ export default function SchedulePage() {
                       {employee.name.slice(0, 1).toUpperCase()}
                     </div>
                     <div className="min-w-0">
-                      <p className="truncate text-sm font-medium text-[#111827]">
+                      <p className="truncate text-sm font-medium text-[#0F172A]">
                         {employee.name}
                       </p>
-                      <p className="truncate text-xs text-[#6B7280]">
+                      <p className="truncate text-xs text-[#64748B]">
                         {employee.note || "Bereit für die Planung"}
                       </p>
                     </div>
@@ -895,7 +952,7 @@ export default function SchedulePage() {
                 </button>
               ))
             ) : (
-              <p className="text-sm text-[#6B7280]">
+              <p className="text-sm text-[#64748B]">
                 Keine aktiven Mitarbeiter gefunden.
               </p>
             )}
@@ -905,7 +962,7 @@ export default function SchedulePage() {
             title="Planungslogik"
             description="Keine komplizierten Zeit-Slots: Der Tag ist die Arbeitsfläche, die Details kommen in den Dialog."
           >
-            <div className="space-y-3 text-sm text-[#6B7280]">
+            <div className="space-y-3 text-sm text-[#64748B]">
               <p>
                 Diese Ansicht ist absichtlich robuster als ein enger
                 Zeitkalender. Auch kurze und überlappende Schichten bleiben gut
@@ -935,12 +992,12 @@ export default function SchedulePage() {
           }
           bodyClassName="p-0"
         >
-          <div className="border-b border-[#E5E7EB] px-6 py-4">
+          <div className="border-b border-[#E2E8F0] px-6 py-4">
             <div className="flex flex-wrap items-center gap-3">
               <Badge variant={isSelectedWeekPublished ? "success" : "warning"}>
                 {isSelectedWeekPublished ? "Veröffentlicht" : "Entwurf"}
               </Badge>
-              <span className="text-sm text-[#6B7280]">
+              <span className="text-sm text-[#64748B]">
                 Mitarbeiter auf einen Tag ziehen. Zeiten und Arbeitstyp werden
                 danach im Dialog festgelegt.
               </span>
@@ -948,7 +1005,7 @@ export default function SchedulePage() {
           </div>
 
           <div className="overflow-x-auto">
-            <div className="grid min-w-[1540px] grid-cols-7 divide-x divide-[#E5E7EB]">
+            <div className="grid min-w-[1540px] grid-cols-7 divide-x divide-[#E2E8F0]">
               {weekDays.map((day) => {
                 const dayShifts = shiftsInSelectedWeek
                   .filter((shift) => shift.shift_date === day.date)
@@ -974,14 +1031,14 @@ export default function SchedulePage() {
                     <button
                       type="button"
                       onClick={() => prefillNewShift(day.date)}
-                      className="sticky top-0 z-10 w-full border-b border-[#E5E7EB] bg-white/95 px-4 py-4 text-left backdrop-blur transition hover:bg-[#F8FAFC]"
+                      className="sticky top-0 z-10 w-full border-b border-[#E2E8F0] bg-white/95 px-4 py-4 text-left backdrop-blur transition hover:bg-[#F8FAFC]"
                     >
                       <div className="flex items-start justify-between gap-3">
                         <div>
-                          <p className="text-sm font-medium text-[#111827]">
+                          <p className="text-sm font-medium text-[#0F172A]">
                             {day.label}
                           </p>
-                          <p className="mt-1 text-xs text-[#6B7280]">
+                          <p className="mt-1 text-xs text-[#64748B]">
                             {day.displayDate}
                           </p>
                         </div>
@@ -1085,7 +1142,7 @@ export default function SchedulePage() {
                         className={`flex min-h-[116px] w-full flex-col items-center justify-center rounded-2xl border border-dashed px-4 py-5 text-center text-sm transition ${
                           dragOverDay === day.date
                             ? "border-[#2563EB] bg-[#EFF6FF] text-[#2563EB]"
-                            : "border-[#CBD5E1] bg-[#F8FAFC] text-[#6B7280] hover:border-[#2563EB] hover:bg-[#EFF6FF] hover:text-[#2563EB]"
+                            : "border-[#CBD5E1] bg-[#F8FAFC] text-[#64748B] hover:border-[#2563EB] hover:bg-[#EFF6FF] hover:text-[#2563EB]"
                         }`}
                       >
                         <span className="mb-2 flex h-8 w-8 items-center justify-center rounded-full bg-white text-lg font-light shadow-[0_8px_18px_rgba(17,24,39,0.08)]">
@@ -1114,13 +1171,13 @@ export default function SchedulePage() {
             {todaysShifts.map((shift) => (
               <div
                 key={shift.id}
-                className="flex flex-col gap-4 rounded-2xl border border-[#E5E7EB] bg-[#F8FAFC] px-4 py-4 md:flex-row md:items-center md:justify-between"
+                className="flex flex-col gap-4 rounded-2xl border border-[#E2E8F0] bg-[#F8FAFC] px-4 py-4 md:flex-row md:items-center md:justify-between"
               >
                 <div>
-                  <p className="text-sm font-medium text-[#111827]">
+                  <p className="text-sm font-medium text-[#0F172A]">
                     {shift.employee_name}
                   </p>
-                  <p className="mt-1 text-sm text-[#6B7280]">
+                  <p className="mt-1 text-sm text-[#64748B]">
                     {formatShiftTime(shift.start_time, shift.end_time)}
                   </p>
                   {shift.work_type_name && (
@@ -1155,23 +1212,28 @@ export default function SchedulePage() {
             ))}
           </div>
         ) : (
-          <p className="text-sm text-[#6B7280]">
-            Für heute sind keine Schichten eingetragen.
-          </p>
+          <div className="rounded-3xl border border-dashed border-[#CBD5E1] bg-[#F8FAFC] px-6 py-10 text-center">
+            <h3 className="text-lg font-semibold text-[#0F172A]">
+              Heute keine Schichten
+            </h3>
+            <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-[#64748B]">
+              Für heute sind keine Einsätze geplant. Du kannst Mitarbeiter oben in der Wochenplanung einteilen.
+            </p>
+          </div>
         )}
       </Section>
 
       {showShiftDialog && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#111827]/35 p-6 backdrop-blur-sm">
-          <div className="w-full max-w-2xl rounded-[28px] border border-[#E5E7EB] bg-white shadow-[0_24px_70px_rgba(17,24,39,0.18)]">
-            <div className="border-b border-[#E5E7EB] px-6 py-5">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#0F172A]/35 p-6 backdrop-blur-sm">
+          <div className="w-full max-w-2xl rounded-[28px] border border-[#E2E8F0] bg-white shadow-[0_24px_70px_rgba(17,24,39,0.18)]">
+            <div className="border-b border-[#E2E8F0] px-6 py-5">
               <p className="text-sm text-[#2563EB]">
                 {editingShiftId ? "Schicht bearbeiten" : "Neue Schicht"}
               </p>
-              <h2 className="mt-1 text-2xl font-light tracking-[-0.03em] text-[#111827]">
+              <h2 className="mt-1 text-2xl font-light tracking-[-0.03em] text-[#0F172A]">
                 {selectedEmployee?.name || "Schicht planen"}
               </h2>
-              <p className="mt-1 text-sm text-[#6B7280]">
+              <p className="mt-1 text-sm text-[#64748B]">
                 Lege Arbeitstyp, Beginn und Ende fest. Erst danach wird die
                 Schicht gespeichert.
               </p>
@@ -1211,20 +1273,18 @@ export default function SchedulePage() {
               </div>
 
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                <Input
-                  label="Beginn"
-                  type="time"
-                  value={start}
-                  onChange={(event) => setStart(event.target.value)}
-                />
+              <TimeInput
+                label="Beginn"
+                value={start}
+                onChange={setStart}
+              />
 
-                <Input
-                  label="Ende"
-                  type="time"
-                  value={end}
-                  onChange={(event) => setEnd(event.target.value)}
-                />
-              </div>
+              <TimeInput
+                label="Ende"
+                value={end}
+                onChange={setEnd}
+              />
+            </div>
 
               <div className="flex flex-wrap gap-2">
                 {start && end && isOvernightShift(start, end) && (
@@ -1250,7 +1310,7 @@ export default function SchedulePage() {
               )}
             </div>
 
-            <div className="flex flex-col-reverse gap-3 border-t border-[#E5E7EB] px-6 py-5 sm:flex-row sm:justify-end">
+            <div className="flex flex-col-reverse gap-3 border-t border-[#E2E8F0] px-6 py-5 sm:flex-row sm:justify-end">
               <Button type="button" variant="secondary" onClick={resetForm}>
                 Abbrechen
               </Button>
@@ -1263,11 +1323,6 @@ export default function SchedulePage() {
         </div>
       )}
 
-      <DiperaPopup
-        open={showSuccessPopup}
-        message={successMessage}
-        onClose={() => setShowSuccessPopup(false)}
-      />
 
       <DiperaPopup
         open={showConfirmPopup}
@@ -1284,11 +1339,6 @@ export default function SchedulePage() {
         confirmText="Bestätigen"
       />
 
-      <DiperaPopup
-        open={showPopup}
-        message={popupMessage}
-        onClose={() => setShowPopup(false)}
-      />
     </div>
   );
 }
