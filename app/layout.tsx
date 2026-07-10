@@ -5,6 +5,7 @@ import {
 } from "next/font/google";
 import "./globals.css";
 import { ToastProvider } from "@/components/ui/ToastProvider";
+import "mapbox-gl/dist/mapbox-gl.css";
 
 
 const notoSans = Noto_Sans({

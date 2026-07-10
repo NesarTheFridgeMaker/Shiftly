@@ -20,6 +20,12 @@ import StatsSkeleton from "@/components/skeletons/StatsSkeleton";
 import FormSkeleton from "@/components/skeletons/FormSkeleton";
 import TimeInput from "@/components/ui/TimeInput";
 
+import { MapPin, Plus } from "lucide-react";
+
+import LocationEditor, {
+  LocationEditorValue,
+} from "@/components/maps/LocationEditor";
+
 type PayRule = {
   id: string;
   business_id: string;
@@ -42,6 +48,31 @@ type ShiftTemplate = {
 type WorkType = {
   id: string;
   name: string;
+};
+
+type BusinessLocation = {
+  id: string;
+  business_id: string;
+  name: string;
+
+  address: string | null;
+  street: string | null;
+  house_number: string | null;
+  postal_code: string | null;
+  city: string | null;
+  country: string | null;
+  country_code: string | null;
+
+  mapbox_feature_id: string | null;
+
+  latitude: number;
+  longitude: number;
+  radius_meters: number;
+  timezone: string;
+
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
 };
 
 type SupabaseLikeError = {
@@ -105,7 +136,9 @@ function formatRuleType(ruleType: string) {
 }
 
 function getFederalStateLabel(value: string) {
-  return federalStateOptions.find((state) => state.value === value)?.label ?? value;
+  return (
+    federalStateOptions.find((state) => state.value === value)?.label ?? value
+  );
 }
 
 function getInitials(name: string) {
@@ -141,7 +174,8 @@ export default function SettingsPage() {
   const [payRuleDatevType, setPayRuleDatevType] = useState("");
 
   const [federalState, setFederalState] = useState("BW");
-  const [datevRegularHoursWageType, setDatevRegularHoursWageType] = useState("100");
+  const [datevRegularHoursWageType, setDatevRegularHoursWageType] =
+    useState("100");
   const [datevSalaryWageType, setDatevSalaryWageType] = useState("101");
   const [datevOvertimeWageType, setDatevOvertimeWageType] = useState("130");
   const [datevVacationWageType, setDatevVacationWageType] = useState("140");
@@ -151,7 +185,38 @@ export default function SettingsPage() {
   const [confirmAction, setConfirmAction] = useState<(() => void) | null>(null);
   const [showConfirmPopup, setShowConfirmPopup] = useState(false);
 
+  const [businessLocations, setBusinessLocations] = useState<
+    BusinessLocation[]
+  >([]);
+  const [showLocationEditor, setShowLocationEditor] = useState(false);
+  const [editingLocationId, setEditingLocationId] = useState<string | null>(
+    null,
+  );
+  const [isSavingLocation, setIsSavingLocation] = useState(false);
+
   const activePayRules = payRules.filter((rule) => rule.active);
+
+  const editingLocation =
+    businessLocations.find((location) => location.id === editingLocationId) ??
+    null;
+
+  const locationEditorInitialValue = editingLocation
+    ? {
+        name: editingLocation.name,
+        address: editingLocation.address ?? "",
+        street: editingLocation.street ?? "",
+        houseNumber: editingLocation.house_number ?? "",
+        postalCode: editingLocation.postal_code ?? "",
+        city: editingLocation.city ?? "",
+        country: editingLocation.country ?? "",
+        countryCode: editingLocation.country_code ?? "",
+        mapboxFeatureId: editingLocation.mapbox_feature_id ?? "",
+        latitude: editingLocation.latitude,
+        longitude: editingLocation.longitude,
+        radiusMeters: editingLocation.radius_meters,
+        timezone: editingLocation.timezone || "Europe/Berlin",
+      }
+    : undefined;
 
   function showConfirm(text: string, action: () => void) {
     setConfirmMessage(text);
@@ -195,7 +260,8 @@ export default function SettingsPage() {
       showToast({
         type: "warning",
         title: "Angaben fehlen",
-        description: "Bitte fülle Name, Beginn und Ende der Schichtvorlage aus.",
+        description:
+          "Bitte fülle Name, Beginn und Ende der Schichtvorlage aus.",
       });
       return;
     }
@@ -286,7 +352,9 @@ export default function SettingsPage() {
     showToast({
       type: "success",
       title: "Schichtvorlage gelöscht",
-      description: template ? `${template.name} wurde entfernt.` : "Die Vorlage wurde entfernt.",
+      description: template
+        ? `${template.name} wurde entfernt.`
+        : "Die Vorlage wurde entfernt.",
     });
   }
 
@@ -412,7 +480,9 @@ export default function SettingsPage() {
     showToast({
       type: "success",
       title: "Arbeitstyp gelöscht",
-      description: workType ? `${workType.name} wurde entfernt.` : "Der Arbeitstyp wurde entfernt.",
+      description: workType
+        ? `${workType.name} wurde entfernt.`
+        : "Der Arbeitstyp wurde entfernt.",
     });
   }
 
@@ -560,11 +630,16 @@ export default function SettingsPage() {
     showToast({
       type: "success",
       title: "Zuschlag gelöscht",
-      description: rule ? `${rule.name} wurde entfernt.` : "Der Zuschlag wurde entfernt.",
+      description: rule
+        ? `${rule.name} wurde entfernt.`
+        : "Der Zuschlag wurde entfernt.",
     });
   }
 
-  async function handleTogglePayRuleActive(ruleId: string, currentActive: boolean) {
+  async function handleTogglePayRuleActive(
+    ruleId: string,
+    currentActive: boolean,
+  ) {
     const businessId = await getBusinessId();
 
     if (!businessId) {
@@ -620,7 +695,7 @@ export default function SettingsPage() {
     const { data, error } = await supabase
       .from("businesses")
       .select(
-        "federal_state, datev_regular_hours_wage_type, datev_salary_wage_type, datev_overtime_wage_type, datev_vacation_wage_type, datev_sick_wage_type"
+        "federal_state, datev_regular_hours_wage_type, datev_salary_wage_type, datev_overtime_wage_type, datev_vacation_wage_type, datev_sick_wage_type",
       )
       .eq("id", businessId)
       .single();
@@ -672,7 +747,8 @@ export default function SettingsPage() {
         .from("businesses")
         .update({
           federal_state: federalState,
-          datev_regular_hours_wage_type: datevRegularHoursWageType.trim() || null,
+          datev_regular_hours_wage_type:
+            datevRegularHoursWageType.trim() || null,
           datev_salary_wage_type: datevSalaryWageType.trim() || null,
           datev_overtime_wage_type: datevOvertimeWageType.trim() || null,
           datev_vacation_wage_type: datevVacationWageType.trim() || null,
@@ -700,6 +776,265 @@ export default function SettingsPage() {
     }
   }
 
+  async function loadBusinessLocations() {
+    const businessId = await getBusinessId();
+
+    if (!businessId) {
+      showToast({
+        type: "error",
+        title: "Betrieb nicht gefunden",
+        description: "Standorte konnten nicht geladen werden.",
+      });
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from("business_locations")
+      .select(
+        `
+        id,
+        business_id,
+        name,
+        address,
+        street,
+        house_number,
+        postal_code,
+        city,
+        country,
+        country_code,
+        mapbox_feature_id,
+        latitude,
+        longitude,
+        radius_meters,
+        timezone,
+        is_active,
+        created_at,
+        updated_at
+      `,
+      )
+      .eq("business_id", businessId)
+      .order("created_at", { ascending: true });
+
+    if (error) {
+      console.error("LOAD BUSINESS LOCATIONS ERROR:", error);
+      showToast({
+        type: "error",
+        title: "Standorte konnten nicht geladen werden",
+        description: formatError(error),
+      });
+      return;
+    }
+
+    setBusinessLocations((data || []) as BusinessLocation[]);
+  }
+
+  function openNewLocationEditor() {
+    setEditingLocationId(null);
+    setShowLocationEditor(true);
+  }
+
+  function openEditLocationEditor(locationId: string) {
+    setEditingLocationId(locationId);
+    setShowLocationEditor(true);
+  }
+
+  function closeLocationEditor() {
+    if (isSavingLocation) return;
+
+    setShowLocationEditor(false);
+    setEditingLocationId(null);
+  }
+
+  async function saveLocationEditorValue(value: LocationEditorValue) {
+    const businessId = await getBusinessId();
+
+    if (!businessId) {
+      showToast({
+        type: "error",
+        title: "Betrieb nicht gefunden",
+        description: "Der Standort konnte nicht gespeichert werden.",
+      });
+      return;
+    }
+
+    setIsSavingLocation(true);
+
+    const databaseValue = {
+      business_id: businessId,
+      name: value.name,
+      address: value.address || null,
+      street: value.street || null,
+      house_number: value.houseNumber || null,
+      postal_code: value.postalCode || null,
+      city: value.city || null,
+      country: value.country || null,
+      country_code: value.countryCode || null,
+      mapbox_feature_id: value.mapboxFeatureId || null,
+      latitude: value.latitude,
+      longitude: value.longitude,
+      radius_meters: value.radiusMeters,
+      timezone: value.timezone,
+      is_active: true,
+    };
+
+    try {
+      if (editingLocationId) {
+        const {
+          business_id: _businessId,
+          is_active: _isActive,
+          ...updateValue
+        } = databaseValue;
+
+        const { error } = await supabase
+          .from("business_locations")
+          .update(updateValue)
+          .eq("id", editingLocationId)
+          .eq("business_id", businessId);
+
+        if (error) {
+          console.error("UPDATE BUSINESS LOCATION ERROR:", error);
+          showToast({
+            type: "error",
+            title: "Standort konnte nicht aktualisiert werden",
+            description: formatError(error),
+          });
+          return;
+        }
+
+        showToast({
+          type: "success",
+          title: "Standort aktualisiert",
+          description: `${value.name} wurde gespeichert.`,
+        });
+      } else {
+        const { error } = await supabase
+          .from("business_locations")
+          .insert([databaseValue]);
+
+        if (error) {
+          console.error("CREATE BUSINESS LOCATION ERROR:", error);
+
+          const duplicateName = error.code === "23505";
+
+          showToast({
+            type: "error",
+            title: duplicateName
+              ? "Standortname bereits vergeben"
+              : "Standort konnte nicht gespeichert werden",
+            description: duplicateName
+              ? "Ein Standort mit diesem Namen existiert bereits."
+              : formatError(error),
+          });
+          return;
+        }
+
+        showToast({
+          type: "success",
+          title: "Standort gespeichert",
+          description: `${value.name} wurde hinzugefügt.`,
+        });
+      }
+
+      await loadBusinessLocations();
+      setShowLocationEditor(false);
+      setEditingLocationId(null);
+    } finally {
+      setIsSavingLocation(false);
+    }
+  }
+
+  async function toggleBusinessLocation(
+    locationId: string,
+    currentStatus: boolean,
+  ) {
+    const businessId = await getBusinessId();
+
+    if (!businessId) {
+      showToast({
+        type: "error",
+        title: "Betrieb nicht gefunden",
+        description: "Der Standort konnte nicht geändert werden.",
+      });
+      return;
+    }
+
+    const location = businessLocations.find((item) => item.id === locationId);
+
+    const { error } = await supabase
+      .from("business_locations")
+      .update({ is_active: !currentStatus })
+      .eq("id", locationId)
+      .eq("business_id", businessId);
+
+    if (error) {
+      console.error("TOGGLE BUSINESS LOCATION ERROR:", error);
+      showToast({
+        type: "error",
+        title: "Standort konnte nicht geändert werden",
+        description: formatError(error),
+      });
+      return;
+    }
+
+    await loadBusinessLocations();
+
+    showToast({
+      type: "success",
+      title: currentStatus ? "Standort deaktiviert" : "Standort aktiviert",
+      description: location
+        ? `${location.name} wurde ${
+            currentStatus ? "deaktiviert" : "aktiviert"
+          }.`
+        : "Die Änderung wurde gespeichert.",
+    });
+  }
+
+  async function deleteBusinessLocation(locationId: string) {
+    const businessId = await getBusinessId();
+
+    if (!businessId) {
+      showToast({
+        type: "error",
+        title: "Betrieb nicht gefunden",
+        description: "Der Standort konnte nicht gelöscht werden.",
+      });
+      return;
+    }
+
+    const location = businessLocations.find((item) => item.id === locationId);
+
+    const { error } = await supabase
+      .from("business_locations")
+      .delete()
+      .eq("id", locationId)
+      .eq("business_id", businessId);
+
+    if (error) {
+      console.error("DELETE BUSINESS LOCATION ERROR:", error);
+      showToast({
+        type: "error",
+        title: "Standort konnte nicht gelöscht werden",
+        description: formatError(error),
+      });
+      return;
+    }
+
+    if (editingLocationId === locationId) {
+      setShowLocationEditor(false);
+      setEditingLocationId(null);
+    }
+
+    await loadBusinessLocations();
+
+    showToast({
+      type: "success",
+      title: "Standort gelöscht",
+      description: location
+        ? `${location.name} wurde entfernt.`
+        : "Der Standort wurde entfernt.",
+    });
+  }
+
   async function loadSettings() {
     setIsLoading(true);
 
@@ -709,6 +1044,7 @@ export default function SettingsPage() {
         loadWorkTypes(),
         loadPayRules(),
         loadBusiness(),
+        loadBusinessLocations(),
       ]);
     } finally {
       setIsLoading(false);
@@ -789,7 +1125,9 @@ export default function SettingsPage() {
           <Input
             label="Reguläre Arbeitsstunden"
             value={datevRegularHoursWageType}
-            onChange={(event) => setDatevRegularHoursWageType(event.target.value)}
+            onChange={(event) =>
+              setDatevRegularHoursWageType(event.target.value)
+            }
             placeholder="z. B. 100"
           />
 
@@ -824,12 +1162,164 @@ export default function SettingsPage() {
 
         <div className="mt-6 flex flex-col gap-3 border-t border-[#E2E8F0] pt-5 md:flex-row md:items-center md:justify-between">
           <p className="text-sm leading-6 text-[#64748B]">
-            Tipp: Diese Lohnarten werden später für Excel- und DATEV-Exporte verwendet.
+            Tipp: Diese Lohnarten werden später für Excel- und DATEV-Exporte
+            verwendet.
           </p>
 
           <Button type="button" onClick={saveFederalState} loading={isSaving}>
             Einstellungen speichern
           </Button>
+        </div>
+      </Section>
+
+      <Section
+        title="Betriebsstandorte"
+        description="Lege fest, an welchen Standorten Mitarbeiter ihre Arbeitszeit erfassen dürfen."
+        action={
+          !showLocationEditor ? (
+            <Button type="button" size="sm" onClick={openNewLocationEditor}>
+              <Plus className="h-4 w-4" />
+              Standort hinzufügen
+            </Button>
+          ) : (
+            <Badge variant="primary">
+              {editingLocation ? "Standort bearbeiten" : "Neuer Standort"}
+            </Badge>
+          )
+        }
+      >
+        {showLocationEditor && (
+          <div className="mb-6 rounded-3xl border border-[#E2E8F0] bg-[#F8FAFC] p-4 md:p-6">
+            <div className="mb-6">
+              <h3 className="text-xl font-semibold text-[#0F172A]">
+                {editingLocation
+                  ? "Betriebsstandort bearbeiten"
+                  : "Betriebsstandort hinzufügen"}
+              </h3>
+
+              <p className="mt-2 text-sm leading-6 text-[#64748B]">
+                Lege den Mittelpunkt und den erlaubten Radius für die mobile
+                Zeiterfassung fest.
+              </p>
+            </div>
+
+            <LocationEditor
+              key={editingLocationId ?? "new-location"}
+              initialValue={locationEditorInitialValue}
+              isSaving={isSavingLocation}
+              onCancel={closeLocationEditor}
+              onSave={saveLocationEditorValue}
+            />
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+          {businessLocations.length > 0 ? (
+            businessLocations.map((location) => (
+              <div
+                key={location.id}
+                className="rounded-3xl border border-[#E2E8F0] bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-[#CBD5E1] hover:shadow-[0_16px_40px_rgba(15,23,42,0.08)]"
+              >
+                <div className="flex flex-col gap-5">
+                  <div className="flex items-start gap-3">
+                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[#EFF6FF] text-[#005CA8]">
+                      <MapPin className="h-5 w-5" />
+                    </div>
+
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="text-base font-semibold text-[#0F172A]">
+                          {location.name}
+                        </p>
+
+                        <Badge
+                          variant={location.is_active ? "success" : "muted"}
+                          dot
+                        >
+                          {location.is_active ? "Aktiv" : "Inaktiv"}
+                        </Badge>
+                      </div>
+
+                      <p className="mt-2 text-sm leading-6 text-[#64748B]">
+                        {location.address ||
+                          "Keine postalische Adresse hinterlegt"}
+                      </p>
+
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <span className="rounded-full bg-[#F8FAFC] px-3 py-1 text-xs font-medium text-[#64748B]">
+                          Radius {location.radius_meters} m
+                        </span>
+
+                        <span className="rounded-full bg-[#F8FAFC] px-3 py-1 text-xs font-medium text-[#64748B]">
+                          {location.timezone}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col gap-2 border-t border-[#E2E8F0] pt-4 sm:flex-row sm:flex-wrap">
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => openEditLocationEditor(location.id)}
+                    >
+                      Bearbeiten
+                    </Button>
+
+                    <Button
+                      type="button"
+                      variant={location.is_active ? "secondary" : "primary"}
+                      size="sm"
+                      onClick={() =>
+                        toggleBusinessLocation(location.id, location.is_active)
+                      }
+                    >
+                      {location.is_active ? "Deaktivieren" : "Aktivieren"}
+                    </Button>
+
+                    <Button
+                      type="button"
+                      variant="danger"
+                      size="sm"
+                      onClick={() =>
+                        showConfirm(
+                          "Möchtest du diesen Standort wirklich löschen?",
+                          () => deleteBusinessLocation(location.id),
+                        )
+                      }
+                    >
+                      Löschen
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            ))
+          ) : (
+            <div className="rounded-3xl border border-dashed border-[#CBD5E1] bg-[#F8FAFC] px-6 py-10 text-center xl:col-span-2">
+              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-[#EFF6FF] text-[#005CA8]">
+                <MapPin className="h-5 w-5" />
+              </div>
+
+              <p className="mt-4 text-base font-semibold text-[#0F172A]">
+                Noch kein Betriebsstandort
+              </p>
+
+              <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-[#64748B]">
+                Füge einen Standort hinzu, damit die mobile GPS-Zeiterfassung
+                eingerichtet werden kann.
+              </p>
+
+              {!showLocationEditor && (
+                <div className="mt-5">
+                  <Button type="button" onClick={openNewLocationEditor}>
+                    <Plus className="h-4 w-4" />
+                    Ersten Standort hinzufügen
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </Section>
 
@@ -883,7 +1373,7 @@ export default function SettingsPage() {
                     size="sm"
                     onClick={() =>
                       showConfirm("Arbeitstyp wirklich löschen?", () =>
-                        deleteWorkType(type.id)
+                        deleteWorkType(type.id),
                       )
                     }
                   >
@@ -893,7 +1383,8 @@ export default function SettingsPage() {
               ))
             ) : (
               <div className="rounded-2xl border border-dashed border-[#CBD5E1] bg-[#F8FAFC] p-5 text-sm leading-6 text-[#64748B]">
-                Noch keine Arbeitstypen vorhanden. Lege zuerst deine wichtigsten Arbeitsbereiche an.
+                Noch keine Arbeitstypen vorhanden. Lege zuerst deine wichtigsten
+                Arbeitsbereiche an.
               </div>
             )}
           </div>
@@ -913,22 +1404,26 @@ export default function SettingsPage() {
             />
 
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            <TimeInput
-              label="Beginn"
-              value={templateStart}
-              onChange={setTemplateStart}
-            />
+              <TimeInput
+                label="Beginn"
+                value={templateStart}
+                onChange={setTemplateStart}
+              />
 
-            <TimeInput
-              label="Ende"
-              value={templateEnd}
-              onChange={setTemplateEnd}
-            />
-          </div>
+              <TimeInput
+                label="Ende"
+                value={templateEnd}
+                onChange={setTemplateEnd}
+              />
+            </div>
           </div>
 
           <div className="mt-5">
-            <Button type="button" onClick={createShiftTemplate} loading={isSaving}>
+            <Button
+              type="button"
+              onClick={createShiftTemplate}
+              loading={isSaving}
+            >
               Vorlage speichern
             </Button>
           </div>
@@ -945,7 +1440,8 @@ export default function SettingsPage() {
                       {template.name}
                     </p>
                     <p className="mt-1 text-sm text-[#64748B]">
-                      {template.start_time.slice(0, 5)} – {template.end_time.slice(0, 5)}
+                      {template.start_time.slice(0, 5)} –{" "}
+                      {template.end_time.slice(0, 5)}
                     </p>
                   </div>
 
@@ -956,7 +1452,7 @@ export default function SettingsPage() {
                     onClick={() =>
                       showConfirm(
                         "Möchtest du diese Schichtvorlage wirklich löschen?",
-                        () => deleteShiftTemplate(template.id)
+                        () => deleteShiftTemplate(template.id),
                       )
                     }
                   >
@@ -966,7 +1462,8 @@ export default function SettingsPage() {
               ))
             ) : (
               <div className="rounded-2xl border border-dashed border-[#CBD5E1] bg-[#F8FAFC] p-5 text-sm leading-6 text-[#64748B]">
-                Noch keine Schichtvorlagen vorhanden. Vorlagen beschleunigen die Wochenplanung deutlich.
+                Noch keine Schichtvorlagen vorhanden. Vorlagen beschleunigen die
+                Wochenplanung deutlich.
               </div>
             )}
           </div>
@@ -1019,18 +1516,18 @@ export default function SettingsPage() {
             />
 
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            <TimeInput
-              label="Beginn"
-              value={payRuleStart}
-              onChange={setPayRuleStart}
-            />
+              <TimeInput
+                label="Beginn"
+                value={payRuleStart}
+                onChange={setPayRuleStart}
+              />
 
-            <TimeInput
-              label="Ende"
-              value={payRuleEnd}
-              onChange={setPayRuleEnd}
-            />
-          </div>
+              <TimeInput
+                label="Ende"
+                value={payRuleEnd}
+                onChange={setPayRuleEnd}
+              />
+            </div>
 
             <Input
               label="DATEV-Lohnart"
@@ -1041,7 +1538,11 @@ export default function SettingsPage() {
           </div>
 
           <div className="mt-5">
-            <Button type="button" onClick={handleCreatePayRule} loading={isSaving}>
+            <Button
+              type="button"
+              onClick={handleCreatePayRule}
+              loading={isSaving}
+            >
               Zuschlag speichern
             </Button>
           </div>
@@ -1063,7 +1564,9 @@ export default function SettingsPage() {
                       <Badge variant={rule.active ? "success" : "danger"} dot>
                         {rule.active ? "Aktiv" : "Inaktiv"}
                       </Badge>
-                      <Badge variant="muted">{formatRuleType(rule.rule_type)}</Badge>
+                      <Badge variant="muted">
+                        {formatRuleType(rule.rule_type)}
+                      </Badge>
                     </div>
 
                     <div className="mt-3 flex flex-wrap gap-2 text-sm text-[#64748B]">
@@ -1073,7 +1576,8 @@ export default function SettingsPage() {
 
                       {rule.starts_at && rule.ends_at && (
                         <span className="rounded-full bg-[#F8FAFC] px-3 py-1">
-                          {rule.starts_at.slice(0, 5)} – {rule.ends_at.slice(0, 5)}
+                          {rule.starts_at.slice(0, 5)} –{" "}
+                          {rule.ends_at.slice(0, 5)}
                         </span>
                       )}
 
@@ -1090,7 +1594,9 @@ export default function SettingsPage() {
                       type="button"
                       variant={rule.active ? "secondary" : "primary"}
                       size="sm"
-                      onClick={() => handleTogglePayRuleActive(rule.id, rule.active)}
+                      onClick={() =>
+                        handleTogglePayRuleActive(rule.id, rule.active)
+                      }
                     >
                       {rule.active ? "Deaktivieren" : "Aktivieren"}
                     </Button>
@@ -1101,7 +1607,7 @@ export default function SettingsPage() {
                       size="sm"
                       onClick={() =>
                         showConfirm("Zuschlag wirklich löschen?", () =>
-                          handleDeletePayRule(rule.id)
+                          handleDeletePayRule(rule.id),
                         )
                       }
                     >
@@ -1113,7 +1619,8 @@ export default function SettingsPage() {
             ))
           ) : (
             <div className="rounded-2xl border border-dashed border-[#CBD5E1] bg-[#F8FAFC] p-6 text-sm leading-6 text-[#64748B] xl:col-span-2">
-              Noch keine Zuschläge vorhanden. Für viele Betriebe reicht zunächst ein Nachtzuschlag.
+              Noch keine Zuschläge vorhanden. Für viele Betriebe reicht zunächst
+              ein Nachtzuschlag.
             </div>
           )}
         </div>
