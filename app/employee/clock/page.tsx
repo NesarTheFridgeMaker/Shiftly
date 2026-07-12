@@ -18,11 +18,17 @@ import Section from "@/components/ui/Section";
 import StatsSkeleton from "@/components/skeletons/StatsSkeleton";
 import { useToast } from "@/components/ui/ToastProvider";
 
+type LocationTrackingMode =
+  | "required"
+  | "remote_allowed"
+  | "disabled";
+
 type Employee = {
   id: string;
   name: string;
   status: "not_checked_in" | "checked_in" | "on_break" | string;
   account_status: string;
+  location_tracking_mode: LocationTrackingMode;
 };
 
 type Profile = {
@@ -39,6 +45,156 @@ type TimeEntry = {
   action: "check_in" | "break_start" | "break_end" | "check_out" | string;
   created_at: string;
 };
+
+type ClockApiSuccess = {
+  success: true;
+
+  entry: {
+    id: string | null;
+    action: string;
+    createdAt: string;
+  };
+
+  employee: {
+    id: string;
+    status: string;
+  };
+
+  location: {
+    trackingMode: LocationTrackingMode;
+    checkStatus: "verified" | "outside_allowed" | "disabled";
+    verified: boolean;
+    locationId: string | null;
+    locationName: string | null;
+    distanceMeters: number | null;
+    accuracyMeters: number | null;
+    capturedAt: string | null;
+  };
+};
+
+type ClockApiError = {
+  success: false;
+  error?: {
+    code?: string;
+    message?: string;
+    details?: Record<string, unknown>;
+  };
+};
+
+type MeasuredPosition = {
+  latitude: number;
+  longitude: number;
+  accuracy: number;
+  capturedAt: string;
+};
+
+function getBestCurrentPosition(): Promise<MeasuredPosition> {
+  return new Promise((resolve, reject) => {
+    if (!navigator.geolocation) {
+      reject(
+        new Error(
+          "Dein Gerät unterstützt keine Standortbestimmung."
+        )
+      );
+      return;
+    }
+
+    let bestPosition: GeolocationPosition | null = null;
+    let watchId: number | null = null;
+    let finished = false;
+
+    function cleanup() {
+      if (watchId !== null) {
+        navigator.geolocation.clearWatch(watchId);
+      }
+
+      window.clearTimeout(timeoutId);
+    }
+
+    function finishWithPosition(position: GeolocationPosition) {
+      if (finished) return;
+
+      finished = true;
+      cleanup();
+
+      resolve({
+        latitude: position.coords.latitude,
+        longitude: position.coords.longitude,
+        accuracy: position.coords.accuracy,
+        capturedAt: new Date(position.timestamp).toISOString(),
+      });
+    }
+
+    function finishWithError(message: string) {
+      if (finished) return;
+
+      finished = true;
+      cleanup();
+      reject(new Error(message));
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      if (bestPosition) {
+        finishWithPosition(bestPosition);
+        return;
+      }
+
+      finishWithError(
+        "Dein Standort konnte nicht rechtzeitig ermittelt werden."
+      );
+    }, 12000);
+
+    watchId = navigator.geolocation.watchPosition(
+      (position) => {
+        if (
+          !bestPosition ||
+          position.coords.accuracy <
+            bestPosition.coords.accuracy
+        ) {
+          bestPosition = position;
+        }
+
+        /*
+         * Bei einer Genauigkeit von 25 Metern oder besser
+         * müssen wir nicht weiter warten.
+         */
+        if (position.coords.accuracy <= 25) {
+          finishWithPosition(position);
+        }
+      },
+      (error) => {
+        if (error.code === error.PERMISSION_DENIED) {
+          finishWithError(
+            "Der Standortzugriff wurde abgelehnt. Bitte erlaube ihn in den Browser-Einstellungen."
+          );
+          return;
+        }
+
+        if (error.code === error.POSITION_UNAVAILABLE) {
+          finishWithError(
+            "Dein Standort ist momentan nicht verfügbar."
+          );
+          return;
+        }
+
+        if (error.code === error.TIMEOUT) {
+          if (bestPosition) {
+            finishWithPosition(bestPosition);
+          } else {
+            finishWithError(
+              "Die Standortermittlung hat zu lange gedauert."
+            );
+          }
+        }
+      },
+      {
+        enableHighAccuracy: true,
+        maximumAge: 0,
+        timeout: 10000,
+      }
+    );
+  });
+}
 
 function formatTime(dateString: string) {
   return new Date(dateString).toLocaleTimeString("de-DE", {
@@ -196,7 +352,9 @@ export default function EmployeeClockPage() {
 
       const { data: employeeData, error: employeeError } = await supabase
         .from("employees")
-        .select("id, name, status, account_status")
+        .select(
+          "id, name, status, account_status, location_tracking_mode"
+        )
         .eq("id", typedProfile.employee_id)
         .eq("business_id", typedProfile.business_id)
         .single();
@@ -247,132 +405,181 @@ export default function EmployeeClockPage() {
     setTimeEntries((data || []) as TimeEntry[]);
   }
 
-  async function handleClockAction(action: TimeEntry["action"]) {
-    if (isProcessing || !employee || !employeeId) return;
+async function handleClockAction(
+  action: TimeEntry["action"]
+) {
+  if (isProcessing || !employee || !employeeId) return;
 
-    setIsProcessing(true);
+  setIsProcessing(true);
 
-    try {
-      const businessId = await getBusinessId();
+  try {
+    const {
+      data: { session },
+      error: sessionError,
+    } = await supabase.auth.getSession();
 
-      if (!businessId) {
-        showToast({
-          type: "error",
-          title: "Betrieb nicht gefunden",
-          description: "Die Stempelung konnte nicht gespeichert werden.",
-        });
-        return;
-      }
-
-      /*
-        Phase 3:
-        Hier schalten wir später die GPS-Prüfung davor.
-
-        Ablauf dann:
-        1. Standortfreigabe abfragen
-        2. Standort an eine serverseitige API senden
-        3. Entfernung zum Betriebsstandort prüfen
-        4. Nur bei gültigem Standort die Stempelung speichern
-      */
-
-      const { error: entryError } = await supabase.from("time_entries").insert([
-        {
-          business_id: businessId,
-          employee_id: employee.id,
-          employee_name: employee.name,
-          action,
-        },
-      ]);
-
-      if (entryError) {
-        console.error(entryError);
-        showToast({
-          type: "error",
-          title: "Stempelung fehlgeschlagen",
-          description: entryError.message,
-        });
-        return;
-      }
-
-      const nextStatus = getNextStatus(action);
-
-      const { error: statusError } = await supabase
-        .from("employees")
-        .update({ status: nextStatus })
-        .eq("id", employee.id)
-        .eq("business_id", businessId);
-
-      if (statusError) {
-        console.error(statusError);
-        showToast({
-          type: "warning",
-          title: "Status konnte nicht aktualisiert werden",
-          description: "Die Stempelung wurde gespeichert.",
-        });
-      }
-
-      setEmployee((current) =>
-        current ? { ...current, status: nextStatus } : current
-      );
-
-      await loadTimeEntries(employee.id);
-
-      const currentTime = new Date().toLocaleTimeString("de-DE", {
-        hour: "2-digit",
-        minute: "2-digit",
-        timeZone: BUSINESS_TIME_ZONE,
+    if (sessionError || !session?.access_token) {
+      showToast({
+        type: "error",
+        title: "Anmeldung abgelaufen",
+        description:
+          "Bitte melde dich erneut an und versuche es noch einmal.",
       });
 
-      const workedMinutes = calculateWorkedMinutes(timeEntries);
-
-      if (action === "check_in") {
-        showToast({
-          type: "success",
-          title: "Eingestempelt",
-          description: `Viel Spaß bei der Arbeit! Du hast dich um ${currentTime} Uhr eingestempelt.`,
-        });
-      }
-
-      if (action === "break_start") {
-        showToast({
-          type: "success",
-          title: "Pause gestartet",
-          description: `Gute Pause! Du hast deine Pause um ${currentTime} Uhr gestartet.`,
-        });
-      }
-
-      if (action === "break_end") {
-        showToast({
-          type: "success",
-          title: "Pause beendet",
-          description: `Willkommen zurück! Du hast deine Pause um ${currentTime} Uhr beendet.`,
-        });
-      }
-
-      if (action === "check_out") {
-        const updatedEntries = [
-          ...timeEntries,
-          {
-            id: "temp",
-            employee_id: employee.id,
-            employee_name: employee.name,
-            action,
-            created_at: new Date().toISOString(),
-          },
-        ];
-
-        showToast({
-          type: "success",
-          title: "Ausgestempelt",
-          description: `Schönen Feierabend! Du hast dich um ${currentTime} Uhr ausgestempelt und heute ${formatMinutes(
-            calculateWorkedMinutes(updatedEntries)
-          )} gearbeitet.`,
-        });
-      }
-    } finally {
-      setIsProcessing(false);
+      return;
     }
+
+    let positionPayload: Partial<MeasuredPosition> = {};
+
+    /*
+     * Bei deaktivierter Standortprüfung wird keine
+     * GPS-Berechtigung angefordert.
+     */
+    if (employee.location_tracking_mode !== "disabled") {
+      try {
+        positionPayload = await getBestCurrentPosition();
+      } catch (error) {
+        showToast({
+          type: "error",
+          title: "Standort konnte nicht geprüft werden",
+          description:
+            error instanceof Error
+              ? error.message
+              : "Bitte versuche es erneut.",
+        });
+
+        return;
+      }
+    }
+
+    const response = await fetch(
+      "/api/time-entries/clock",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({
+          action,
+
+          ...(employee.location_tracking_mode !== "disabled"
+            ? {
+                latitude: positionPayload.latitude,
+                longitude: positionPayload.longitude,
+                accuracy: positionPayload.accuracy,
+                capturedAt: positionPayload.capturedAt,
+              }
+            : {}),
+        }),
+      }
+    );
+
+    const payload = (await response.json()) as
+      | ClockApiSuccess
+      | ClockApiError;
+
+    if (!response.ok || !payload.success) {
+      const apiError = payload as ClockApiError;
+
+      showToast({
+        type: "error",
+        title: "Stempelung nicht möglich",
+        description:
+          apiError.error?.message ??
+          "Die Stempelung konnte nicht gespeichert werden.",
+      });
+
+      return;
+    }
+
+    const result = payload as ClockApiSuccess;
+
+    setEmployee((current) =>
+      current
+        ? {
+            ...current,
+            status: result.employee.status,
+          }
+        : current
+    );
+
+    const createdAt =
+      result.entry.createdAt || new Date().toISOString();
+
+    const newEntry: TimeEntry = {
+      id: result.entry.id ?? `temp-${Date.now()}`,
+      employee_id: employee.id,
+      employee_name: employee.name,
+      action,
+      created_at: createdAt,
+    };
+
+    const updatedEntries = [...timeEntries, newEntry];
+
+    setTimeEntries(updatedEntries);
+
+    /*
+     * Danach noch einmal aus der Datenbank synchronisieren.
+     * Der unmittelbare lokale Eintrag verhindert, dass die UI
+     * bis dahin veraltet wirkt.
+     */
+    await loadTimeEntries(employee.id);
+
+    const currentTime = new Date(
+      createdAt
+    ).toLocaleTimeString("de-DE", {
+      hour: "2-digit",
+      minute: "2-digit",
+      timeZone: BUSINESS_TIME_ZONE,
+    });
+
+    if (action === "check_in") {
+      showToast({
+        type: "success",
+        title: "Eingestempelt",
+        description: `Viel Spaß bei der Arbeit! Du hast dich um ${currentTime} Uhr eingestempelt.`,
+      });
+    }
+
+    if (action === "break_start") {
+      showToast({
+        type: "success",
+        title: "Pause gestartet",
+        description: `Gute Pause! Du hast deine Pause um ${currentTime} Uhr gestartet.`,
+      });
+    }
+
+    if (action === "break_end") {
+      showToast({
+        type: "success",
+        title: "Pause beendet",
+        description: `Willkommen zurück! Du hast deine Pause um ${currentTime} Uhr beendet.`,
+      });
+    }
+
+    if (action === "check_out") {
+      showToast({
+        type: "success",
+        title: "Ausgestempelt",
+        description: `Schönen Feierabend! Du hast dich um ${currentTime} Uhr ausgestempelt und heute ${formatMinutes(
+          calculateWorkedMinutes(updatedEntries)
+        )} gearbeitet.`,
+      });
+    }
+  } catch (error) {
+    console.error("CLOCK ACTION ERROR:", error);
+
+    showToast({
+      type: "error",
+      title: "Stempelung fehlgeschlagen",
+      description:
+        "Es ist ein unerwarteter Fehler aufgetreten. Bitte versuche es erneut.",
+    });
+  } finally {
+    setIsProcessing(false);
   }
+}
 
   useEffect(() => {
     loadEmployeeClockData();
