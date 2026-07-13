@@ -20,6 +20,11 @@ import { useToast } from "@/components/ui/ToastProvider";
 import TableSkeleton from "@/components/skeletons/TableSkeleton";
 import StatsSkeleton from "@/components/skeletons/StatsSkeleton";
 
+type LocationTrackingMode =
+| "required"
+| "remote_allowed"
+| "disabled";
+
 type Employee = {
   id: string;
   name: string;
@@ -36,6 +41,9 @@ type Employee = {
   datev_personnel_number?: string | null;
   cost_center?: string | null;
   eligible_for_surcharges?: boolean;
+
+  location_tracking_mode: LocationTrackingMode;
+  location_tracking_note: string | null;
 };
 
 type EmployeeTargetHour = {
@@ -145,6 +153,18 @@ export default function EmployeesPage() {
   const [noteToDelete, setNoteToDelete] = useState<string | null>(null);
   const [noteTexts, setNoteTexts] = useState<Record<string, string>>({});
 
+  const [editingLocationEmployee, setEditingLocationEmployee] =
+  useState<EmployeeWithTargetHours | null>(null);
+
+  const [editLocationTrackingMode, setEditLocationTrackingMode] =
+  useState<LocationTrackingMode>("required");
+
+  const [editLocationTrackingNote, setEditLocationTrackingNote] =
+  useState("");
+
+  const [isSavingLocationTracking, setIsSavingLocationTracking] =
+  useState(false);
+
     async function loadEmployees() {
     setIsLoading(true);
 
@@ -196,7 +216,7 @@ export default function EmployeesPage() {
       const { data: employeeData, error: employeeError } = await supabase
         .from("employees")
         .select(
-          "id, name, role, pin, status, account_status, hours, vacation_days_per_year, work_days_per_week, wage_type, hourly_rate, monthly_salary, datev_personnel_number, cost_center, eligible_for_surcharges"
+          "id, name, role, pin, status, account_status, hours, vacation_days_per_year, work_days_per_week, wage_type, hourly_rate, monthly_salary, datev_personnel_number, cost_center, eligible_for_surcharges, location_tracking_mode, location_tracking_note"
         )
         .eq("business_id", businessId)
         .order("created_at", { ascending: false });
@@ -300,6 +320,9 @@ export default function EmployeesPage() {
 
   const canManageAdmins = currentUserRole === "owner";
   const canEditPayroll = currentUserRole === "owner";
+  const canEditLocationTracking =
+    currentUserRole === "owner" || 
+    currentUserRole === "admin";
 
   useEffect(() => {
     loadEmployees();
@@ -1045,6 +1068,99 @@ export default function EmployeesPage() {
     );
   }
 
+  function handleOpenLocationTracking(
+  employee: EmployeeWithTargetHours
+) {
+  if (!canEditLocationTracking) {
+    showToast({
+      type: "error",
+      title: "Keine Berechtigung",
+      description:
+        "Du darfst die Standortprüfung nicht bearbeiten.",
+    });
+    return;
+  }
+
+  setEditingLocationEmployee(employee);
+  setEditLocationTrackingMode(
+    employee.location_tracking_mode ?? "required"
+  );
+  setEditLocationTrackingNote(
+    employee.location_tracking_note ?? ""
+  );
+}
+
+async function handleSaveLocationTracking() {
+  if (!editingLocationEmployee || isSavingLocationTracking) {
+    return;
+  }
+
+  if (!canEditLocationTracking) {
+    showToast({
+      type: "error",
+      title: "Keine Berechtigung",
+      description:
+        "Du darfst die Standortprüfung nicht bearbeiten.",
+    });
+    return;
+  }
+
+  const businessId = await getBusinessId();
+
+  if (!businessId) {
+    showToast({
+      type: "error",
+      title: "Betrieb nicht gefunden",
+      description:
+        "Die Standortregel konnte nicht gespeichert werden.",
+    });
+    return;
+  }
+
+  setIsSavingLocationTracking(true);
+
+  try {
+    const { error } = await supabase
+      .from("employees")
+      .update({
+        location_tracking_mode: editLocationTrackingMode,
+        location_tracking_note:
+          editLocationTrackingNote.trim() || null,
+      })
+      .eq("id", editingLocationEmployee.id)
+      .eq("business_id", businessId);
+
+    if (error) {
+      console.error("SAVE LOCATION TRACKING ERROR:", error);
+
+      showToast({
+        type: "error",
+        title:
+          "Standortregel konnte nicht gespeichert werden",
+        description: error.message,
+      });
+
+      return;
+    }
+
+    const employeeName = editingLocationEmployee.name;
+
+    setEditingLocationEmployee(null);
+    setEditLocationTrackingMode("required");
+    setEditLocationTrackingNote("");
+
+    await loadEmployees();
+
+    showToast({
+      type: "success",
+      title: "Standortregel gespeichert",
+      description: `Die Standortprüfung für ${employeeName} wurde aktualisiert.`,
+    });
+  } finally {
+    setIsSavingLocationTracking(false);
+  }
+}
+
   function handleOpenEditPayroll(employee: EmployeeWithTargetHours) {
     if (!canEditPayroll) {
       showToast({
@@ -1548,6 +1664,19 @@ export default function EmployeesPage() {
                       Deaktivieren
                     </Button>
 
+                    {canEditLocationTracking && (
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      type="button"
+                      onClick={() =>
+                        handleOpenLocationTracking(employee)
+                      }
+                    >
+                      GPS
+                    </Button>
+                  )}
+
                     {canEditPayroll && (
                       <Button
                         variant="primary"
@@ -1666,6 +1795,19 @@ export default function EmployeesPage() {
                         Deaktivieren
                       </Button>
 
+                      {canEditLocationTracking && (
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          type="button"
+                          onClick={() =>
+                            handleOpenLocationTracking(employee)
+                          }
+                        >
+                          GPS
+                        </Button>
+                      )}
+
                       {canEditPayroll && (
                         <Button
                           variant="primary"
@@ -1778,6 +1920,102 @@ export default function EmployeesPage() {
         confirmText="Löschen"
         cancelText="Abbrechen"
       />
+
+{editingLocationEmployee && (
+  <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#111827]/40 p-4 backdrop-blur-sm">
+    <div className="w-full max-w-xl overflow-hidden rounded-3xl border border-[#E2E8F0] bg-white shadow-[0_24px_80px_rgba(15,23,42,0.18)]">
+      <div className="border-b border-[#E2E8F0] px-6 py-5">
+        <h2 className="text-2xl font-semibold tracking-[-0.02em] text-[#0F172A]">
+          Standortprüfung
+        </h2>
+
+        <p className="mt-1 text-sm text-[#64748B]">
+          {editingLocationEmployee.name}
+        </p>
+      </div>
+
+      <div className="space-y-5 p-6">
+        <Select
+          label="Regel für die Zeiterfassung"
+          value={editLocationTrackingMode}
+          disabled={isSavingLocationTracking}
+          onChange={(event) =>
+            setEditLocationTrackingMode(
+              event.target.value as LocationTrackingMode
+            )
+          }
+          options={[
+            {
+              value: "required",
+              label: "Standort erforderlich",
+            },
+            {
+              value: "remote_allowed",
+              label: "Mobiles Arbeiten erlaubt",
+            },
+            {
+              value: "disabled",
+              label: "Standortprüfung deaktiviert",
+            },
+          ]}
+        />
+
+        <div className="rounded-2xl border border-[#DBEAFE] bg-[#EFF6FF] p-4">
+          <p className="text-sm font-semibold text-[#0F172A]">
+            {editLocationTrackingMode === "required" &&
+              "Stempeln ist nur innerhalb eines aktiven Betriebsstandorts möglich."}
+
+            {editLocationTrackingMode === "remote_allowed" &&
+              "Der Standort wird weiterhin erfasst. Stempeln außerhalb des Betriebs ist jedoch erlaubt."}
+
+            {editLocationTrackingMode === "disabled" &&
+              "Beim Stempeln wird keine GPS-Position angefordert oder geprüft."}
+          </p>
+        </div>
+
+        <Textarea
+          value={editLocationTrackingNote}
+          disabled={isSavingLocationTracking}
+          onChange={(event) =>
+            setEditLocationTrackingNote(event.target.value)
+          }
+          placeholder="Interner Hinweis, z. B. regelmäßiges Homeoffice am Dienstag und Donnerstag"
+          className="min-h-28"
+        />
+
+        <p className="text-xs leading-5 text-[#64748B]">
+          Dieser Hinweis ist intern und wird bei erlaubten
+          Standortausnahmen zusammen mit der Stempelung
+          protokolliert.
+        </p>
+      </div>
+
+      <div className="flex flex-col-reverse gap-3 border-t border-[#E2E8F0] px-6 py-5 sm:flex-row sm:justify-end">
+        <Button
+          variant="secondary"
+          type="button"
+          disabled={isSavingLocationTracking}
+          onClick={() => {
+            setEditingLocationEmployee(null);
+            setEditLocationTrackingMode("required");
+            setEditLocationTrackingNote("");
+          }}
+        >
+          Abbrechen
+        </Button>
+
+        <Button
+          variant="primary"
+          type="button"
+          loading={isSavingLocationTracking}
+          onClick={handleSaveLocationTracking}
+        >
+          Speichern
+        </Button>
+      </div>
+    </div>
+  </div>
+)}
 
       {editingPayrollEmployee && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#111827]/40 p-6 backdrop-blur-sm">

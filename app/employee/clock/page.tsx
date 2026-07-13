@@ -730,11 +730,11 @@ async function handleClockAction(
                 <MapPin className="mt-0.5 h-5 w-5 shrink-0 text-[#2563EB]" />
                 <div>
                   <p className="text-sm font-semibold text-[#0F172A]">
-                    Standortprüfung folgt in Phase 3
+                    Standortprüfung
                   </p>
                   <p className="mt-1 text-sm leading-6 text-[#64748B]">
-                    Die mobile Stempelung wird später an den Betriebsstandort
-                    gekoppelt. Dein Standort wird dann nur beim Stempeln geprüft.
+                    Die Zeiterfassung ist an deinen Standort gekoppelt.
+                    Wir prüfen diesen ausschließlich, wenn du eine Stempelung tätigst.
                   </p>
                 </div>
               </div>
