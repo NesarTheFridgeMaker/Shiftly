@@ -21,72 +21,128 @@ export default function SetupPage() {
   }
 
 
-  useEffect(() => {
-    async function checkSetupAccess() {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+ useEffect(() => {
+  let pollingInterval: ReturnType<typeof setInterval> | null = null;
+  let pollingTimeout: ReturnType<typeof setTimeout> | null = null;
+  let stopped = false;
 
-      if (!user) {
-        window.location.href = "/login";
-        return;
+  async function checkProfileAndRedirect(userId: string) {
+    const { data: profile, error } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", userId)
+      .maybeSingle();
+
+    if (error) {
+      console.error("SETUP PROFILE CHECK ERROR:", error);
+      return false;
+    }
+
+    if (profile?.role === "owner" || profile?.role === "admin") {
+      window.location.href = "/admin";
+      return true;
+    }
+
+    if (profile?.role === "employee") {
+      window.location.href = "/employee";
+      return true;
+    }
+
+    return false;
+  }
+
+  async function checkSetupAccess() {
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser();
+
+    if (userError || !user) {
+      window.location.href = "/login";
+      return;
+    }
+
+    if (!user.email_confirmed_at) {
+      await supabase.auth.signOut();
+      window.location.href = "/login";
+      return;
+    }
+
+    if (
+      user.user_metadata?.registration_type !== "business_owner"
+    ) {
+      window.location.href = "/employee-setup";
+      return;
+    }
+
+    const alreadyConfigured = await checkProfileAndRedirect(
+      user.id
+    );
+
+    if (alreadyConfigured || stopped) {
+      return;
+    }
+
+    const params = new URLSearchParams(
+      window.location.search
+    );
+
+    const checkoutStatus = params.get("checkout");
+
+    if (checkoutStatus === "cancelled") {
+      showDiperaPopup("Der Checkout wurde abgebrochen.");
+      setCheckingAuth(false);
+      return;
+    }
+
+    if (checkoutStatus !== "success") {
+      setCheckingAuth(false);
+      return;
+    }
+
+    /*
+     * Nach Stripe bleibt das Formular verborgen.
+     * Wir warten darauf, dass der Webhook Betrieb und Profil anlegt.
+     */
+    setCheckingAuth(true);
+
+    pollingInterval = setInterval(async () => {
+      const completed = await checkProfileAndRedirect(
+        user.id
+      );
+
+      if (completed && pollingInterval) {
+        clearInterval(pollingInterval);
       }
+    }, 1500);
 
-      if (!user.email_confirmed_at) {
-        await supabase.auth.signOut();
-        window.location.href = "/login";
-        return;
-      }
-
-      if (user.user_metadata?.registration_type !== "business_owner") {
-        window.location.href = "/employee-setup";
-        return;
-      }
-
-      const { data: profile, error } = await supabase
-        .from("profiles")
-        .select("role")
-        .eq("id", user.id)
-        .maybeSingle();
-
-      if (error) {
-        console.error(error);
-        showDiperaPopup("Profil konnte nicht geprüft werden.");
-        setCheckingAuth(false);
-        return;
-      }
-
-      if (profile?.role === "owner" || profile?.role === "admin") {
-        window.location.href = "/admin";
-        return;
-      }
-
-      if (profile?.role === "employee") {
-        window.location.href = "/employee";
-        return;
-      }
-
-      const params = new URLSearchParams(window.location.search);
-      const checkoutStatus = params.get("checkout");
-
-      if (checkoutStatus === "success") {
-  showDiperaPopup(
-    "Deine Testphase wurde gestartet. Dein Betrieb wird eingerichtet."
-  );
-
-  setCheckingAuth(false);
-  return;
-}
-
-      if (checkoutStatus === "cancelled") {
-        showDiperaPopup("Der Checkout wurde abgebrochen.");
+    pollingTimeout = setTimeout(() => {
+      if (pollingInterval) {
+        clearInterval(pollingInterval);
       }
 
       setCheckingAuth(false);
+
+      showDiperaPopup(
+        "Die Einrichtung dauert länger als erwartet. Bitte lade die Seite in einigen Sekunden erneut. Es ist kein weiterer Checkout erforderlich."
+      );
+    }, 30000);
+  }
+
+  void checkSetupAccess();
+
+  return () => {
+    stopped = true;
+
+    if (pollingInterval) {
+      clearInterval(pollingInterval);
     }
 
-    checkSetupAccess();
-  }, []);
+    if (pollingTimeout) {
+      clearTimeout(pollingTimeout);
+    }
+  };
+}, []);
 
   async function handleStartCheckout() {
     if (!businessName || !adminName || !adminPin) {
@@ -132,15 +188,23 @@ const response = await fetch("/api/stripe/create-checkout-session", {
     window.location.href = data.url;
   }
 
-  if (checkingAuth) {
-    return (
-      <main className="relative min-h-screen overflow-hidden bg-[#f7f7f8] flex items-center justify-center p-4">
-        <div className="bg-white rounded-2xl shadow p-6 text-gray-600">
-          Setup wird vorbereitet...
-        </div>
-      </main>
-    );
-  }
+ if (checkingAuth) {
+  return (
+    <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[#f7f7f8] p-4">
+      <div className="rounded-3xl border border-white bg-white/95 p-8 text-center shadow-2xl">
+        <div className="mx-auto mb-4 h-10 w-10 animate-spin rounded-full border-4 border-blue-100 border-t-[#005CA8]" />
+
+        <p className="font-medium text-slate-700">
+          Dein Betrieb wird eingerichtet...
+        </p>
+
+        <p className="mt-2 text-sm text-slate-500">
+          Bitte schließe diese Seite nicht.
+        </p>
+      </div>
+    </main>
+  );
+}
 
   return (
     <main className="relative min-h-screen overflow-hidden bg-[#f7f7f8] flex items-center justify-center p-4">

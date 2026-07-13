@@ -44,20 +44,50 @@ export async function POST(request: NextRequest) {
 
   const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
 
-  const { data: existingEvent } = await supabaseAdmin
-  .from("stripe_events")
-  .select("id")
-  .eq("id", event.id)
-  .maybeSingle();
+const { data: existingEvent, error: existingEventError } =
+  await supabaseAdmin
+    .from("stripe_events")
+    .select("id, processed_at")
+    .eq("id", event.id)
+    .maybeSingle();
 
-if (existingEvent) {
+if (existingEventError) {
+  console.error(
+    "STRIPE EVENT CHECK ERROR:",
+    existingEventError
+  );
+
+  return NextResponse.json(
+    { error: "Stripe-Event konnte nicht geprüft werden." },
+    { status: 500 }
+  );
+}
+
+if (existingEvent?.processed_at) {
   return NextResponse.json({ received: true });
 }
 
-await supabaseAdmin.from("stripe_events").insert({
-  id: event.id,
-  type: event.type,
-});
+if (!existingEvent) {
+  const { error: eventInsertError } = await supabaseAdmin
+    .from("stripe_events")
+    .insert({
+      id: event.id,
+      type: event.type,
+      processed_at: null,
+    });
+
+  if (eventInsertError) {
+    console.error(
+      "STRIPE EVENT INSERT ERROR:",
+      eventInsertError
+    );
+
+    return NextResponse.json(
+      { error: "Stripe-Event konnte nicht gespeichert werden." },
+      { status: 500 }
+    );
+  }
+}
 
   try {
     if (event.type === "checkout.session.completed") {
@@ -115,15 +145,30 @@ if (existingProfile) {
   return NextResponse.json({ received: true });
 }
 
-      const businessId = await supabaseAdmin.rpc(
-        "create_business_with_owner_for_user",
-        {
-          p_user_id: userId,
-          p_business_name: pendingSetup.business_name,
-          p_admin_name: pendingSetup.admin_name,
-          p_admin_pin: pendingSetup.admin_pin,
-        }
-      );
+      const {
+  data: businessId,
+  error: createBusinessError,
+} = await supabaseAdmin.rpc(
+  "create_business_with_owner_for_user",
+  {
+    p_user_id: userId,
+    p_business_name: pendingSetup.business_name,
+    p_admin_name: pendingSetup.admin_name,
+    p_admin_pin: pendingSetup.admin_pin,
+  }
+);
+
+if (createBusinessError || !businessId) {
+  console.error(
+    "CREATE BUSINESS RPC ERROR:",
+    createBusinessError
+  );
+
+  throw (
+    createBusinessError ??
+    new Error("Betrieb konnte nicht erstellt werden.")
+  );
+}
 
       const subscription = await stripe.subscriptions.retrieve(
         subscriptionId
@@ -144,7 +189,7 @@ if (existingProfile) {
             ).toISOString()
           : null,
         })
-        .eq("id", businessId.data);
+        .eq("id", businessId);
 
       if (businessUpdateError) {
         throw businessUpdateError;
