@@ -135,7 +135,40 @@ export default function EmployeeSetupPage() {
         return;
       }
 
-      window.location.href = "/employee";
+const {
+  data: { user },
+  error: userError,
+} = await supabase.auth.getUser();
+
+if (userError || !user) {
+  showDiperaPopup(
+    "Dein Benutzerkonto konnte nach der Aktivierung nicht geladen werden."
+  );
+  return;
+}
+
+const { data: profile, error: profileError } = await supabase
+  .from("profiles")
+  .select("role")
+  .eq("id", user.id)
+  .single();
+
+if (profileError || !profile) {
+  console.error("PROFILE LOAD AFTER INVITE ERROR:", profileError);
+
+  showDiperaPopup(
+    "Deine Rolle konnte nach der Aktivierung nicht geladen werden."
+  );
+  return;
+}
+
+if (profile.role === "admin" || profile.role === "owner") {
+  window.location.assign("/admin");
+  return;
+}
+
+window.location.assign("/employee");
+
     } catch (error) {
       console.error(
         "EMPLOYEE SETUP ERROR:",
@@ -272,7 +305,7 @@ export default function EmployeeSetupPage() {
 
           <p className="text-center text-xs leading-5 text-slate-400">
             Nach erfolgreicher Aktivierung wirst du direkt zu
-            deinem Mitarbeiter-Dashboard weitergeleitet.
+            deinem Dashboard weitergeleitet.
           </p>
         </div>
       </section>
