@@ -94,8 +94,11 @@ export default function EmployeeSetupPage() {
     setIsLoading(true);
 
     try {
-      const { error } = await supabase.rpc(
-        "complete_employee_invite",
+      const {
+        data: assignedRole,
+        error,
+      } = await supabase.rpc(
+        "complete_employee_invite_v2",
         {
           p_invite_code: cleanedInviteCode,
         }
@@ -135,39 +138,22 @@ export default function EmployeeSetupPage() {
         return;
       }
 
-const {
-  data: { user },
-  error: userError,
-} = await supabase.auth.getUser();
+      if (
+        assignedRole === "admin" ||
+        assignedRole === "owner"
+      ) {
+        window.location.replace("/admin");
+        return;
+      }
 
-if (userError || !user) {
-  showDiperaPopup(
-    "Dein Benutzerkonto konnte nach der Aktivierung nicht geladen werden."
-  );
-  return;
-}
+      if (assignedRole === "employee") {
+        window.location.replace("/employee");
+        return;
+      }
 
-const { data: profile, error: profileError } = await supabase
-  .from("profiles")
-  .select("role")
-  .eq("id", user.id)
-  .single();
-
-if (profileError || !profile) {
-  console.error("PROFILE LOAD AFTER INVITE ERROR:", profileError);
-
-  showDiperaPopup(
-    "Deine Rolle konnte nach der Aktivierung nicht geladen werden."
-  );
-  return;
-}
-
-if (profile.role === "admin" || profile.role === "owner") {
-  window.location.assign("/admin");
-  return;
-}
-
-window.location.assign("/employee");
+      showDiperaPopup(
+        "Die Benutzerrolle konnte nach der Aktivierung nicht bestimmt werden."
+      );
 
     } catch (error) {
       console.error(
