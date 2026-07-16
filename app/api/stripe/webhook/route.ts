@@ -16,6 +16,18 @@ type PendingBusinessSetup = {
   admin_name: string;
   admin_pin: string;
   status: string;
+  contact_name: string;
+  phone: string;
+  street: string;
+  house_number: string;
+  postal_code: string;
+  city: string;
+  country_code: string;
+  support_email: string;
+  billing_email: string;
+  website: string | null;
+  vat_id: string | null;
+  legal_form: string | null;
   plan_key: string | null;
   employee_limit: number | null;
 };
@@ -27,57 +39,109 @@ function toIsoDate(unixTimestamp: number | null | undefined) {
 }
 
 function getCurrentPeriodEnd(subscription: Stripe.Subscription) {
-  return toIsoDate(
-    subscription.items.data[0]?.current_period_end
-  );
+  return toIsoDate(subscription.items.data[0]?.current_period_end);
+}
+
+function validatePendingSetup(pendingSetup: PendingBusinessSetup) {
+  const requiredValues = [
+    pendingSetup.business_name,
+    pendingSetup.admin_name,
+    pendingSetup.admin_pin,
+    pendingSetup.contact_name,
+    pendingSetup.phone,
+    pendingSetup.street,
+    pendingSetup.house_number,
+    pendingSetup.postal_code,
+    pendingSetup.city,
+    pendingSetup.country_code,
+    pendingSetup.support_email,
+    pendingSetup.billing_email,
+  ];
+
+  if (
+    requiredValues.some(
+      (value) => typeof value !== "string" || !value.trim()
+    )
+  ) {
+    throw new Error(
+      "Das Pending Setup enthält unvollständige Unternehmensdaten."
+    );
+  }
+
+  if (!/^\d{4}$/.test(pendingSetup.admin_pin)) {
+    throw new Error(
+      "Das Pending Setup enthält eine ungültige Admin-PIN."
+    );
+  }
+
+  if (!/^[A-Z]{2}$/.test(pendingSetup.country_code)) {
+    throw new Error(
+      "Das Pending Setup enthält einen ungültigen Ländercode."
+    );
+  }
+
+  if (
+    typeof pendingSetup.plan_key !== "string" ||
+    !pendingSetup.plan_key.trim() ||
+    typeof pendingSetup.employee_limit !== "number"
+  ) {
+    throw new Error(
+      "Das Pending Setup enthält keine gültige Paketzuordnung."
+    );
+  }
+
+  if (
+    pendingSetup.employee_limit < 10 ||
+    pendingSetup.employee_limit >= 50 ||
+    pendingSetup.employee_limit % 5 !== 0
+  ) {
+    throw new Error(
+      "Das Pending Setup enthält ein ungültiges Mitarbeiterlimit."
+    );
+  }
 }
 
 async function markEventProcessed(eventId: string) {
   const { error } = await supabaseAdmin
     .from("stripe_events")
-    .update({
-      processed_at: new Date().toISOString(),
-    })
+    .update({ processed_at: new Date().toISOString() })
     .eq("id", eventId);
 
-  if (error) {
-    throw error;
-  }
+  if (error) throw error;
 }
 
-async function updateBusinessSubscription(
+async function updateBusinessAfterCheckout(
   businessId: string,
+  pendingSetup: PendingBusinessSetup,
   subscription: Stripe.Subscription,
-  customerId?: string,
-  plan?: {
-    planKey: string;
-    employeeLimit: number;
-  }
+  customerId: string
 ) {
-  const updateValue: Record<string, unknown> = {
-    stripe_subscription_id: subscription.id,
-    subscription_status: subscription.status,
-    trial_ends_at: toIsoDate(subscription.trial_end),
-    current_period_end: getCurrentPeriodEnd(subscription),
-  };
-
-  if (customerId) {
-    updateValue.stripe_customer_id = customerId;
-  }
-
-  if (plan) {
-    updateValue.plan_key = plan.planKey;
-    updateValue.employee_limit = plan.employeeLimit;
-  }
-
   const { error } = await supabaseAdmin
     .from("businesses")
-    .update(updateValue)
+    .update({
+      contact_name: pendingSetup.contact_name,
+      phone: pendingSetup.phone,
+      street: pendingSetup.street,
+      house_number: pendingSetup.house_number,
+      postal_code: pendingSetup.postal_code,
+      city: pendingSetup.city,
+      country_code: pendingSetup.country_code,
+      support_email: pendingSetup.support_email,
+      billing_email: pendingSetup.billing_email,
+      website: pendingSetup.website,
+      vat_id: pendingSetup.vat_id,
+      legal_form: pendingSetup.legal_form,
+      stripe_customer_id: customerId,
+      stripe_subscription_id: subscription.id,
+      subscription_status: subscription.status,
+      trial_ends_at: toIsoDate(subscription.trial_end),
+      current_period_end: getCurrentPeriodEnd(subscription),
+      plan_key: pendingSetup.plan_key,
+      employee_limit: pendingSetup.employee_limit,
+    })
     .eq("id", businessId);
 
-  if (error) {
-    throw error;
-  }
+  if (error) throw error;
 }
 
 async function updateBusinessSubscriptionBySubscriptionId(
@@ -92,9 +156,7 @@ async function updateBusinessSubscriptionBySubscriptionId(
     })
     .eq("stripe_subscription_id", subscription.id);
 
-  if (error) {
-    throw error;
-  }
+  if (error) throw error;
 }
 
 async function completePendingSetup(
@@ -117,9 +179,7 @@ async function completePendingSetup(
     .eq("id", pendingSetupId)
     .eq("user_id", userId);
 
-  if (error) {
-    throw error;
-  }
+  if (error) throw error;
 }
 
 async function handleCheckoutCompleted(
@@ -139,37 +199,40 @@ async function handleCheckoutCompleted(
       ? session.subscription
       : session.subscription?.id;
 
-  if (
-    !pendingSetupId ||
-    !userId ||
-    !customerId ||
-    !subscriptionId
-  ) {
+  if (!pendingSetupId || !userId || !customerId || !subscriptionId) {
     throw new Error(
       "Checkout Session enthält unvollständige Metadaten."
     );
   }
 
-  const {
-    data: pendingSetupData,
-    error: pendingSetupError,
-  } = await supabaseAdmin
-    .from("pending_business_setups")
-    .select(
-      `
+  const { data: pendingSetupData, error: pendingSetupError } =
+    await supabaseAdmin
+      .from("pending_business_setups")
+      .select(`
         id,
         user_id,
         business_name,
         admin_name,
         admin_pin,
         status,
+        contact_name,
+        phone,
+        street,
+        house_number,
+        postal_code,
+        city,
+        country_code,
+        support_email,
+        billing_email,
+        website,
+        vat_id,
+        legal_form,
         plan_key,
         employee_limit
-      `
-    )
-    .eq("id", pendingSetupId)
-    .eq("user_id", userId)
-    .single();
+      `)
+      .eq("id", pendingSetupId)
+      .eq("user_id", userId)
+      .single();
 
   if (pendingSetupError || !pendingSetupData) {
     throw (
@@ -178,66 +241,27 @@ async function handleCheckoutCompleted(
     );
   }
 
-  const pendingSetup: PendingBusinessSetup = {
-    id: pendingSetupData.id,
-    user_id: pendingSetupData.user_id,
-    business_name: pendingSetupData.business_name,
-    admin_name: pendingSetupData.admin_name,
-    admin_pin: pendingSetupData.admin_pin,
-    status: pendingSetupData.status,
-    plan_key: pendingSetupData.plan_key,
-    employee_limit: pendingSetupData.employee_limit,
-  };
+  const pendingSetup = pendingSetupData as PendingBusinessSetup;
+  validatePendingSetup(pendingSetup);
 
-  if (
-    typeof pendingSetup.plan_key !== "string" ||
-    !pendingSetup.plan_key.trim() ||
-    typeof pendingSetup.employee_limit !== "number"
-  ) {
-    throw new Error(
-      "Das Pending Setup enthält keine gültige Paketzuordnung."
-    );
-  }
+  const subscription = await stripe.subscriptions.retrieve(subscriptionId);
 
-  if (
-    pendingSetup.employee_limit < 10 ||
-    pendingSetup.employee_limit >= 50 ||
-    pendingSetup.employee_limit % 5 !== 0
-  ) {
-    throw new Error(
-      "Das Pending Setup enthält ein ungültiges Mitarbeiterlimit."
-    );
-  }
+  const { data: existingProfileData, error: existingProfileError } =
+    await supabaseAdmin
+      .from("profiles")
+      .select("id, business_id")
+      .eq("id", userId)
+      .maybeSingle();
 
-  const subscription =
-    await stripe.subscriptions.retrieve(subscriptionId);
+  if (existingProfileError) throw existingProfileError;
 
-  const {
-    data: existingProfileData,
-    error: existingProfileError,
-  } = await supabaseAdmin
-    .from("profiles")
-    .select("id, business_id")
-    .eq("id", userId)
-    .maybeSingle();
+  const existingProfile: ExistingProfile | null = existingProfileData
+    ? {
+        id: existingProfileData.id,
+        business_id: existingProfileData.business_id ?? null,
+      }
+    : null;
 
-  if (existingProfileError) {
-    throw existingProfileError;
-  }
-
-  const existingProfile: ExistingProfile | null =
-    existingProfileData
-      ? {
-          id: existingProfileData.id,
-          business_id:
-            existingProfileData.business_id ?? null,
-        }
-      : null;
-
-  /*
-   * Wiederholter oder teilweise bereits verarbeiteter Checkout:
-   * kein zweiter Betrieb, sondern vorhandenen Betrieb vervollständigen.
-   */
   if (existingProfile) {
     if (!existingProfile.business_id) {
       throw new Error(
@@ -245,14 +269,11 @@ async function handleCheckoutCompleted(
       );
     }
 
-    await updateBusinessSubscription(
+    await updateBusinessAfterCheckout(
       existingProfile.business_id,
+      pendingSetup,
       subscription,
-      customerId,
-      {
-        planKey: pendingSetup.plan_key,
-        employeeLimit: pendingSetup.employee_limit,
-      }
+      customerId
     );
 
     await completePendingSetup(
@@ -260,48 +281,47 @@ async function handleCheckoutCompleted(
       userId,
       customerId,
       subscriptionId,
-      pendingSetup.plan_key,
-      pendingSetup.employee_limit
+      pendingSetup.plan_key!,
+      pendingSetup.employee_limit!
     );
 
     await markEventProcessed(event.id);
-
     return NextResponse.json({ received: true });
   }
 
-  const {
-    data: businessId,
-    error: createBusinessError,
-  } = await supabaseAdmin.rpc(
-    "create_business_with_owner_for_user",
-    {
+  const { data: businessId, error: createBusinessError } =
+    await supabaseAdmin.rpc("create_business_with_owner_for_user", {
       p_user_id: userId,
       p_business_name: pendingSetup.business_name,
       p_admin_name: pendingSetup.admin_name,
       p_admin_pin: pendingSetup.admin_pin,
-    }
-  );
+      p_contact_name: pendingSetup.contact_name,
+      p_phone: pendingSetup.phone,
+      p_street: pendingSetup.street,
+      p_house_number: pendingSetup.house_number,
+      p_postal_code: pendingSetup.postal_code,
+      p_city: pendingSetup.city,
+      p_country_code: pendingSetup.country_code,
+      p_support_email: pendingSetup.support_email,
+      p_billing_email: pendingSetup.billing_email,
+      p_website: pendingSetup.website,
+      p_vat_id: pendingSetup.vat_id,
+      p_legal_form: pendingSetup.legal_form,
+    });
 
   if (createBusinessError || !businessId) {
-    console.error(
-      "CREATE BUSINESS RPC ERROR:",
-      createBusinessError
-    );
-
+    console.error("CREATE BUSINESS RPC ERROR:", createBusinessError);
     throw (
       createBusinessError ??
       new Error("Betrieb konnte nicht erstellt werden.")
     );
   }
 
-  await updateBusinessSubscription(
+  await updateBusinessAfterCheckout(
     businessId,
+    pendingSetup,
     subscription,
-    customerId,
-    {
-      planKey: pendingSetup.plan_key,
-      employeeLimit: pendingSetup.employee_limit,
-    }
+    customerId
   );
 
   await completePendingSetup(
@@ -309,19 +329,16 @@ async function handleCheckoutCompleted(
     userId,
     customerId,
     subscriptionId,
-    pendingSetup.plan_key,
-    pendingSetup.employee_limit
+    pendingSetup.plan_key!,
+    pendingSetup.employee_limit!
   );
 
   await markEventProcessed(event.id);
-
   return NextResponse.json({ received: true });
 }
 
 function getInvoiceSubscriptionId(invoice: Stripe.Invoice) {
-  if (
-    invoice.parent?.type !== "subscription_details"
-  ) {
+  if (invoice.parent?.type !== "subscription_details") {
     return null;
   }
 
@@ -344,8 +361,7 @@ function getInvoiceSubscriptionId(invoice: Stripe.Invoice) {
 }
 
 export async function POST(request: NextRequest) {
-  const webhookSecret =
-    process.env.STRIPE_WEBHOOK_SECRET;
+  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
 
   if (!webhookSecret) {
     return NextResponse.json(
@@ -355,8 +371,7 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.text();
-  const signature =
-    request.headers.get("stripe-signature");
+  const signature = request.headers.get("stripe-signature");
 
   if (!signature) {
     return NextResponse.json(
@@ -374,10 +389,7 @@ export async function POST(request: NextRequest) {
       webhookSecret
     );
   } catch (error) {
-    console.error(
-      "STRIPE WEBHOOK SIGNATURE ERROR:",
-      error
-    );
+    console.error("STRIPE WEBHOOK SIGNATURE ERROR:", error);
 
     return NextResponse.json(
       { error: "Ungültige Stripe-Signatur." },
@@ -385,26 +397,18 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const {
-    data: existingEvent,
-    error: existingEventError,
-  } = await supabaseAdmin
-    .from("stripe_events")
-    .select("id, processed_at")
-    .eq("id", event.id)
-    .maybeSingle();
+  const { data: existingEvent, error: existingEventError } =
+    await supabaseAdmin
+      .from("stripe_events")
+      .select("id, processed_at")
+      .eq("id", event.id)
+      .maybeSingle();
 
   if (existingEventError) {
-    console.error(
-      "STRIPE EVENT CHECK ERROR:",
-      existingEventError
-    );
+    console.error("STRIPE EVENT CHECK ERROR:", existingEventError);
 
     return NextResponse.json(
-      {
-        error:
-          "Stripe-Event konnte nicht geprüft werden.",
-      },
+      { error: "Stripe-Event konnte nicht geprüft werden." },
       { status: 500 }
     );
   }
@@ -414,29 +418,19 @@ export async function POST(request: NextRequest) {
   }
 
   if (!existingEvent) {
-    const { error: eventInsertError } =
-      await supabaseAdmin
-        .from("stripe_events")
-        .insert({
-          id: event.id,
-          type: event.type,
-          processed_at: null,
-        });
+    const { error: eventInsertError } = await supabaseAdmin
+      .from("stripe_events")
+      .insert({
+        id: event.id,
+        type: event.type,
+        processed_at: null,
+      });
 
-    if (
-      eventInsertError &&
-      eventInsertError.code !== "23505"
-    ) {
-      console.error(
-        "STRIPE EVENT INSERT ERROR:",
-        eventInsertError
-      );
+    if (eventInsertError && eventInsertError.code !== "23505") {
+      console.error("STRIPE EVENT INSERT ERROR:", eventInsertError);
 
       return NextResponse.json(
-        {
-          error:
-            "Stripe-Event konnte nicht gespeichert werden.",
-        },
+        { error: "Stripe-Event konnte nicht gespeichert werden." },
         { status: 500 }
       );
     }
@@ -451,16 +445,11 @@ export async function POST(request: NextRequest) {
     }
 
     if (
-      event.type ===
-        "customer.subscription.updated" ||
-      event.type ===
-        "customer.subscription.deleted"
+      event.type === "customer.subscription.updated" ||
+      event.type === "customer.subscription.deleted"
     ) {
-      const subscription =
-        event.data.object as Stripe.Subscription;
-
       await updateBusinessSubscriptionBySubscriptionId(
-        subscription
+        event.data.object as Stripe.Subscription
       );
     }
 
@@ -468,38 +457,25 @@ export async function POST(request: NextRequest) {
       event.type === "invoice.payment_failed" ||
       event.type === "invoice.paid"
     ) {
-      const invoice =
-        event.data.object as Stripe.Invoice;
-
-      const subscriptionId =
-        getInvoiceSubscriptionId(invoice);
+      const invoice = event.data.object as Stripe.Invoice;
+      const subscriptionId = getInvoiceSubscriptionId(invoice);
 
       if (subscriptionId) {
-        const subscription =
-          await stripe.subscriptions.retrieve(
-            subscriptionId
-          );
-
-        await updateBusinessSubscriptionBySubscriptionId(
-          subscription
+        const subscription = await stripe.subscriptions.retrieve(
+          subscriptionId
         );
+
+        await updateBusinessSubscriptionBySubscriptionId(subscription);
       }
     }
 
     await markEventProcessed(event.id);
-
     return NextResponse.json({ received: true });
   } catch (error) {
-    console.error(
-      "STRIPE WEBHOOK HANDLER ERROR:",
-      error
-    );
+    console.error("STRIPE WEBHOOK HANDLER ERROR:", error);
 
     return NextResponse.json(
-      {
-        error:
-          "Webhook konnte nicht verarbeitet werden.",
-      },
+      { error: "Webhook konnte nicht verarbeitet werden." },
       { status: 500 }
     );
   }

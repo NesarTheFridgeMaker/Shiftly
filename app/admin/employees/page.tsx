@@ -732,78 +732,178 @@ export default function EmployeesPage() {
     });
   }
 
-  async function handleToggleAccountStatus(id: string, currentStatus: string) {
-    const businessId = await getBusinessId();
+async function handleToggleAccountStatus(
+  id: string,
+  currentStatus: string
+) {
+  const businessId = await getBusinessId();
 
-    if (!businessId) {
+  if (!businessId) {
+    showToast({
+      type: "error",
+      title: "Betrieb nicht gefunden",
+      description:
+        "Der Status konnte nicht geändert werden.",
+    });
+    return;
+  }
+
+  const employee = employees.find(
+    (employeeItem) => employeeItem.id === id
+  );
+
+  if (!employee) {
+    showToast({
+      type: "error",
+      title: "Mitarbeiter nicht gefunden",
+      description:
+        "Bitte lade die Seite neu und versuche es erneut.",
+    });
+    return;
+  }
+
+  if (employee.role === "Owner") {
+    showToast({
+      type: "warning",
+      title: "Owner kann nicht deaktiviert werden",
+      description:
+        "Der Hauptinhaber des Betriebs bleibt immer aktiv.",
+    });
+    return;
+  }
+
+  if (
+    employee.role === "Admin" &&
+    currentUserRole !== "owner"
+  ) {
+    showToast({
+      type: "error",
+      title: "Keine Berechtigung",
+      description:
+        "Du darfst den Status von Admins nicht ändern.",
+    });
+    return;
+  }
+
+  const isReactivating =
+    currentStatus === "inactive";
+
+  /*
+   * Beim Deaktivieren wird ein Platz frei.
+   * Nur beim Reaktivieren muss das Paketlimit geprüft werden.
+   */
+  if (isReactivating) {
+    const {
+      data: businessLimitData,
+      error: businessLimitError,
+    } = await supabase
+      .from("businesses")
+      .select("employee_limit")
+      .eq("id", businessId)
+      .single();
+
+    if (
+      businessLimitError ||
+      !businessLimitData
+    ) {
+      console.error(
+        "BUSINESS LIMIT LOAD ERROR:",
+        businessLimitError
+      );
+
       showToast({
         type: "error",
-        title: "Betrieb nicht gefunden",
-        description: "Der Status konnte nicht geändert werden.",
+        title:
+          "Mitarbeiterlimit konnte nicht geprüft werden",
+        description:
+          "Bitte versuche es erneut.",
       });
       return;
     }
 
-    const employee = employees.find((employee) => employee.id === id);
-
-    if (!employee) {
-      showToast({
-        type: "error",
-        title: "Mitarbeiter nicht gefunden",
-        description: "Bitte lade die Seite neu und versuche es erneut.",
-      });
-      return;
-    }
-
-    if (employee.role === "Owner") {
-      showToast({
-        type: "warning",
-        title: "Owner kann nicht deaktiviert werden",
-        description: "Der Hauptinhaber des Betriebs bleibt immer aktiv.",
-      });
-      return;
-    }
-
-    if (employee.role === "Admin" && currentUserRole !== "owner") {
-      showToast({
-        type: "error",
-        title: "Keine Berechtigung",
-        description: "Du darfst keine Admins deaktivieren.",
-      });
-      return;
-    }
-
-    const newStatus = currentStatus === "active" ? "inactive" : "active";
-
-    const { error } = await supabase
+    const {
+      count: activeEmployeeCount,
+      error: employeeCountError,
+    } = await supabase
       .from("employees")
-      .update({ account_status: newStatus })
-      .eq("id", id)
-      .eq("business_id", businessId);
+      .select("*", {
+        count: "exact",
+        head: true,
+      })
+      .eq("business_id", businessId)
+      .eq("account_status", "active");
 
-    if (error) {
-      console.error(error);
+    if (employeeCountError) {
+      console.error(
+        "ACTIVE EMPLOYEE COUNT ERROR:",
+        employeeCountError
+      );
+
       showToast({
         type: "error",
-        title: "Status konnte nicht geändert werden",
-        description: error.message,
+        title:
+          "Mitarbeiteranzahl konnte nicht geprüft werden",
+        description:
+          "Bitte versuche es erneut.",
       });
       return;
     }
 
-    await loadEmployees();
+    if (
+      (activeEmployeeCount ?? 0) >=
+      businessLimitData.employee_limit
+    ) {
+      setEmployeeLimit(
+        businessLimitData.employee_limit
+      );
+
+      setShowEmployeeLimitPopup(true);
+      return;
+    }
+  }
+
+  const newStatus = isReactivating
+    ? "active"
+    : "inactive";
+
+  const { error } = await supabase
+    .from("employees")
+    .update({
+      account_status: newStatus,
+    })
+    .eq("id", id)
+    .eq("business_id", businessId);
+
+  if (error) {
+    console.error(
+      "EMPLOYEE STATUS UPDATE ERROR:",
+      error
+    );
 
     showToast({
-      type: "success",
+      type: "error",
       title:
-        newStatus === "active"
-          ? "Mitarbeiter reaktiviert"
-          : "Mitarbeiter deaktiviert",
-      description: `${employee.name} wurde ${
-        newStatus === "active" ? "reaktiviert" : "deaktiviert"
-      }.`,
+        "Status konnte nicht geändert werden",
+      description: error.message,
     });
+    return;
   }
+
+  await loadEmployees();
+
+  showToast({
+    type: "success",
+    title:
+      newStatus === "active"
+        ? "Mitarbeiter reaktiviert"
+        : "Mitarbeiter deaktiviert",
+    description: `${employee.name} wurde ${
+      newStatus === "active"
+        ? "reaktiviert"
+        : "deaktiviert"
+    }.`,
+  });
+}
   async function handleUpdateMonthlyHours(
     employeeId: string,
     newMonthlyHours: number

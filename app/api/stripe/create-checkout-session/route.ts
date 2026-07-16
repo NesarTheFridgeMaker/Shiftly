@@ -1,16 +1,31 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { stripe } from "@/lib/stripe";
-import { supabaseAdmin } from "@/lib/supabaseServer";
 import {
   INDIVIDUAL_OFFER_FROM,
   getPlanByEmployeeLimit,
 } from "@/lib/billing/plans";
+import { stripe } from "@/lib/stripe";
+import { supabaseAdmin } from "@/lib/supabaseServer";
 
 type CheckoutRequestBody = {
   businessName?: unknown;
   adminName?: unknown;
+  contactName?: unknown;
   adminPin?: unknown;
+
+  phone?: unknown;
+  street?: unknown;
+  houseNumber?: unknown;
+  postalCode?: unknown;
+  city?: unknown;
+  countryCode?: unknown;
+
+  supportEmail?: unknown;
+  billingEmail?: unknown;
+  website?: unknown;
+  vatId?: unknown;
+  legalForm?: unknown;
+
   selectedEmployeeLimit?: unknown;
 };
 
@@ -27,6 +42,49 @@ function getBearerToken(request: NextRequest) {
     .trim();
 
   return token || null;
+}
+
+function getRequiredString(value: unknown) {
+  return typeof value === "string"
+    ? value.trim()
+    : "";
+}
+
+function getOptionalString(value: unknown) {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const cleaned = value.trim();
+
+  return cleaned || null;
+}
+
+function normalizeEmail(value: unknown) {
+  return typeof value === "string"
+    ? value.trim().toLowerCase()
+    : "";
+}
+
+function isValidEmail(value: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+}
+
+function isValidWebsite(value: string | null) {
+  if (!value) {
+    return true;
+  }
+
+  try {
+    const parsedUrl = new URL(value);
+
+    return (
+      parsedUrl.protocol === "http:" ||
+      parsedUrl.protocol === "https:"
+    );
+  } catch {
+    return false;
+  }
 }
 
 export async function POST(request: NextRequest) {
@@ -90,28 +148,76 @@ export async function POST(request: NextRequest) {
     }
 
     const businessName =
-      typeof body.businessName === "string"
-        ? body.businessName.trim()
-        : "";
+      getRequiredString(body.businessName);
 
     const adminName =
-      typeof body.adminName === "string"
-        ? body.adminName.trim()
-        : "";
+      getRequiredString(body.adminName);
+
+    const contactName =
+      getRequiredString(body.contactName) ||
+      adminName;
 
     const adminPin =
-      typeof body.adminPin === "string"
-        ? body.adminPin.trim()
-        : "";
+      getRequiredString(body.adminPin);
+
+    const phone =
+      getRequiredString(body.phone);
+
+    const street =
+      getRequiredString(body.street);
+
+    const houseNumber =
+      getRequiredString(body.houseNumber);
+
+    const postalCode =
+      getRequiredString(body.postalCode);
+
+    const city =
+      getRequiredString(body.city);
+
+    const countryCode =
+      getRequiredString(body.countryCode)
+        .toUpperCase();
+
+    const supportEmail =
+      normalizeEmail(body.supportEmail);
+
+    const billingEmail =
+      normalizeEmail(body.billingEmail);
+
+    const website =
+      getOptionalString(body.website);
+
+    const vatId =
+      getOptionalString(body.vatId);
+
+    const legalForm =
+      getOptionalString(body.legalForm);
 
     const selectedEmployeeLimit =
       typeof body.selectedEmployeeLimit === "number"
         ? body.selectedEmployeeLimit
         : Number(body.selectedEmployeeLimit);
 
-    if (!businessName || !adminName || !adminPin) {
+    if (
+      !businessName ||
+      !adminName ||
+      !contactName ||
+      !adminPin ||
+      !phone ||
+      !street ||
+      !houseNumber ||
+      !postalCode ||
+      !city ||
+      !countryCode ||
+      !supportEmail ||
+      !billingEmail
+    ) {
       return NextResponse.json(
-        { error: "Bitte alle Felder ausfüllen." },
+        {
+          error:
+            "Bitte fülle alle Pflichtfelder vollständig aus.",
+        },
         { status: 400 }
       );
     }
@@ -121,6 +227,39 @@ export async function POST(request: NextRequest) {
         {
           error:
             "Die Admin-PIN muss aus genau vier Zahlen bestehen.",
+        },
+        { status: 400 }
+      );
+    }
+
+    if (!/^[A-Z]{2}$/.test(countryCode)) {
+      return NextResponse.json(
+        {
+          error:
+            "Der ausgewählte Ländercode ist ungültig.",
+        },
+        { status: 400 }
+      );
+    }
+
+    if (
+      !isValidEmail(supportEmail) ||
+      !isValidEmail(billingEmail)
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            "Bitte prüfe die Support- und Rechnungs-E-Mail-Adresse.",
+        },
+        { status: 400 }
+      );
+    }
+
+    if (!isValidWebsite(website)) {
+      return NextResponse.json(
+        {
+          error:
+            "Bitte gib eine gültige Website mit http:// oder https:// an.",
         },
         { status: 400 }
       );
@@ -267,16 +406,29 @@ export async function POST(request: NextRequest) {
       user_id: user.id,
       business_name: businessName,
       admin_name: adminName,
+      contact_name: contactName,
       admin_pin: adminPin,
       status: "pending",
+
+      phone,
+      street,
+      house_number: houseNumber,
+      postal_code: postalCode,
+      city,
+      country_code: countryCode,
+
+      support_email: supportEmail,
+      billing_email: billingEmail,
+      website,
+      vat_id: vatId,
+      legal_form: legalForm,
 
       plan_key: plan.key,
       employee_limit: plan.employeeLimit,
 
       /*
-       * Da der Slider direkt ein Paket auswählt und nicht
-       * die tatsächliche Beschäftigtenzahl abfragt, bleibt
-       * requested_employee_count bewusst leer.
+       * Der Slider wählt direkt eine Paketstufe.
+       * Deshalb wird keine abweichende tatsächliche Mitarbeiterzahl gespeichert.
        */
       requested_employee_count: null,
     };
@@ -340,6 +492,9 @@ export async function POST(request: NextRequest) {
       await stripe.checkout.sessions.create({
         mode: "subscription",
 
+        customer_email:
+          user.email ?? billingEmail,
+
         line_items: [
           {
             price: priceId,
@@ -401,12 +556,6 @@ export async function POST(request: NextRequest) {
         "CHECKOUT SESSION SAVE ERROR:",
         sessionUpdateError
       );
-
-      /*
-       * Die Stripe-Session existiert bereits. Wir geben daher
-       * nicht zwingend einen Fehler zurück, protokollieren das
-       * Problem aber für die spätere Bereinigung.
-       */
     }
 
     return NextResponse.json({
