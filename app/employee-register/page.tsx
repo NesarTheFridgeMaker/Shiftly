@@ -109,7 +109,7 @@ export default function EmployeeRegisterPage() {
       }
 
       showDiperaPopup(
-        "Wir haben dir einen Bestätigungslink per E-Mail geschickt. Bestätige deine E-Mail-Adresse und melde dich anschließend an, um deinen Mitarbeiter-Zugang zu aktivieren. Prüfe bei Bedarf auch deinen Spamordner."
+        "Wir haben dir einen Bestätigungslink per E-Mail geschickt. Bestätige deine E-Mail-Adresse und melde dich anschließend an. Dein Mitarbeiter-Zugang wird danach automatisch eingerichtet. Prüfe bei Bedarf auch deinen Spamordner."
       );
     } catch (error) {
       console.error("EMPLOYEE REGISTRATION ERROR:", error);
