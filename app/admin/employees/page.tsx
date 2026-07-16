@@ -20,6 +20,7 @@ import { useToast } from "@/components/ui/ToastProvider";
 import TableSkeleton from "@/components/skeletons/TableSkeleton";
 import StatsSkeleton from "@/components/skeletons/StatsSkeleton";
 
+
 type LocationTrackingMode =
 | "required"
 | "remote_allowed"
@@ -121,6 +122,13 @@ export default function EmployeesPage() {
   const [popupMessage, setPopupMessage] = useState("");
   const [showPopup, setShowPopup] = useState(false);
   const [employeeToDelete, setEmployeeToDelete] = useState<string | null>(null);
+
+  const [showEmployeeLimitPopup, setShowEmployeeLimitPopup] =
+    useState(false);
+  const [employeeLimit, setEmployeeLimit] =
+    useState<number | null>(null);
+  const [isOpeningBillingPortal, setIsOpeningBillingPortal] =
+    useState(false);
 
   const [newEmployeeWageType, setNewEmployeeWageType] =
     useState<"hourly" | "fixed_hourly" | "salary">("hourly");
@@ -333,6 +341,66 @@ export default function EmployeesPage() {
     setShowPopup(true);
   }
 
+  async function handleOpenBillingPortal() {
+    if (isOpeningBillingPortal) return;
+
+    setIsOpeningBillingPortal(true);
+
+    try {
+      const {
+        data: { session },
+        error: sessionError,
+      } = await supabase.auth.getSession();
+
+      if (sessionError || !session?.access_token) {
+        showToast({
+          type: "error",
+          title: "Anmeldung abgelaufen",
+          description: "Bitte melde dich erneut an.",
+        });
+        return;
+      }
+
+      const response = await fetch(
+        "/api/stripe/create-portal-session",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${session.access_token}`,
+          },
+        }
+      );
+
+      const data = (await response.json()) as {
+        url?: string;
+        error?: string;
+      };
+
+      if (!response.ok || !data.url) {
+        showToast({
+          type: "error",
+          title: "Abo-Verwaltung konnte nicht geöffnet werden",
+          description:
+            data.error || "Bitte versuche es erneut.",
+        });
+        return;
+      }
+
+      window.location.href = data.url;
+    } catch (error) {
+      console.error("OPEN BILLING PORTAL ERROR:", error);
+
+      showToast({
+        type: "error",
+        title: "Abo-Verwaltung konnte nicht geöffnet werden",
+        description: "Bitte versuche es erneut.",
+      });
+    } finally {
+      setIsOpeningBillingPortal(false);
+    }
+  }
+
   async function handleAddEmployee() {
     if (isSaving) return;
 
@@ -436,11 +504,8 @@ export default function EmployeesPage() {
       }
 
       if ((count || 0) >= businessData.employee_limit) {
-        showToast({
-          type: "warning",
-          title: "Mitarbeiterlimit erreicht",
-          description: `Dein Tarif erlaubt maximal ${businessData.employee_limit} aktive Mitarbeiter.`,
-        });
+        setEmployeeLimit(businessData.employee_limit);
+        setShowEmployeeLimitPopup(true);
         return;
       }
 
@@ -1893,6 +1958,27 @@ async function handleSaveLocationTracking() {
         open={showPopup}
         message={popupMessage}
         onClose={() => setShowPopup(false)}
+      />
+
+      <DiperaPopup
+        open={showEmployeeLimitPopup}
+        variant="upgrade"
+        title="Mitarbeiterlimit erreicht"
+        highlight={
+          employeeLimit !== null
+            ? `Bis zu ${employeeLimit} aktive Mitarbeiter`
+            : undefined
+        }
+        message="Du hast die maximale Mitarbeiterzahl deines aktuellen Pakets erreicht. Öffne die Abo-Verwaltung, um dein Paket zu erweitern."
+        confirmText="Abo verwalten"
+        cancelText="Abbrechen"
+        isConfirmLoading={isOpeningBillingPortal}
+        closeOnBackdropClick={!isOpeningBillingPortal}
+        onClose={() => {
+          if (isOpeningBillingPortal) return;
+          setShowEmployeeLimitPopup(false);
+        }}
+        onConfirm={() => void handleOpenBillingPortal()}
       />
 
       <DiperaPopup
