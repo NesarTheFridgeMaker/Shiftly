@@ -3,11 +3,11 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 
 
-export default function EmployeeRegisterPage() {
+function EmployeeRegisterContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [inviteCode, setInviteCode] = useState("");
@@ -156,6 +156,7 @@ async function handleRegister() {
             }}
           />
         ))}
+        
       </div>
 
       <section className="relative z-10 mt-16 w-full max-w-md rounded-3xl border border-white bg-white/95 p-6 shadow-2xl sm:mt-0 sm:p-8">
@@ -279,5 +280,18 @@ async function handleRegister() {
         </div>
       )}
     </main>
+  );
+}
+export default function EmployeeRegisterPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex min-h-screen items-center justify-center">
+          <p>Registrierungsseite wird geladen...</p>
+        </div>
+      }
+    >
+      <EmployeeRegisterContent />
+    </Suspense>
   );
 }
