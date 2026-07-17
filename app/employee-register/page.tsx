@@ -117,8 +117,19 @@ async function handleRegister() {
       return;
     }
 
-    router.replace("/employee");
-    router.refresh();
+    if (result.role === "admin" || result.role === "owner") {
+  window.location.assign("/admin");
+  return;
+}
+
+if (result.role === "employee") {
+  window.location.assign("/employee");
+  return;
+}
+
+showDiperaPopup(
+  "Der Zugang wurde erstellt, aber die Benutzerrolle konnte nicht erkannt werden."
+);
   } catch (error) {
     console.error("EMPLOYEE REGISTRATION ERROR:", error);
 
