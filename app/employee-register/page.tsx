@@ -1,11 +1,23 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
+import { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
+
 
 export default function EmployeeRegisterPage() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [inviteCode, setInviteCode] = useState("");
+  useEffect(() => {
+  const invite = searchParams.get("invite");
+
+  if (invite) {
+    setInviteCode(invite);
+  }
+}, [searchParams]);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -24,102 +36,99 @@ export default function EmployeeRegisterPage() {
     setShowPopup(true);
   }
 
-  async function handleRegister() {
-    if (isLoading) return;
+async function handleRegister() {
+  if (isLoading) return;
 
-    const cleanedInviteCode = inviteCode.trim().toUpperCase();
-    const cleanedEmail = email.trim().toLowerCase();
+  const cleanedInviteCode = inviteCode.trim().toUpperCase();
+  const cleanedEmail = email.trim().toLowerCase();
 
-    if (
-      !cleanedInviteCode ||
-      !cleanedEmail ||
-      !password ||
-      !confirmPassword
-    ) {
-      showDiperaPopup("Bitte fülle alle Felder aus.");
-      return;
-    }
+  if (
+    !cleanedInviteCode ||
+    !cleanedEmail ||
+    !password ||
+    !confirmPassword
+  ) {
+    showDiperaPopup("Bitte fülle alle Felder aus.");
+    return;
+  }
 
-    if (password !== confirmPassword) {
-      showDiperaPopup("Die Passwörter stimmen nicht überein.");
-      return;
-    }
+  if (password !== confirmPassword) {
+    showDiperaPopup("Die Passwörter stimmen nicht überein.");
+    return;
+  }
 
-    if (!hasMinLength || !hasUppercase || !hasNumber || !hasSpecialChar) {
-      showDiperaPopup("Bitte erfülle alle Passwortanforderungen.");
-      return;
-    }
+  if (!hasMinLength || !hasUppercase || !hasNumber || !hasSpecialChar) {
+    showDiperaPopup("Bitte erfülle alle Passwortanforderungen.");
+    return;
+  }
 
-    setIsLoading(true);
+  setIsLoading(true);
 
-    try {
-      await supabase.auth.signOut();
+  try {
+    /*
+     * Eventuell noch bestehende Owner-/Admin-Session beenden.
+     * Wichtig beim Testen im selben Browser.
+     */
+    await supabase.auth.signOut();
 
-      const { data: isInviteValid, error: inviteCheckError } =
-        await supabase.rpc("check_employee_invite", {
-          p_invite_code: cleanedInviteCode,
-        });
-
-      if (inviteCheckError) {
-        console.error("EMPLOYEE INVITE CHECK ERROR:", inviteCheckError);
-        showDiperaPopup(
-          "Der Einladungscode konnte nicht geprüft werden. Bitte versuche es erneut."
-        );
-        return;
-      }
-
-      if (!isInviteValid) {
-        showDiperaPopup(
-          "Der Einladungscode ist ungültig oder wurde bereits verwendet."
-        );
-        return;
-      }
-
-      const { error: signUpError } = await supabase.auth.signUp({
+    const response = await fetch("/api/employee-register", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        inviteCode: cleanedInviteCode,
         email: cleanedEmail,
         password,
-        options: {
-          emailRedirectTo: `${window.location.origin}/login`,
-          data: {
-            registration_type: "employee_invite",
-            invite_code: cleanedInviteCode,
-          },
-        },
+      }),
+    });
+
+    const result = (await response.json()) as {
+      success?: boolean;
+      message?: string;
+      code?: string;
+      role?: string;
+    };
+
+    if (!response.ok || !result.success) {
+      console.error("EMPLOYEE REGISTER API ERROR:", result);
+
+      showDiperaPopup(
+        result.message ??
+          "Der Mitarbeiter-Zugang konnte nicht erstellt werden."
+      );
+
+      return;
+    }
+
+    const { error: signInError } =
+      await supabase.auth.signInWithPassword({
+        email: cleanedEmail,
+        password,
       });
 
-      if (signUpError) {
-        console.error("EMPLOYEE SIGN-UP ERROR:", signUpError);
-
-        const message = signUpError.message.toLowerCase();
-
-        if (
-          message.includes("already") ||
-          message.includes("registered") ||
-          message.includes("exists") ||
-          message.includes("user already")
-        ) {
-          showDiperaPopup(
-            "Für diese E-Mail-Adresse existiert bereits ein Dipera-Konto. Bitte melde dich an oder nutze „Passwort vergessen“."
-          );
-        } else {
-          showDiperaPopup(signUpError.message);
-        }
-
-        return;
-      }
+    if (signInError) {
+      console.error("EMPLOYEE SIGN-IN ERROR:", signInError);
 
       showDiperaPopup(
-        "Wir haben dir einen Bestätigungslink per E-Mail geschickt. Bestätige deine E-Mail-Adresse und melde dich anschließend an. Dein Mitarbeiter-Zugang wird danach automatisch eingerichtet. Prüfe bei Bedarf auch deinen Spamordner."
+        "Dein Zugang wurde erfolgreich erstellt, aber die automatische Anmeldung ist fehlgeschlagen. Bitte melde dich über die Loginseite an."
       );
-    } catch (error) {
-      console.error("EMPLOYEE REGISTRATION ERROR:", error);
-      showDiperaPopup(
-        "Bei der Registrierung ist ein unerwarteter Fehler aufgetreten. Bitte versuche es erneut."
-      );
-    } finally {
-      setIsLoading(false);
+
+      return;
     }
+
+    router.replace("/employee");
+    router.refresh();
+  } catch (error) {
+    console.error("EMPLOYEE REGISTRATION ERROR:", error);
+
+    showDiperaPopup(
+      "Bei der Registrierung ist ein unerwarteter Fehler aufgetreten. Bitte versuche es erneut."
+    );
+  } finally {
+    setIsLoading(false);
   }
+}
 
   return (
     <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[#f7f7f8] p-4">

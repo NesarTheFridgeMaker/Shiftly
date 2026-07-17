@@ -15,16 +15,13 @@ import Badge from "@/components/ui/Badge";
 import Input from "@/components/ui/Input";
 import Select from "@/components/ui/Select";
 import Textarea from "@/components/ui/Textarea";
+import { useSearchParams } from "next/navigation";
 
 import { useToast } from "@/components/ui/ToastProvider";
 import TableSkeleton from "@/components/skeletons/TableSkeleton";
 import StatsSkeleton from "@/components/skeletons/StatsSkeleton";
 
-
-type LocationTrackingMode =
-| "required"
-| "remote_allowed"
-| "disabled";
+type LocationTrackingMode = "required" | "remote_allowed" | "disabled";
 
 type Employee = {
   id: string;
@@ -75,6 +72,12 @@ type EmployeeWithTargetHours = Employee & {
   invite: EmployeeInvite | null;
 };
 
+type CreatedEmployeeInvite = {
+  employeeId: string;
+  employeeName: string;
+  inviteCode: string;
+};
+
 function formatAccountStatus(status: string) {
   if (status === "active") return "Aktiv";
   if (status === "inactive") return "Deaktiviert";
@@ -103,6 +106,8 @@ function generateInviteCode() {
 }
 
 export default function EmployeesPage() {
+
+  
   const { showToast } = useToast();
 
   const [isLoading, setIsLoading] = useState(true);
@@ -111,6 +116,12 @@ export default function EmployeesPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [showInactiveEmployees, setShowInactiveEmployees] = useState(false);
   const [currentUserRole, setCurrentUserRole] = useState("");
+  const [createdEmployeeInvite, setCreatedEmployeeInvite] =
+    useState<CreatedEmployeeInvite | null>(null);
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [isSendingInviteEmail, setIsSendingInviteEmail] = useState(false);
+  const [isCopyingInviteLink, setIsCopyingInviteLink] = useState(false);
+  const [isCopyingInviteCode, setIsCopyingInviteCode] = useState(false);
 
   const [name, setName] = useState("");
   const [role, setRole] = useState("Mitarbeiter");
@@ -123,37 +134,35 @@ export default function EmployeesPage() {
   const [showPopup, setShowPopup] = useState(false);
   const [employeeToDelete, setEmployeeToDelete] = useState<string | null>(null);
 
-  const [showEmployeeLimitPopup, setShowEmployeeLimitPopup] =
-    useState(false);
-  const [employeeLimit, setEmployeeLimit] =
-    useState<number | null>(null);
-  const [isOpeningBillingPortal, setIsOpeningBillingPortal] =
-    useState(false);
+  const [showEmployeeLimitPopup, setShowEmployeeLimitPopup] = useState(false);
+  const [employeeLimit, setEmployeeLimit] = useState<number | null>(null);
+  const [isOpeningBillingPortal, setIsOpeningBillingPortal] = useState(false);
 
-  const [newEmployeeWageType, setNewEmployeeWageType] =
-    useState<"hourly" | "fixed_hourly" | "salary">("hourly");
+  const [newEmployeeWageType, setNewEmployeeWageType] = useState<
+    "hourly" | "fixed_hourly" | "salary"
+  >("hourly");
 
   const [newEmployeeHourlyRate, setNewEmployeeHourlyRate] = useState("");
   const [newEmployeeMonthlySalary, setNewEmployeeMonthlySalary] = useState("");
-  const [
-    newEmployeeDatevPersonnelNumber,
-    setNewEmployeeDatevPersonnelNumber,
-  ] = useState("");
+  const [newEmployeeDatevPersonnelNumber, setNewEmployeeDatevPersonnelNumber] =
+    useState("");
   const [newEmployeeCostCenter, setNewEmployeeCostCenter] = useState("");
 
   const [editingPayrollEmployee, setEditingPayrollEmployee] =
     useState<EmployeeWithTargetHours | null>(null);
 
-  const [editWageType, setEditWageType] =
-    useState<"hourly" | "fixed_hourly" | "salary">("hourly");
+  const [editWageType, setEditWageType] = useState<
+    "hourly" | "fixed_hourly" | "salary"
+  >("hourly");
 
   const [editHourlyRate, setEditHourlyRate] = useState("");
   const [editMonthlySalary, setEditMonthlySalary] = useState("");
   const [editDatevPersonnelNumber, setEditDatevPersonnelNumber] = useState("");
   const [editCostCenter, setEditCostCenter] = useState("");
 
-  const [unsavedMonthlyHours, setUnsavedMonthlyHours] =
-    useState<Record<string, boolean>>({});
+  const [unsavedMonthlyHours, setUnsavedMonthlyHours] = useState<
+    Record<string, boolean>
+  >({});
 
   const [editEligibleForSurcharges, setEditEligibleForSurcharges] =
     useState(true);
@@ -162,18 +171,17 @@ export default function EmployeesPage() {
   const [noteTexts, setNoteTexts] = useState<Record<string, string>>({});
 
   const [editingLocationEmployee, setEditingLocationEmployee] =
-  useState<EmployeeWithTargetHours | null>(null);
+    useState<EmployeeWithTargetHours | null>(null);
 
   const [editLocationTrackingMode, setEditLocationTrackingMode] =
-  useState<LocationTrackingMode>("required");
+    useState<LocationTrackingMode>("required");
 
-  const [editLocationTrackingNote, setEditLocationTrackingNote] =
-  useState("");
+  const [editLocationTrackingNote, setEditLocationTrackingNote] = useState("");
 
   const [isSavingLocationTracking, setIsSavingLocationTracking] =
-  useState(false);
+    useState(false);
 
-    async function loadEmployees() {
+  async function loadEmployees() {
     setIsLoading(true);
 
     try {
@@ -224,7 +232,7 @@ export default function EmployeesPage() {
       const { data: employeeData, error: employeeError } = await supabase
         .from("employees")
         .select(
-          "id, name, role, pin, status, account_status, hours, vacation_days_per_year, work_days_per_week, wage_type, hourly_rate, monthly_salary, datev_personnel_number, cost_center, eligible_for_surcharges, location_tracking_mode, location_tracking_note"
+          "id, name, role, pin, status, account_status, hours, vacation_days_per_year, work_days_per_week, wage_type, hourly_rate, monthly_salary, datev_personnel_number, cost_center, eligible_for_surcharges, location_tracking_mode, location_tracking_note",
         )
         .eq("business_id", businessId)
         .order("created_at", { ascending: false });
@@ -300,16 +308,17 @@ export default function EmployeesPage() {
 
       const employeesWithData = (employeeData || []).map((employee) => {
         const target = targetHours.find(
-          (targetHour) => targetHour.employee_id === employee.id
+          (targetHour) => targetHour.employee_id === employee.id,
         );
 
         const employeeNotes = notes.filter(
-          (note) => note.employee_id === employee.id
+          (note) => note.employee_id === employee.id,
         );
 
         const invite =
-          invites.find((inviteItem) => inviteItem.employee_id === employee.id) ||
-          null;
+          invites.find(
+            (inviteItem) => inviteItem.employee_id === employee.id,
+          ) || null;
 
         return {
           ...employee,
@@ -329,8 +338,7 @@ export default function EmployeesPage() {
   const canManageAdmins = currentUserRole === "owner";
   const canEditPayroll = currentUserRole === "owner";
   const canEditLocationTracking =
-    currentUserRole === "owner" || 
-    currentUserRole === "admin";
+    currentUserRole === "owner" || currentUserRole === "admin";
 
   useEffect(() => {
     loadEmployees();
@@ -361,16 +369,13 @@ export default function EmployeesPage() {
         return;
       }
 
-      const response = await fetch(
-        "/api/stripe/create-portal-session",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${session.access_token}`,
-          },
-        }
-      );
+      const response = await fetch("/api/stripe/create-portal-session", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
+      });
 
       const data = (await response.json()) as {
         url?: string;
@@ -381,8 +386,7 @@ export default function EmployeesPage() {
         showToast({
           type: "error",
           title: "Abo-Verwaltung konnte nicht geöffnet werden",
-          description:
-            data.error || "Bitte versuche es erneut.",
+          description: data.error || "Bitte versuche es erneut.",
         });
         return;
       }
@@ -407,7 +411,10 @@ export default function EmployeesPage() {
     setIsSaving(true);
 
     try {
-      if (!name.trim() || !pin.trim()) {
+      const employeeName = name.trim();
+      const employeePin = pin.trim();
+
+      if (!employeeName || !employeePin) {
         showToast({
           type: "warning",
           title: "Angaben fehlen",
@@ -416,7 +423,7 @@ export default function EmployeesPage() {
         return;
       }
 
-      if (pin.trim().length !== 4) {
+      if (!/^\d{4}$/.test(employeePin)) {
         showToast({
           type: "warning",
           title: "Ungültige PIN",
@@ -427,7 +434,7 @@ export default function EmployeesPage() {
 
       const parsedMonthlyHours = Number(monthlyHours);
 
-      if (!parsedMonthlyHours || parsedMonthlyHours <= 0) {
+      if (!Number.isFinite(parsedMonthlyHours) || parsedMonthlyHours <= 0) {
         showToast({
           type: "warning",
           title: "Ungültige Sollstunden",
@@ -439,7 +446,11 @@ export default function EmployeesPage() {
       const parsedVacationDays = vacationDays ? Number(vacationDays) : 24;
       const parsedWorkDays = Number(workDaysPerWeek);
 
-      if (parsedWorkDays < 1 || parsedWorkDays > 7) {
+      if (
+        !Number.isInteger(parsedWorkDays) ||
+        parsedWorkDays < 1 ||
+        parsedWorkDays > 7
+      ) {
         showToast({
           type: "warning",
           title: "Ungültige Arbeitstage",
@@ -448,7 +459,7 @@ export default function EmployeesPage() {
         return;
       }
 
-      if (parsedVacationDays < 0) {
+      if (!Number.isFinite(parsedVacationDays) || parsedVacationDays < 0) {
         showToast({
           type: "warning",
           title: "Ungültige Urlaubstage",
@@ -503,7 +514,7 @@ export default function EmployeesPage() {
         return;
       }
 
-      if ((count || 0) >= businessData.employee_limit) {
+      if ((count ?? 0) >= businessData.employee_limit) {
         setEmployeeLimit(businessData.employee_limit);
         setShowEmployeeLimitPopup(true);
         return;
@@ -514,7 +525,7 @@ export default function EmployeesPage() {
           .from("employees")
           .select("id")
           .eq("business_id", businessId)
-          .eq("pin", pin.trim())
+          .eq("pin", employeePin)
           .maybeSingle();
 
       if (pinCheckError) {
@@ -545,13 +556,48 @@ export default function EmployeesPage() {
         return;
       }
 
+      const parsedHourlyRate = newEmployeeHourlyRate
+        ? Number(newEmployeeHourlyRate.replace(",", "."))
+        : null;
+
+      const parsedMonthlySalary = newEmployeeMonthlySalary
+        ? Number(newEmployeeMonthlySalary.replace(",", "."))
+        : null;
+
+      if (
+        (newEmployeeWageType === "hourly" ||
+          newEmployeeWageType === "fixed_hourly") &&
+        parsedHourlyRate !== null &&
+        (!Number.isFinite(parsedHourlyRate) || parsedHourlyRate < 0)
+      ) {
+        showToast({
+          type: "warning",
+          title: "Ungültiger Stundenlohn",
+          description: "Bitte gib einen gültigen Stundenlohn ein.",
+        });
+        return;
+      }
+
+      if (
+        newEmployeeWageType === "salary" &&
+        parsedMonthlySalary !== null &&
+        (!Number.isFinite(parsedMonthlySalary) || parsedMonthlySalary < 0)
+      ) {
+        showToast({
+          type: "warning",
+          title: "Ungültiges Monatsgehalt",
+          description: "Bitte gib ein gültiges Monatsgehalt ein.",
+        });
+        return;
+      }
+
       const { data: insertedEmployee, error: employeeError } = await supabase
         .from("employees")
         .insert([
           {
-            name: name.trim(),
+            name: employeeName,
             role,
-            pin: pin.trim(),
+            pin: employeePin,
             status: "not_checked_in",
             account_status: "active",
             hours: "0 h",
@@ -560,15 +606,12 @@ export default function EmployeesPage() {
             work_days_per_week: parsedWorkDays,
             wage_type: newEmployeeWageType,
             hourly_rate:
-              (newEmployeeWageType === "hourly" ||
-                newEmployeeWageType === "fixed_hourly") &&
-              newEmployeeHourlyRate
-                ? Number(newEmployeeHourlyRate.replace(",", "."))
+              newEmployeeWageType === "hourly" ||
+              newEmployeeWageType === "fixed_hourly"
+                ? parsedHourlyRate
                 : null,
             monthly_salary:
-              newEmployeeWageType === "salary" && newEmployeeMonthlySalary
-                ? Number(newEmployeeMonthlySalary.replace(",", "."))
-                : null,
+              newEmployeeWageType === "salary" ? parsedMonthlySalary : null,
             datev_personnel_number:
               newEmployeeDatevPersonnelNumber.trim() || null,
             cost_center: newEmployeeCostCenter.trim() || null,
@@ -584,7 +627,8 @@ export default function EmployeesPage() {
           type: "error",
           title: "Mitarbeiter konnte nicht erstellt werden",
           description:
-            employeeError?.message || "Bitte prüfe die Angaben und versuche es erneut.",
+            employeeError?.message ||
+            "Bitte prüfe die Angaben und versuche es erneut.",
         });
         return;
       }
@@ -604,27 +648,39 @@ export default function EmployeesPage() {
         showToast({
           type: "error",
           title: "Sollstunden konnten nicht gespeichert werden",
-          description: "Der Mitarbeiter wurde angelegt, aber die Sollstunden fehlen.",
+          description:
+            "Der Mitarbeiter wurde angelegt, aber die Sollstunden fehlen.",
         });
         return;
       }
 
-      const { error: inviteError } = await supabase
+      const inviteCode = generateInviteCode();
+
+      const { data: insertedInvite, error: inviteError } = await supabase
         .from("employee_invites")
         .insert([
           {
             business_id: businessId,
             employee_id: insertedEmployee.id,
-            invite_code: generateInviteCode(),
+            invite_code: inviteCode,
           },
-        ]);
+        ])
+        .select("id, invite_code")
+        .single();
 
-      if (inviteError) {
-        console.error(inviteError);
+      if (inviteError || !insertedInvite) {
+        console.error("EMPLOYEE INVITE INSERT ERROR:", inviteError);
         showToast({
           type: "warning",
           title: "Einladung konnte nicht erstellt werden",
-          description: "Der Mitarbeiter wurde angelegt, aber ohne Einladungscode.",
+          description:
+            "Der Mitarbeiter wurde angelegt, aber ohne Einladungscode.",
+        });
+      } else {
+        setCreatedEmployeeInvite({
+          employeeId: insertedEmployee.id,
+          employeeName,
+          inviteCode: insertedInvite.invite_code,
         });
       }
 
@@ -646,12 +702,237 @@ export default function EmployeesPage() {
       showToast({
         type: "success",
         title: "Mitarbeiter angelegt",
-        description: `${name.trim()} wurde erfolgreich hinzugefügt.`,
+        description: `${employeeName} wurde erfolgreich hinzugefügt.`,
       });
     } finally {
       setIsSaving(false);
     }
   }
+
+  function getInviteUrl(inviteCode: string) {
+  const appUrl = (
+    process.env.NEXT_PUBLIC_APP_URL || "https://app.dipera.de"
+  ).replace(/\/$/, "");
+
+  return `${appUrl}/employee-register?invite=${encodeURIComponent(
+    inviteCode,
+  )}`;
+}
+
+  function closeCreatedEmployeeInvite() {
+    if (
+      isSendingInviteEmail ||
+      isCopyingInviteLink ||
+      isCopyingInviteCode
+    ) {
+      return;
+    }
+
+    setCreatedEmployeeInvite(null);
+    setInviteEmail("");
+  }
+
+  function handleOpenExistingInvite(employee: EmployeeWithTargetHours) {
+    if (!employee.invite || employee.invite.used_at) return;
+
+    setInviteEmail("");
+    setCreatedEmployeeInvite({
+      employeeId: employee.id,
+      employeeName: employee.name,
+      inviteCode: employee.invite.invite_code,
+    });
+  }
+
+  async function handleSendInviteEmail() {
+    if (!createdEmployeeInvite || isSendingInviteEmail) return;
+
+    const normalizedEmail = inviteEmail.trim().toLowerCase();
+
+    if (!normalizedEmail) {
+      showToast({
+        type: "warning",
+        title: "E-Mail-Adresse fehlt",
+        description: "Bitte gib die E-Mail-Adresse des Mitarbeiters ein.",
+      });
+      return;
+    }
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
+      showToast({
+        type: "warning",
+        title: "Ungültige E-Mail-Adresse",
+        description: "Bitte prüfe die eingegebene E-Mail-Adresse.",
+      });
+      return;
+    }
+
+    setIsSendingInviteEmail(true);
+
+    try {
+      const {
+        data: { session },
+        error: sessionError,
+      } = await supabase.auth.getSession();
+
+      if (sessionError || !session?.access_token) {
+        showToast({
+          type: "error",
+          title: "Anmeldung abgelaufen",
+          description: "Bitte melde dich erneut an.",
+        });
+        return;
+      }
+
+      const response = await fetch("/api/employee-invitations/send-email", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({
+          employeeId: createdEmployeeInvite.employeeId,
+          email: normalizedEmail,
+        }),
+      });
+
+      const responseText = await response.text();
+
+let data: {
+  success?: boolean;
+  error?: string;
+} = {};
+
+try {
+  data = responseText ? JSON.parse(responseText) : {};
+} catch {
+  console.error("NON-JSON API RESPONSE:", {
+    status: response.status,
+    contentType: response.headers.get("content-type"),
+    responseText,
+  });
+
+  showToast({
+    type: "error",
+    title: "Einladungsroute nicht verfügbar",
+    description:
+      "Die API hat keine gültige Antwort geliefert. Bitte prüfe das Terminal.",
+  });
+
+  return;
+}
+
+      if (!response.ok || !data.success) {
+        showToast({
+          type: "error",
+          title: "Einladung konnte nicht versendet werden",
+          description: data.error || "Bitte versuche es erneut.",
+        });
+        return;
+      }
+
+      const employeeName = createdEmployeeInvite.employeeName;
+
+      setCreatedEmployeeInvite(null);
+      setInviteEmail("");
+
+      showToast({
+        type: "success",
+        title: "Einladung versendet",
+        description: `Die Einladung für ${employeeName} wurde per E-Mail versendet.`,
+      });
+    } catch (error) {
+      console.error("SEND INVITE EMAIL ERROR:", error);
+
+      showToast({
+        type: "error",
+        title: "Einladung konnte nicht versendet werden",
+        description: "Bitte versuche es erneut.",
+      });
+    } finally {
+      setIsSendingInviteEmail(false);
+    }
+  }
+
+  async function handleCopyInviteLink() {
+    if (!createdEmployeeInvite || isCopyingInviteLink) return;
+
+    setIsCopyingInviteLink(true);
+
+    try {
+      const inviteUrl = getInviteUrl(createdEmployeeInvite.inviteCode);
+      await navigator.clipboard.writeText(inviteUrl);
+
+      showToast({
+        type: "success",
+        title: "Einladungslink kopiert",
+        description: "Der Link wurde in die Zwischenablage kopiert.",
+      });
+    } catch (error) {
+      console.error("COPY INVITE LINK ERROR:", error);
+
+      showToast({
+        type: "error",
+        title: "Link konnte nicht kopiert werden",
+        description: "Bitte versuche es erneut.",
+      });
+    } finally {
+      setIsCopyingInviteLink(false);
+    }
+  }
+
+  async function handleCopyInviteCode() {
+    if (!createdEmployeeInvite || isCopyingInviteCode) return;
+
+    setIsCopyingInviteCode(true);
+
+    try {
+      await navigator.clipboard.writeText(createdEmployeeInvite.inviteCode);
+
+      showToast({
+        type: "success",
+        title: "Einladungscode kopiert",
+        description: "Der Code wurde in die Zwischenablage kopiert.",
+      });
+    } catch (error) {
+      console.error("COPY INVITE CODE ERROR:", error);
+
+      showToast({
+        type: "error",
+        title: "Code konnte nicht kopiert werden",
+        description: "Bitte versuche es erneut.",
+      });
+    } finally {
+      setIsCopyingInviteCode(false);
+    }
+  }
+
+function handleOpenWhatsAppInvite() {
+  if (!createdEmployeeInvite) return;
+
+  const inviteUrl = getInviteUrl(createdEmployeeInvite.inviteCode);
+
+  const message = [
+    `Hallo ${createdEmployeeInvite.employeeName} 👋`,
+    "",
+    "Du wurdest von deinem Arbeitgeber zu Dipera eingeladen.",
+    "",
+    "📱 Registrierung:",
+    "",
+    inviteUrl,
+    "",
+    "Der Einladungscode wird automatisch übernommen.",
+    "",
+    "Du musst nur noch deine E-Mail-Adresse und dein Passwort festlegen.",
+    "",
+    "Willkommen bei Dipera!",
+  ].join("\n");
+
+  window.open(
+    `https://wa.me/?text=${encodeURIComponent(message)}`,
+    "_blank",
+    "noopener,noreferrer",
+  );
+}
 
   async function handleDeleteEmployee(id: string) {
     const businessId = await getBusinessId();
@@ -732,181 +1013,138 @@ export default function EmployeesPage() {
     });
   }
 
-async function handleToggleAccountStatus(
-  id: string,
-  currentStatus: string
-) {
-  const businessId = await getBusinessId();
+  async function handleToggleAccountStatus(id: string, currentStatus: string) {
+    const businessId = await getBusinessId();
 
-  if (!businessId) {
-    showToast({
-      type: "error",
-      title: "Betrieb nicht gefunden",
-      description:
-        "Der Status konnte nicht geändert werden.",
-    });
-    return;
-  }
-
-  const employee = employees.find(
-    (employeeItem) => employeeItem.id === id
-  );
-
-  if (!employee) {
-    showToast({
-      type: "error",
-      title: "Mitarbeiter nicht gefunden",
-      description:
-        "Bitte lade die Seite neu und versuche es erneut.",
-    });
-    return;
-  }
-
-  if (employee.role === "Owner") {
-    showToast({
-      type: "warning",
-      title: "Owner kann nicht deaktiviert werden",
-      description:
-        "Der Hauptinhaber des Betriebs bleibt immer aktiv.",
-    });
-    return;
-  }
-
-  if (
-    employee.role === "Admin" &&
-    currentUserRole !== "owner"
-  ) {
-    showToast({
-      type: "error",
-      title: "Keine Berechtigung",
-      description:
-        "Du darfst den Status von Admins nicht ändern.",
-    });
-    return;
-  }
-
-  const isReactivating =
-    currentStatus === "inactive";
-
-  /*
-   * Beim Deaktivieren wird ein Platz frei.
-   * Nur beim Reaktivieren muss das Paketlimit geprüft werden.
-   */
-  if (isReactivating) {
-    const {
-      data: businessLimitData,
-      error: businessLimitError,
-    } = await supabase
-      .from("businesses")
-      .select("employee_limit")
-      .eq("id", businessId)
-      .single();
-
-    if (
-      businessLimitError ||
-      !businessLimitData
-    ) {
-      console.error(
-        "BUSINESS LIMIT LOAD ERROR:",
-        businessLimitError
-      );
-
+    if (!businessId) {
       showToast({
         type: "error",
-        title:
-          "Mitarbeiterlimit konnte nicht geprüft werden",
-        description:
-          "Bitte versuche es erneut.",
+        title: "Betrieb nicht gefunden",
+        description: "Der Status konnte nicht geändert werden.",
       });
       return;
     }
 
-    const {
-      count: activeEmployeeCount,
-      error: employeeCountError,
-    } = await supabase
+    const employee = employees.find((employeeItem) => employeeItem.id === id);
+
+    if (!employee) {
+      showToast({
+        type: "error",
+        title: "Mitarbeiter nicht gefunden",
+        description: "Bitte lade die Seite neu und versuche es erneut.",
+      });
+      return;
+    }
+
+    if (employee.role === "Owner") {
+      showToast({
+        type: "warning",
+        title: "Owner kann nicht deaktiviert werden",
+        description: "Der Hauptinhaber des Betriebs bleibt immer aktiv.",
+      });
+      return;
+    }
+
+    if (employee.role === "Admin" && currentUserRole !== "owner") {
+      showToast({
+        type: "error",
+        title: "Keine Berechtigung",
+        description: "Du darfst den Status von Admins nicht ändern.",
+      });
+      return;
+    }
+
+    const isReactivating = currentStatus === "inactive";
+
+    /*
+     * Beim Deaktivieren wird ein Platz frei.
+     * Nur beim Reaktivieren muss das Paketlimit geprüft werden.
+     */
+    if (isReactivating) {
+      const { data: businessLimitData, error: businessLimitError } =
+        await supabase
+          .from("businesses")
+          .select("employee_limit")
+          .eq("id", businessId)
+          .single();
+
+      if (businessLimitError || !businessLimitData) {
+        console.error("BUSINESS LIMIT LOAD ERROR:", businessLimitError);
+
+        showToast({
+          type: "error",
+          title: "Mitarbeiterlimit konnte nicht geprüft werden",
+          description: "Bitte versuche es erneut.",
+        });
+        return;
+      }
+
+      const { count: activeEmployeeCount, error: employeeCountError } =
+        await supabase
+          .from("employees")
+          .select("*", {
+            count: "exact",
+            head: true,
+          })
+          .eq("business_id", businessId)
+          .eq("account_status", "active");
+
+      if (employeeCountError) {
+        console.error("ACTIVE EMPLOYEE COUNT ERROR:", employeeCountError);
+
+        showToast({
+          type: "error",
+          title: "Mitarbeiteranzahl konnte nicht geprüft werden",
+          description: "Bitte versuche es erneut.",
+        });
+        return;
+      }
+
+      if ((activeEmployeeCount ?? 0) >= businessLimitData.employee_limit) {
+        setEmployeeLimit(businessLimitData.employee_limit);
+
+        setShowEmployeeLimitPopup(true);
+        return;
+      }
+    }
+
+    const newStatus = isReactivating ? "active" : "inactive";
+
+    const { error } = await supabase
       .from("employees")
-      .select("*", {
-        count: "exact",
-        head: true,
+      .update({
+        account_status: newStatus,
       })
-      .eq("business_id", businessId)
-      .eq("account_status", "active");
+      .eq("id", id)
+      .eq("business_id", businessId);
 
-    if (employeeCountError) {
-      console.error(
-        "ACTIVE EMPLOYEE COUNT ERROR:",
-        employeeCountError
-      );
+    if (error) {
+      console.error("EMPLOYEE STATUS UPDATE ERROR:", error);
 
       showToast({
         type: "error",
-        title:
-          "Mitarbeiteranzahl konnte nicht geprüft werden",
-        description:
-          "Bitte versuche es erneut.",
+        title: "Status konnte nicht geändert werden",
+        description: error.message,
       });
       return;
     }
 
-    if (
-      (activeEmployeeCount ?? 0) >=
-      businessLimitData.employee_limit
-    ) {
-      setEmployeeLimit(
-        businessLimitData.employee_limit
-      );
-
-      setShowEmployeeLimitPopup(true);
-      return;
-    }
-  }
-
-  const newStatus = isReactivating
-    ? "active"
-    : "inactive";
-
-  const { error } = await supabase
-    .from("employees")
-    .update({
-      account_status: newStatus,
-    })
-    .eq("id", id)
-    .eq("business_id", businessId);
-
-  if (error) {
-    console.error(
-      "EMPLOYEE STATUS UPDATE ERROR:",
-      error
-    );
+    await loadEmployees();
 
     showToast({
-      type: "error",
+      type: "success",
       title:
-        "Status konnte nicht geändert werden",
-      description: error.message,
+        newStatus === "active"
+          ? "Mitarbeiter reaktiviert"
+          : "Mitarbeiter deaktiviert",
+      description: `${employee.name} wurde ${
+        newStatus === "active" ? "reaktiviert" : "deaktiviert"
+      }.`,
     });
-    return;
   }
-
-  await loadEmployees();
-
-  showToast({
-    type: "success",
-    title:
-      newStatus === "active"
-        ? "Mitarbeiter reaktiviert"
-        : "Mitarbeiter deaktiviert",
-    description: `${employee.name} wurde ${
-      newStatus === "active"
-        ? "reaktiviert"
-        : "deaktiviert"
-    }.`,
-  });
-}
   async function handleUpdateMonthlyHours(
     employeeId: string,
-    newMonthlyHours: number
+    newMonthlyHours: number,
   ) {
     if (!canEditPayroll) {
       showToast({
@@ -1108,13 +1346,13 @@ async function handleToggleAccountStatus(
   }
 
   function renderInvite(employee: EmployeeWithTargetHours) {
+    const hasOpenInvite = Boolean(employee.invite && !employee.invite.used_at);
+
     return (
       <div className="mt-4 rounded-2xl border border-[#E2E8F0] bg-[#F8FAFC] p-4">
         <div className="mb-3 flex items-center justify-between gap-3">
           <div>
-            <h4 className="font-semibold text-[#0F172A]">
-              Mitarbeiter-Zugang
-            </h4>
+            <h4 className="font-semibold text-[#0F172A]">Mitarbeiter-Zugang</h4>
             <p className="mt-1 text-sm text-[#64748B]">
               Einladung für das Mitarbeiter-Dashboard.
             </p>
@@ -1122,14 +1360,14 @@ async function handleToggleAccountStatus(
 
           {employee.invite?.used_at ? (
             <Badge variant="success" dot>
-              Verwendet
+              Registriert
             </Badge>
           ) : employee.invite ? (
             <Badge variant="primary" dot>
-              Offen
+              Einladung offen
             </Badge>
           ) : (
-            <Badge variant="muted">Fehlt</Badge>
+            <Badge variant="muted">Einladung fehlt</Badge>
           )}
         </div>
 
@@ -1141,9 +1379,22 @@ async function handleToggleAccountStatus(
 
             <p className="mt-2 text-xs leading-5 text-[#64748B]">
               {employee.invite.used_at
-                ? "Dieser Code wurde bereits verwendet."
-                : "Diesen Code gibt der Mitarbeiter später bei der Registrierung ein."}
+                ? "Der Mitarbeiter hat seinen Zugang bereits aktiviert."
+                : "Die Einladung wurde noch nicht verwendet und kann jederzeit erneut versendet werden."}
             </p>
+
+            {hasOpenInvite && (
+              <div className="mt-4">
+                <Button
+                  variant="primary"
+                  size="sm"
+                  type="button"
+                  onClick={() => handleOpenExistingInvite(employee)}
+                >
+                  Einladung versenden
+                </Button>
+              </div>
+            )}
           </>
         ) : (
           <p className="text-sm text-[#64748B]">
@@ -1166,9 +1417,7 @@ async function handleToggleAccountStatus(
           </div>
 
           {employee.notes.length > 0 && (
-            <Badge variant="muted">
-              {employee.notes.length}
-            </Badge>
+            <Badge variant="muted">{employee.notes.length}</Badge>
           )}
         </div>
 
@@ -1233,98 +1482,87 @@ async function handleToggleAccountStatus(
     );
   }
 
-  function handleOpenLocationTracking(
-  employee: EmployeeWithTargetHours
-) {
-  if (!canEditLocationTracking) {
-    showToast({
-      type: "error",
-      title: "Keine Berechtigung",
-      description:
-        "Du darfst die Standortprüfung nicht bearbeiten.",
-    });
-    return;
-  }
-
-  setEditingLocationEmployee(employee);
-  setEditLocationTrackingMode(
-    employee.location_tracking_mode ?? "required"
-  );
-  setEditLocationTrackingNote(
-    employee.location_tracking_note ?? ""
-  );
-}
-
-async function handleSaveLocationTracking() {
-  if (!editingLocationEmployee || isSavingLocationTracking) {
-    return;
-  }
-
-  if (!canEditLocationTracking) {
-    showToast({
-      type: "error",
-      title: "Keine Berechtigung",
-      description:
-        "Du darfst die Standortprüfung nicht bearbeiten.",
-    });
-    return;
-  }
-
-  const businessId = await getBusinessId();
-
-  if (!businessId) {
-    showToast({
-      type: "error",
-      title: "Betrieb nicht gefunden",
-      description:
-        "Die Standortregel konnte nicht gespeichert werden.",
-    });
-    return;
-  }
-
-  setIsSavingLocationTracking(true);
-
-  try {
-    const { error } = await supabase
-      .from("employees")
-      .update({
-        location_tracking_mode: editLocationTrackingMode,
-        location_tracking_note:
-          editLocationTrackingNote.trim() || null,
-      })
-      .eq("id", editingLocationEmployee.id)
-      .eq("business_id", businessId);
-
-    if (error) {
-      console.error("SAVE LOCATION TRACKING ERROR:", error);
-
+  function handleOpenLocationTracking(employee: EmployeeWithTargetHours) {
+    if (!canEditLocationTracking) {
       showToast({
         type: "error",
-        title:
-          "Standortregel konnte nicht gespeichert werden",
-        description: error.message,
+        title: "Keine Berechtigung",
+        description: "Du darfst die Standortprüfung nicht bearbeiten.",
       });
-
       return;
     }
 
-    const employeeName = editingLocationEmployee.name;
-
-    setEditingLocationEmployee(null);
-    setEditLocationTrackingMode("required");
-    setEditLocationTrackingNote("");
-
-    await loadEmployees();
-
-    showToast({
-      type: "success",
-      title: "Standortregel gespeichert",
-      description: `Die Standortprüfung für ${employeeName} wurde aktualisiert.`,
-    });
-  } finally {
-    setIsSavingLocationTracking(false);
+    setEditingLocationEmployee(employee);
+    setEditLocationTrackingMode(employee.location_tracking_mode ?? "required");
+    setEditLocationTrackingNote(employee.location_tracking_note ?? "");
   }
-}
+
+  async function handleSaveLocationTracking() {
+    if (!editingLocationEmployee || isSavingLocationTracking) {
+      return;
+    }
+
+    if (!canEditLocationTracking) {
+      showToast({
+        type: "error",
+        title: "Keine Berechtigung",
+        description: "Du darfst die Standortprüfung nicht bearbeiten.",
+      });
+      return;
+    }
+
+    const businessId = await getBusinessId();
+
+    if (!businessId) {
+      showToast({
+        type: "error",
+        title: "Betrieb nicht gefunden",
+        description: "Die Standortregel konnte nicht gespeichert werden.",
+      });
+      return;
+    }
+
+    setIsSavingLocationTracking(true);
+
+    try {
+      const { error } = await supabase
+        .from("employees")
+        .update({
+          location_tracking_mode: editLocationTrackingMode,
+          location_tracking_note: editLocationTrackingNote.trim() || null,
+        })
+        .eq("id", editingLocationEmployee.id)
+        .eq("business_id", businessId);
+
+      if (error) {
+        console.error("SAVE LOCATION TRACKING ERROR:", error);
+
+        showToast({
+          type: "error",
+          title: "Standortregel konnte nicht gespeichert werden",
+          description: error.message,
+        });
+
+        return;
+      }
+
+      const employeeName = editingLocationEmployee.name;
+
+      setEditingLocationEmployee(null);
+      setEditLocationTrackingMode("required");
+      setEditLocationTrackingNote("");
+
+      await loadEmployees();
+
+      showToast({
+        type: "success",
+        title: "Standortregel gespeichert",
+        description: `Die Standortprüfung für ${employeeName} wurde aktualisiert.`,
+      });
+    } finally {
+      setIsSavingLocationTracking(false);
+    }
+  }
 
   function handleOpenEditPayroll(employee: EmployeeWithTargetHours) {
     if (!canEditPayroll) {
@@ -1342,20 +1580,20 @@ async function handleSaveLocationTracking() {
       employee.wage_type === "fixed_hourly"
         ? "fixed_hourly"
         : employee.wage_type === "salary"
-        ? "salary"
-        : "hourly"
+          ? "salary"
+          : "hourly",
     );
 
     setEditHourlyRate(
       employee.hourly_rate !== null && employee.hourly_rate !== undefined
         ? String(employee.hourly_rate)
-        : ""
+        : "",
     );
 
     setEditMonthlySalary(
       employee.monthly_salary !== null && employee.monthly_salary !== undefined
         ? String(employee.monthly_salary)
-        : ""
+        : "",
     );
 
     setEditDatevPersonnelNumber(employee.datev_personnel_number || "");
@@ -1422,20 +1660,20 @@ async function handleSaveLocationTracking() {
   }
 
   const activeEmployees = employees.filter(
-    (employee) => employee.account_status === "active"
+    (employee) => employee.account_status === "active",
   );
 
   const inactiveEmployees = employees.filter(
-    (employee) => employee.account_status === "inactive"
+    (employee) => employee.account_status === "inactive",
   );
 
   const activeEmployeesCount = activeEmployees.length;
   const inactiveEmployeesCount = inactiveEmployees.length;
   const invitedEmployeesCount = employees.filter(
-    (employee) => employee.invite && !employee.invite.used_at
+    (employee) => employee.invite && !employee.invite.used_at,
   ).length;
   const registeredEmployeesCount = employees.filter(
-    (employee) => employee.invite?.used_at
+    (employee) => employee.invite?.used_at,
   ).length;
 
   if (isLoading) {
@@ -1466,11 +1704,12 @@ async function handleSaveLocationTracking() {
         action={
           <PageActions>
             <Button
-              variant="primary"
-              onClick={() => setShowForm(true)}
-            >
-              Mitarbeiter hinzufügen
-            </Button>
+            variant="primary"
+            type="button"
+            onClick={() => setShowForm(true)}
+          >
+            Mitarbeiter hinzufügen
+          </Button>
           </PageActions>
         }
       />
@@ -1562,7 +1801,7 @@ async function handleSaveLocationTracking() {
                 value={newEmployeeWageType}
                 onChange={(event) =>
                   setNewEmployeeWageType(
-                    event.target.value as "hourly" | "fixed_hourly" | "salary"
+                    event.target.value as "hourly" | "fixed_hourly" | "salary",
                   )
                 }
                 disabled={isSaving}
@@ -1688,11 +1927,12 @@ async function handleSaveLocationTracking() {
             </p>
             <div className="mt-6">
               <Button
-                variant="primary"
-                onClick={() => setShowForm(true)}
-              >
-                Ersten Mitarbeiter anlegen
-              </Button>
+              variant="primary"
+              type="button"
+              onClick={() => setShowForm(true)}
+            >
+              Ersten Mitarbeiter anlegen
+            </Button>
             </div>
           </div>
         ) : (
@@ -1709,9 +1949,7 @@ async function handleSaveLocationTracking() {
                         {employee.name}
                       </h3>
 
-                      <p className="text-sm text-[#64748B]">
-                        {employee.role}
-                      </p>
+                      <p className="text-sm text-[#64748B]">{employee.role}</p>
                     </div>
 
                     <Badge
@@ -1782,11 +2020,11 @@ async function handleSaveLocationTracking() {
                                 ? {
                                     ...currentEmployee,
                                     monthly_target_hours: Number(
-                                      event.target.value
+                                      event.target.value,
                                     ),
                                   }
-                                : currentEmployee
-                            )
+                                : currentEmployee,
+                            ),
                           );
 
                           setUnsavedMonthlyHours((current) => ({
@@ -1804,7 +2042,7 @@ async function handleSaveLocationTracking() {
                           onClick={() =>
                             handleUpdateMonthlyHours(
                               employee.id,
-                              employee.monthly_target_hours
+                              employee.monthly_target_hours,
                             )
                           }
                         >
@@ -1822,7 +2060,7 @@ async function handleSaveLocationTracking() {
                       onClick={() =>
                         handleToggleAccountStatus(
                           employee.id,
-                          employee.account_status
+                          employee.account_status,
                         )
                       }
                     >
@@ -1830,17 +2068,15 @@ async function handleSaveLocationTracking() {
                     </Button>
 
                     {canEditLocationTracking && (
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      type="button"
-                      onClick={() =>
-                        handleOpenLocationTracking(employee)
-                      }
-                    >
-                      GPS
-                    </Button>
-                  )}
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        type="button"
+                        onClick={() => handleOpenLocationTracking(employee)}
+                      >
+                        GPS
+                      </Button>
+                    )}
 
                     {canEditPayroll && (
                       <Button
@@ -1922,7 +2158,7 @@ async function handleSaveLocationTracking() {
                         onBlur={(event) =>
                           handleUpdateMonthlyHours(
                             employee.id,
-                            Number(event.target.value)
+                            Number(event.target.value),
                           )
                         }
                         className="w-24"
@@ -1953,7 +2189,7 @@ async function handleSaveLocationTracking() {
                         onClick={() =>
                           handleToggleAccountStatus(
                             employee.id,
-                            employee.account_status
+                            employee.account_status,
                           )
                         }
                       >
@@ -1965,9 +2201,7 @@ async function handleSaveLocationTracking() {
                           variant="secondary"
                           size="sm"
                           type="button"
-                          onClick={() =>
-                            handleOpenLocationTracking(employee)
-                          }
+                          onClick={() => handleOpenLocationTracking(employee)}
                         >
                           GPS
                         </Button>
@@ -2039,7 +2273,7 @@ async function handleSaveLocationTracking() {
                         onClick={() =>
                           handleToggleAccountStatus(
                             employee.id,
-                            employee.account_status
+                            employee.account_status,
                           )
                         }
                       >
@@ -2059,6 +2293,114 @@ async function handleSaveLocationTracking() {
         message={popupMessage}
         onClose={() => setShowPopup(false)}
       />
+
+      {createdEmployeeInvite && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#111827]/40 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-xl overflow-hidden rounded-3xl border border-[#E2E8F0] bg-white shadow-[0_24px_80px_rgba(15,23,42,0.18)]">
+            <div className="border-b border-[#E2E8F0] px-6 py-5">
+              <h2 className="text-2xl font-semibold tracking-[-0.02em] text-[#0F172A]">
+                Mitarbeiter einladen
+              </h2>
+              <p className="mt-1 text-sm text-[#64748B]">
+                Versende die Einladung für {createdEmployeeInvite.employeeName}
+                per E-Mail, WhatsApp oder kopiere die Zugangsdaten.
+              </p>
+            </div>
+
+            <div className="space-y-5 p-6">
+              <div className="rounded-2xl border border-[#DBEAFE] bg-[#EFF6FF] p-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[#64748B]">
+                  Einladungscode
+                </p>
+                <p className="mt-2 font-mono text-lg font-bold tracking-wide text-[#0F172A]">
+                  {createdEmployeeInvite.inviteCode}
+                </p>
+              </div>
+
+              <div>
+                <Input
+                  label="Einladung per E-Mail"
+                  type="email"
+                  placeholder="mitarbeiter@beispiel.de"
+                  value={inviteEmail}
+                  disabled={isSendingInviteEmail}
+                  onChange={(event) => setInviteEmail(event.target.value)}
+                />
+
+                <div className="mt-3">
+                  <Button
+                    variant="primary"
+                    type="button"
+                    fullWidth
+                    loading={isSendingInviteEmail}
+                    onClick={handleSendInviteEmail}
+                  >
+                    Einladung per E-Mail senden
+                  </Button>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <Button
+                  variant="secondary"
+                  type="button"
+                  fullWidth
+                  disabled={
+                    isSendingInviteEmail ||
+                    isCopyingInviteLink ||
+                    isCopyingInviteCode
+                  }
+                  onClick={handleOpenWhatsAppInvite}
+                >
+                  Per WhatsApp senden
+                </Button>
+
+                <Button
+                  variant="secondary"
+                  type="button"
+                  fullWidth
+                  loading={isCopyingInviteLink}
+                  disabled={isSendingInviteEmail || isCopyingInviteCode}
+                  onClick={handleCopyInviteLink}
+                >
+                  Einladungslink kopieren
+                </Button>
+
+                <Button
+                  variant="secondary"
+                  type="button"
+                  fullWidth
+                  loading={isCopyingInviteCode}
+                  disabled={isSendingInviteEmail || isCopyingInviteLink}
+                  onClick={handleCopyInviteCode}
+                  className="sm:col-span-2"
+                >
+                  Einladungscode kopieren
+                </Button>
+              </div>
+
+              <p className="text-xs leading-5 text-[#64748B]">
+                Der Mitarbeiter öffnet den Link und gibt anschließend den Einladungscode bei der Registrierung selbst ein.
+              </p>
+            </div>
+
+            <div className="flex justify-end border-t border-[#E2E8F0] px-6 py-5">
+              <Button
+                variant="secondary"
+                type="button"
+                disabled={
+                  isSendingInviteEmail ||
+                  isCopyingInviteLink ||
+                  isCopyingInviteCode
+                }
+                onClick={closeCreatedEmployeeInvite}
+              >
+                Später erledigen
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <DiperaPopup
         open={showEmployeeLimitPopup}
@@ -2107,101 +2449,100 @@ async function handleSaveLocationTracking() {
         cancelText="Abbrechen"
       />
 
-{editingLocationEmployee && (
-  <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#111827]/40 p-4 backdrop-blur-sm">
-    <div className="w-full max-w-xl overflow-hidden rounded-3xl border border-[#E2E8F0] bg-white shadow-[0_24px_80px_rgba(15,23,42,0.18)]">
-      <div className="border-b border-[#E2E8F0] px-6 py-5">
-        <h2 className="text-2xl font-semibold tracking-[-0.02em] text-[#0F172A]">
-          Standortprüfung
-        </h2>
+      {editingLocationEmployee && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#111827]/40 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-xl overflow-hidden rounded-3xl border border-[#E2E8F0] bg-white shadow-[0_24px_80px_rgba(15,23,42,0.18)]">
+            <div className="border-b border-[#E2E8F0] px-6 py-5">
+              <h2 className="text-2xl font-semibold tracking-[-0.02em] text-[#0F172A]">
+                Standortprüfung
+              </h2>
 
-        <p className="mt-1 text-sm text-[#64748B]">
-          {editingLocationEmployee.name}
-        </p>
-      </div>
+              <p className="mt-1 text-sm text-[#64748B]">
+                {editingLocationEmployee.name}
+              </p>
+            </div>
 
-      <div className="space-y-5 p-6">
-        <Select
-          label="Regel für die Zeiterfassung"
-          value={editLocationTrackingMode}
-          disabled={isSavingLocationTracking}
-          onChange={(event) =>
-            setEditLocationTrackingMode(
-              event.target.value as LocationTrackingMode
-            )
-          }
-          options={[
-            {
-              value: "required",
-              label: "Standort erforderlich",
-            },
-            {
-              value: "remote_allowed",
-              label: "Mobiles Arbeiten erlaubt",
-            },
-            {
-              value: "disabled",
-              label: "Standortprüfung deaktiviert",
-            },
-          ]}
-        />
+            <div className="space-y-5 p-6">
+              <Select
+                label="Regel für die Zeiterfassung"
+                value={editLocationTrackingMode}
+                disabled={isSavingLocationTracking}
+                onChange={(event) =>
+                  setEditLocationTrackingMode(
+                    event.target.value as LocationTrackingMode,
+                  )
+                }
+                options={[
+                  {
+                    value: "required",
+                    label: "Standort erforderlich",
+                  },
+                  {
+                    value: "remote_allowed",
+                    label: "Mobiles Arbeiten erlaubt",
+                  },
+                  {
+                    value: "disabled",
+                    label: "Standortprüfung deaktiviert",
+                  },
+                ]}
+              />
 
-        <div className="rounded-2xl border border-[#DBEAFE] bg-[#EFF6FF] p-4">
-          <p className="text-sm font-semibold text-[#0F172A]">
-            {editLocationTrackingMode === "required" &&
-              "Stempeln ist nur innerhalb eines aktiven Betriebsstandorts möglich."}
+              <div className="rounded-2xl border border-[#DBEAFE] bg-[#EFF6FF] p-4">
+                <p className="text-sm font-semibold text-[#0F172A]">
+                  {editLocationTrackingMode === "required" &&
+                    "Stempeln ist nur innerhalb eines aktiven Betriebsstandorts möglich."}
 
-            {editLocationTrackingMode === "remote_allowed" &&
-              "Der Standort wird weiterhin erfasst. Stempeln außerhalb des Betriebs ist jedoch erlaubt."}
+                  {editLocationTrackingMode === "remote_allowed" &&
+                    "Der Standort wird weiterhin erfasst. Stempeln außerhalb des Betriebs ist jedoch erlaubt."}
 
-            {editLocationTrackingMode === "disabled" &&
-              "Beim Stempeln wird keine GPS-Position angefordert oder geprüft."}
-          </p>
+                  {editLocationTrackingMode === "disabled" &&
+                    "Beim Stempeln wird keine GPS-Position angefordert oder geprüft."}
+                </p>
+              </div>
+
+              <Textarea
+                value={editLocationTrackingNote}
+                disabled={isSavingLocationTracking}
+                onChange={(event) =>
+                  setEditLocationTrackingNote(event.target.value)
+                }
+                placeholder="Interner Hinweis, z. B. regelmäßiges Homeoffice am Dienstag und Donnerstag"
+                className="min-h-28"
+              />
+
+              <p className="text-xs leading-5 text-[#64748B]">
+                Dieser Hinweis ist intern und wird bei erlaubten
+                Standortausnahmen zusammen mit der Stempelung protokolliert.
+              </p>
+            </div>
+
+            <div className="flex flex-col-reverse gap-3 border-t border-[#E2E8F0] px-6 py-5 sm:flex-row sm:justify-end">
+              <Button
+                variant="secondary"
+                type="button"
+                disabled={isSavingLocationTracking}
+                onClick={() => {
+                  setEditingLocationEmployee(null);
+                  setEditLocationTrackingMode("required");
+                  setEditLocationTrackingNote("");
+                }}
+              >
+                Abbrechen
+              </Button>
+
+              <Button
+                variant="primary"
+                type="button"
+                loading={isSavingLocationTracking}
+                onClick={handleSaveLocationTracking}
+              >
+                Speichern
+              </Button>
+            </div>
+          </div>
         </div>
-
-        <Textarea
-          value={editLocationTrackingNote}
-          disabled={isSavingLocationTracking}
-          onChange={(event) =>
-            setEditLocationTrackingNote(event.target.value)
-          }
-          placeholder="Interner Hinweis, z. B. regelmäßiges Homeoffice am Dienstag und Donnerstag"
-          className="min-h-28"
-        />
-
-        <p className="text-xs leading-5 text-[#64748B]">
-          Dieser Hinweis ist intern und wird bei erlaubten
-          Standortausnahmen zusammen mit der Stempelung
-          protokolliert.
-        </p>
-      </div>
-
-      <div className="flex flex-col-reverse gap-3 border-t border-[#E2E8F0] px-6 py-5 sm:flex-row sm:justify-end">
-        <Button
-          variant="secondary"
-          type="button"
-          disabled={isSavingLocationTracking}
-          onClick={() => {
-            setEditingLocationEmployee(null);
-            setEditLocationTrackingMode("required");
-            setEditLocationTrackingNote("");
-          }}
-        >
-          Abbrechen
-        </Button>
-
-        <Button
-          variant="primary"
-          type="button"
-          loading={isSavingLocationTracking}
-          onClick={handleSaveLocationTracking}
-        >
-          Speichern
-        </Button>
-      </div>
-    </div>
-  </div>
-)}
+      )}
 
       {editingPayrollEmployee && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#111827]/40 p-6 backdrop-blur-sm">
@@ -2222,10 +2563,7 @@ async function handleSaveLocationTracking() {
                 value={editWageType}
                 onChange={(event) =>
                   setEditWageType(
-                    event.target.value as
-                      | "hourly"
-                      | "fixed_hourly"
-                      | "salary"
+                    event.target.value as "hourly" | "fixed_hourly" | "salary",
                   )
                 }
                 options={[
