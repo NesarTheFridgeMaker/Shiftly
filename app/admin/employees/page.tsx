@@ -61,7 +61,12 @@ type EmployeeNote = {
 type EmployeeInvite = {
   id: string;
   employee_id: string;
+  business_id: string;
   invite_code: string;
+  email: string | null;
+  delivery_method: "email" | "whatsapp";
+  auth_user_id: string | null;
+  claimed_at: string | null;
   used_at: string | null;
 };
 
@@ -76,6 +81,8 @@ type CreatedEmployeeInvite = {
   employeeId: string;
   employeeName: string;
   inviteCode: string;
+  email: string | null;
+  deliveryMethod: "email" | "whatsapp";
 };
 
 function formatAccountStatus(status: string) {
@@ -289,10 +296,21 @@ export default function EmployeesPage() {
         }
 
         const { data: inviteData, error: inviteError } = await supabase
-          .from("employee_invites")
-          .select("id, employee_id, invite_code, used_at")
-          .eq("business_id", businessId)
-          .in("employee_id", employeeIds);
+  .from("employee_invites")
+  .select(`
+    id,
+    employee_id,
+    business_id,
+    invite_code,
+    email,
+    delivery_method,
+    auth_user_id,
+    claimed_at,
+    used_at
+  `)
+  .eq("business_id", businessId)
+  .in("employee_id", employeeIds)
+  .order("created_at", { ascending: false });
 
         if (inviteError) {
           console.error(inviteError);
@@ -315,10 +333,14 @@ export default function EmployeesPage() {
           (note) => note.employee_id === employee.id,
         );
 
+        const employeeInvites = invites.filter(
+          (inviteItem) => inviteItem.employee_id === employee.id,
+        );
+
         const invite =
-          invites.find(
-            (inviteItem) => inviteItem.employee_id === employee.id,
-          ) || null;
+          employeeInvites.find((inviteItem) => !inviteItem.used_at) ??
+          employeeInvites[0] ??
+          null;
 
         return {
           ...employee,
@@ -657,16 +679,25 @@ export default function EmployeesPage() {
       const inviteCode = generateInviteCode();
 
       const { data: insertedInvite, error: inviteError } = await supabase
-        .from("employee_invites")
-        .insert([
-          {
-            business_id: businessId,
-            employee_id: insertedEmployee.id,
-            invite_code: inviteCode,
-          },
-        ])
-        .select("id, invite_code")
-        .single();
+      .from("employee_invites")
+      .insert([
+        {
+          business_id: businessId,
+          employee_id: insertedEmployee.id,
+          invite_code: inviteCode,
+          email: null,
+          delivery_method: "whatsapp",
+          auth_user_id: null,
+          claimed_at: null,
+        },
+      ])
+      .select(`
+        id,
+        invite_code,
+        email,
+        delivery_method
+      `)
+  .single();
 
       if (inviteError || !insertedInvite) {
         console.error("EMPLOYEE INVITE INSERT ERROR:", inviteError);
@@ -678,10 +709,12 @@ export default function EmployeesPage() {
         });
       } else {
         setCreatedEmployeeInvite({
-          employeeId: insertedEmployee.id,
-          employeeName,
-          inviteCode: insertedInvite.invite_code,
-        });
+        employeeId: insertedEmployee.id,
+        employeeName,
+        inviteCode: insertedInvite.invite_code,
+        email: insertedInvite.email,
+        deliveryMethod: insertedInvite.delivery_method,
+      });
       }
 
       setName("");
@@ -733,15 +766,20 @@ export default function EmployeesPage() {
   }
 
   function handleOpenExistingInvite(employee: EmployeeWithTargetHours) {
-    if (!employee.invite || employee.invite.used_at) return;
-
-    setInviteEmail("");
-    setCreatedEmployeeInvite({
-      employeeId: employee.id,
-      employeeName: employee.name,
-      inviteCode: employee.invite.invite_code,
-    });
+  if (!employee.invite || employee.invite.used_at) {
+    return;
   }
+
+  setInviteEmail(employee.invite.email ?? "");
+
+  setCreatedEmployeeInvite({
+    employeeId: employee.id,
+    employeeName: employee.name,
+    inviteCode: employee.invite.invite_code,
+    email: employee.invite.email,
+    deliveryMethod: employee.invite.delivery_method,
+  });
+}
 
   async function handleSendInviteEmail() {
     if (!createdEmployeeInvite || isSendingInviteEmail) return;
@@ -800,6 +838,7 @@ export default function EmployeesPage() {
 let data: {
   success?: boolean;
   error?: string;
+  email?: string;
 } = {};
 
 try {
@@ -834,6 +873,8 @@ try {
 
       setCreatedEmployeeInvite(null);
       setInviteEmail("");
+
+      await loadEmployees();
 
       showToast({
         type: "success",
@@ -906,32 +947,78 @@ try {
     }
   }
 
-function handleOpenWhatsAppInvite() {
+async function handleOpenWhatsAppInvite() {
   if (!createdEmployeeInvite) return;
 
-  const inviteUrl = getInviteUrl(createdEmployeeInvite.inviteCode);
+  try {
+    const { error } = await supabase
+      .from("employee_invites")
+      .update({
+        delivery_method: "whatsapp",
+        email: null,
+      })
+      .eq("employee_id", createdEmployeeInvite.employeeId)
+      .eq("invite_code", createdEmployeeInvite.inviteCode)
+      .is("used_at", null);
 
-  const message = [
-    `Hallo ${createdEmployeeInvite.employeeName} 👋`,
-    "",
-    "Du wurdest von deinem Arbeitgeber zu Dipera eingeladen.",
-    "",
-    "📱 Registrierung:",
-    "",
-    inviteUrl,
-    "",
-    "Der Einladungscode wird automatisch übernommen.",
-    "",
-    "Du musst nur noch deine E-Mail-Adresse und dein Passwort festlegen.",
-    "",
-    "Willkommen bei Dipera!",
-  ].join("\n");
+    if (error) {
+      console.error("UPDATE WHATSAPP INVITE ERROR:", error);
 
-  window.open(
-    `https://wa.me/?text=${encodeURIComponent(message)}`,
-    "_blank",
-    "noopener,noreferrer",
-  );
+      showToast({
+        type: "error",
+        title: "WhatsApp-Einladung konnte nicht vorbereitet werden",
+        description: "Bitte versuche es erneut.",
+      });
+
+      return;
+    }
+
+    const inviteUrl = getInviteUrl(createdEmployeeInvite.inviteCode);
+
+    const message = [
+      `Hallo ${createdEmployeeInvite.employeeName} 👋`,
+      "",
+      "Du wurdest von deinem Arbeitgeber zu Dipera eingeladen.",
+      "",
+      "📱 Registrierung:",
+      inviteUrl,
+      "",
+      "Dein Einladungscode wird automatisch übernommen.",
+      "",
+      "Bitte gib deine E-Mail-Adresse ein und lege ein Passwort fest.",
+      "Anschließend bestätigst du deine E-Mail-Adresse über die E-Mail von Dipera.",
+      "",
+      "Willkommen bei Dipera!",
+    ].join("\n");
+
+    window.open(
+      `https://wa.me/?text=${encodeURIComponent(message)}`,
+      "_blank",
+      "noopener,noreferrer",
+    );
+
+    setCreatedEmployeeInvite((current) =>
+      current
+        ? {
+            ...current,
+            email: null,
+            deliveryMethod: "whatsapp",
+          }
+        : null,
+    );
+
+    setInviteEmail("");
+
+    await loadEmployees();
+  } catch (error) {
+    console.error("OPEN WHATSAPP INVITE ERROR:", error);
+
+    showToast({
+      type: "error",
+      title: "WhatsApp konnte nicht geöffnet werden",
+      description: "Bitte versuche es erneut.",
+    });
+  }
 }
 
   async function handleDeleteEmployee(id: string) {
@@ -1376,6 +1463,15 @@ function handleOpenWhatsAppInvite() {
             <div className="rounded-xl border border-[#E2E8F0] bg-white px-4 py-3 font-mono text-sm font-semibold tracking-wide text-[#0F172A]">
               {employee.invite.invite_code}
             </div>
+
+            {!employee.invite.used_at && (
+              <p className="mt-2 text-xs font-medium text-[#64748B]">
+                Versandart:{" "}
+                {employee.invite.delivery_method === "email"
+                  ? `E-Mail${employee.invite.email ? ` an ${employee.invite.email}` : ""}`
+                  : "WhatsApp oder kopierter Link"}
+              </p>
+            )}
 
             <p className="mt-2 text-xs leading-5 text-[#64748B]">
               {employee.invite.used_at
@@ -2380,7 +2476,10 @@ function handleOpenWhatsAppInvite() {
               </div>
 
               <p className="text-xs leading-5 text-[#64748B]">
-                Der Mitarbeiter öffnet den Link und gibt anschließend den Einladungscode bei der Registrierung selbst ein.
+                Der Einladungscode wird über den Link automatisch übernommen. Bei einer
+                E-Mail-Einladung wird die hinterlegte E-Mail-Adresse verwendet. Bei einer
+                WhatsApp-Einladung gibt der Mitarbeiter seine E-Mail-Adresse selbst ein und
+                bestätigt sie anschließend.
               </p>
             </div>
 
