@@ -59,8 +59,8 @@ async function completeEmailConfirmation() {
         );
 
         setErrorMessage(
-          "Der Bestätigungslink ist ungültig, abgelaufen oder wurde bereits verwendet.",
-        );
+  exchangeError.message
+);
         return;
       }
 
