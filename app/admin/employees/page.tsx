@@ -20,6 +20,7 @@ import { useSearchParams } from "next/navigation";
 import { useToast } from "@/components/ui/ToastProvider";
 import TableSkeleton from "@/components/skeletons/TableSkeleton";
 import StatsSkeleton from "@/components/skeletons/StatsSkeleton";
+import { FaWhatsapp } from "react-icons/fa";
 
 type LocationTrackingMode = "required" | "remote_allowed" | "disabled";
 
@@ -996,6 +997,8 @@ async function handleOpenWhatsAppInvite() {
       "_blank",
       "noopener,noreferrer",
     );
+
+    setCreatedEmployeeInvite(null);
 
     setCreatedEmployeeInvite((current) =>
       current
@@ -2437,19 +2440,13 @@ async function handleOpenWhatsAppInvite() {
               </div>
 
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <Button
-                  variant="secondary"
-                  type="button"
-                  fullWidth
-                  disabled={
-                    isSendingInviteEmail ||
-                    isCopyingInviteLink ||
-                    isCopyingInviteCode
-                  }
+                <button
                   onClick={handleOpenWhatsAppInvite}
+                  className="flex h-11 items-center justify-center gap-2 rounded-xl bg-[#25D366] px-5 font-semibold text-white transition hover:bg-[#1DA851]"
                 >
-                  Per WhatsApp senden
-                </Button>
+                  <FaWhatsapp className="h-5 w-5" />
+                  Mit WhatsApp versenden
+                </button>
 
                 <Button
                   variant="secondary"
