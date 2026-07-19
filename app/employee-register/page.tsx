@@ -57,7 +57,12 @@ async function handleRegister() {
     return;
   }
 
-  if (!hasMinLength || !hasUppercase || !hasNumber || !hasSpecialChar) {
+  if (
+    !hasMinLength ||
+    !hasUppercase ||
+    !hasNumber ||
+    !hasSpecialChar
+  ) {
     showDiperaPopup("Bitte erfülle alle Passwortanforderungen.");
     return;
   }
@@ -66,72 +71,134 @@ async function handleRegister() {
 
   try {
     /*
-     * Eventuell noch bestehende Owner-/Admin-Session beenden.
-     * Wichtig beim Testen im selben Browser.
+     * Beim Testen kann im selben Browser noch ein Owner oder Admin
+     * angemeldet sein. Diese Sitzung zuerst beenden.
      */
     await supabase.auth.signOut();
 
-    const response = await fetch("/api/employee-register", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        inviteCode: cleanedInviteCode,
-        email: cleanedEmail,
-        password,
-      }),
-    });
+    /*
+     * 1. Einladung serverseitig prüfen
+     */
+    const validateResponse = await fetch(
+      "/api/employee-register/validate",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          inviteCode: cleanedInviteCode,
+        }),
+      }
+    );
 
-    const result = (await response.json()) as {
+    const validateResult = (await validateResponse.json()) as {
       success?: boolean;
       message?: string;
-      code?: string;
       role?: string;
     };
 
-    if (!response.ok || !result.success) {
-      console.error("EMPLOYEE REGISTER API ERROR:", result);
-
+    if (!validateResponse.ok || !validateResult.success) {
       showDiperaPopup(
-        result.message ??
-          "Der Mitarbeiter-Zugang konnte nicht erstellt werden."
+        validateResult.message ??
+          "Der Einladungscode konnte nicht geprüft werden."
       );
-
       return;
     }
 
-    const { error: signInError } =
-      await supabase.auth.signInWithPassword({
+    /*
+     * 2. Normale Registrierung mit E-Mail-Bestätigung
+     */
+    const appUrl =
+      window.location.origin;
+
+      console.log("VOR signUp");
+
+    const { data, error: signUpError } =
+      await supabase.auth.signUp({
         email: cleanedEmail,
         password,
+        options: {
+          emailRedirectTo: `${appUrl}/auth/callback`,
+          data: {
+            registration_type: "employee_invite",
+            invite_code: cleanedInviteCode,
+          },
+        },
       });
 
-    if (signInError) {
-      console.error("EMPLOYEE SIGN-IN ERROR:", signInError);
+      console.log("NACH signUp", {
+  error: signUpError,
+  session: data.session,
+  user: data.user,
+});
 
-      showDiperaPopup(
-        "Dein Zugang wurde erfolgreich erstellt, aber die automatische Anmeldung ist fehlgeschlagen. Bitte melde dich über die Loginseite an."
+    if (signUpError) {
+      console.error(
+        "EMPLOYEE SIGN-UP ERROR:",
+        signUpError
       );
 
+      const normalizedMessage =
+        signUpError.message.toLowerCase();
+
+      if (
+        normalizedMessage.includes("already") ||
+        normalizedMessage.includes("registered") ||
+        normalizedMessage.includes("exists")
+      ) {
+        showDiperaPopup(
+          "Für diese E-Mail-Adresse existiert bereits ein Dipera-Konto. Bitte melde dich mit deinem bestehenden Konto an oder verwende eine andere E-Mail-Adresse."
+        );
+        return;
+      }
+
+      showDiperaPopup(
+        signUpError.message ||
+          "Der Mitarbeiter-Zugang konnte nicht erstellt werden."
+      );
       return;
     }
 
-    if (result.role === "admin" || result.role === "owner") {
-  window.location.assign("/admin");
-  return;
-}
+    if (!data.user) {
+      showDiperaPopup(
+        "Der Mitarbeiter-Zugang konnte nicht erstellt werden."
+      );
+      return;
+    }
 
-if (result.role === "employee") {
-  window.location.assign("/employee");
+    /*
+     * Bei aktivierter E-Mail-Bestätigung ist data.session normalerweise null.
+     * Der Benutzer wird erst nach Klick auf den E-Mail-Link angemeldet.
+     */
+    console.log("EMPLOYEE SIGN-UP RESULT:", {
+  userId: data.user?.id,
+  emailConfirmedAt: data.user?.email_confirmed_at,
+  hasSession: Boolean(data.session),
+  supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL,
+});
+
+if (data.session) {
+  await supabase.auth.signOut();
+
+  showDiperaPopup(
+    "Fehler bei der E-Mail-Bestätigung: Supabase hat den Zugang sofort freigeschaltet. Bitte prüfe die Browser-Konsole."
+  );
+
   return;
 }
 
 showDiperaPopup(
-  "Der Zugang wurde erstellt, aber die Benutzerrolle konnte nicht erkannt werden."
+  "Fast geschafft! Wir haben dir eine Bestätigungs-E-Mail geschickt. Bitte öffne die E-Mail und bestätige deine Adresse, um die Registrierung abzuschließen."
 );
+
+setPassword("");
+setConfirmPassword("");
   } catch (error) {
-    console.error("EMPLOYEE REGISTRATION ERROR:", error);
+    console.error(
+      "EMPLOYEE REGISTRATION ERROR:",
+      error
+    );
 
     showDiperaPopup(
       "Bei der Registrierung ist ein unerwarteter Fehler aufgetreten. Bitte versuche es erneut."
@@ -140,7 +207,6 @@ showDiperaPopup(
     setIsLoading(false);
   }
 }
-
   return (
     <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[#f7f7f8] p-4">
       <div className="absolute left-5 top-5 z-10 sm:left-10 sm:top-8">

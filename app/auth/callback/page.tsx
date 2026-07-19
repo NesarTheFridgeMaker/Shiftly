@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useRef, useState } from "react";
 
 import { supabase } from "@/lib/supabaseClient";
+import type { EmailOtpType } from "@supabase/supabase-js";
 
 const ALLOWED_NEXT_PATHS = new Set([
   "/employee-set-password",
@@ -35,58 +36,77 @@ function AuthCallbackContent() {
 
     hasStarted.current = true;
 
-    async function completeEmailConfirmation() {
-      const code = searchParams.get("code");
-      const requestedNextPath = getSafeNextPath(
-        searchParams.get("next"),
-      );
+async function completeEmailConfirmation() {
+  const code = searchParams.get("code");
+  const tokenHash = searchParams.get("token_hash");
+  const verificationType = searchParams.get("type");
 
-      if (!code) {
+  const requestedNextPath = getSafeNextPath(
+    searchParams.get("next"),
+  );
+
+  try {
+    let user = null;
+
+    if (code) {
+      const { data, error: exchangeError } =
+        await supabase.auth.exchangeCodeForSession(code);
+
+      if (exchangeError) {
+        console.error(
+          "EMAIL CONFIRMATION CODE EXCHANGE ERROR:",
+          exchangeError,
+        );
+
         setErrorMessage(
-          "Der Bestätigungslink ist ungültig oder unvollständig.",
+          "Der Bestätigungslink ist ungültig, abgelaufen oder wurde bereits verwendet.",
         );
         return;
       }
 
-      try {
-        /*
-         * Den einmalig verwendbaren PKCE-Code gegen eine
-         * angemeldete Supabase-Sitzung austauschen.
-         */
-        const { data, error: exchangeError } =
-          await supabase.auth.exchangeCodeForSession(code);
+      user = data.user;
+    } else if (
+      tokenHash &&
+      verificationType === "invite"
+    ) {
+      const { data, error: verificationError } =
+        await supabase.auth.verifyOtp({
+          token_hash: tokenHash,
+          type: "invite",
+        });
 
-        if (exchangeError) {
-          console.error(
-            "EMAIL CONFIRMATION CODE EXCHANGE ERROR:",
-            exchangeError,
-          );
+      if (verificationError) {
+        console.error(
+          "EMAIL INVITE TOKEN VERIFICATION ERROR:",
+          verificationError,
+        );
 
-          setErrorMessage(
-            "Der Bestätigungslink ist ungültig, abgelaufen oder wurde bereits verwendet.",
-          );
-          return;
-        }
+        setErrorMessage(
+          "Der Einladungslink ist ungültig, abgelaufen oder wurde bereits verwendet.",
+        );
+        return;
+      }
 
-        const user = data.user;
+      user = data.user;
+    } else {
+      setErrorMessage(
+        "Der Bestätigungslink ist ungültig oder unvollständig.",
+      );
+      return;
+    }
 
-        if (!user) {
-          setErrorMessage(
-            "Die E-Mail-Adresse wurde bestätigt, aber der Benutzer konnte nicht geladen werden.",
-          );
-          return;
-        }
+    if (!user) {
+      setErrorMessage(
+        "Die E-Mail-Adresse wurde bestätigt, aber der Benutzer konnte nicht geladen werden.",
+      );
+      return;
+    }
 
-        /*
-         * Ein ausdrücklich mitgegebener, erlaubter Zielpfad hat
-         * Vorrang. Das wird insbesondere für E-Mail-Einladungen
-         * verwendet, die zuerst zur Passwortseite führen.
-         */
-        if (requestedNextPath) {
-          window.location.replace(requestedNextPath);
-          return;
-        }
-
+    // Ab hier bleibt dein bisheriger Code bestehen:
+    if (requestedNextPath) {
+      window.location.replace(requestedNextPath);
+      return;
+    }
         /*
          * Bereits vorhandenes Dipera-Profil laden.
          */
