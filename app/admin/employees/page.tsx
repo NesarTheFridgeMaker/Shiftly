@@ -2442,7 +2442,7 @@ async function handleOpenWhatsAppInvite() {
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <button
                   onClick={handleOpenWhatsAppInvite}
-                  className="flex h-11 items-center justify-center gap-2 rounded-xl bg-[#25D366] px-5 font-semibold text-white transition hover:bg-[#1DA851]"
+                  className="flex h-11 items-center justify-center gap-2 rounded-xl bg-[#25D366] px-5 text-sm font-semibold text-white transition hover:bg-[#1DA851]"
                 >
                   <FaWhatsapp className="h-5 w-5" />
                   Mit WhatsApp versenden
