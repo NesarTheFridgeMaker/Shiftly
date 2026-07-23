@@ -51,6 +51,10 @@ type ActiveEmployeesSectionProps = {
   onOpenPayroll: (employee: ActiveEmployee) => void;
   onOpenInvite: (employee: ActiveEmployee) => void;
   onDelete: (employeeId: string) => void;
+
+  // NEU
+  expandedEmployeeId: string | null;
+  onToggleExpanded: (employeeId: string) => void;
 };
 
 export default function ActiveEmployeesSection({
@@ -66,6 +70,10 @@ export default function ActiveEmployeesSection({
   onOpenPayroll,
   onOpenInvite,
   onDelete,
+
+  // NEU
+  expandedEmployeeId,
+  onToggleExpanded,
 }: ActiveEmployeesSectionProps) {
   return (
     <div className="grid grid-cols-1 gap-5 lg:grid-cols-2 2xl:grid-cols-3">
@@ -103,6 +111,12 @@ export default function ActiveEmployeesSection({
             />
           }
           notesContent={renderNotes(employee)}
+
+          // NEU
+          isExpanded={expandedEmployeeId === employee.id}
+          onToggleExpanded={() =>
+            onToggleExpanded(employee.id)
+          }
         />
       ))}
     </div>
