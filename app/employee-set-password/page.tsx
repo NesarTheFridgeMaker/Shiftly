@@ -2,7 +2,12 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Eye, EyeOff, LockKeyhole } from "lucide-react";
+import {
+  Check,
+  Eye,
+  EyeOff,
+  LockKeyhole,
+} from "lucide-react";
 
 import { supabase } from "@/lib/supabaseClient";
 
@@ -24,6 +29,33 @@ export default function EmployeeSetPasswordPage() {
     useState(false);
 
   const [errorMessage, setErrorMessage] = useState("");
+
+  const passwordChecks = {
+    minLength: password.length >= MIN_PASSWORD_LENGTH,
+    hasLowercase: /[a-zäöüß]/.test(password),
+    hasUppercase: /[A-ZÄÖÜ]/.test(password),
+    hasNumber: /\d/.test(password),
+    hasSpecialCharacter: /[^A-Za-zÄÖÜäöüß0-9]/.test(
+      password,
+    ),
+  };
+
+  const passwordIsValid = Object.values(passwordChecks).every(
+    Boolean,
+  );
+
+  const passwordsMatch =
+    passwordRepeat.length > 0 &&
+    password === passwordRepeat;
+
+  const passwordRepeatHasError =
+    passwordRepeat.length > 0 &&
+    password !== passwordRepeat;
+
+  const canSubmit =
+    pageState !== "saving" &&
+    passwordIsValid &&
+    passwordsMatch;
 
   useEffect(() => {
     let isMounted = true;
@@ -129,7 +161,9 @@ export default function EmployeeSetPasswordPage() {
     };
   }, [router]);
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(
+    event: FormEvent<HTMLFormElement>,
+  ) {
     event.preventDefault();
 
     if (pageState === "saving") {
@@ -138,14 +172,21 @@ export default function EmployeeSetPasswordPage() {
 
     setErrorMessage("");
 
-    if (password.length < MIN_PASSWORD_LENGTH) {
+    if (!passwordIsValid) {
       setErrorMessage(
-        `Dein Passwort muss mindestens ${MIN_PASSWORD_LENGTH} Zeichen lang sein.`,
+        "Das Passwort erfüllt noch nicht alle Sicherheitsanforderungen.",
       );
       return;
     }
 
-    if (password !== passwordRepeat) {
+    if (!passwordRepeat) {
+      setErrorMessage(
+        "Bitte wiederhole dein neues Passwort.",
+      );
+      return;
+    }
+
+    if (!passwordsMatch) {
       setErrorMessage(
         "Die beiden Passwörter stimmen nicht überein.",
       );
@@ -193,7 +234,7 @@ export default function EmployeeSetPasswordPage() {
           message.includes("password")
         ) {
           setErrorMessage(
-            "Das Passwort erfüllt die Sicherheitsanforderungen nicht. Verwende mindestens 8 Zeichen und möglichst eine Mischung aus Buchstaben, Zahlen und Sonderzeichen.",
+            "Das Passwort erfüllt die Sicherheitsanforderungen nicht.",
           );
         } else if (
           message.includes("session") ||
@@ -319,15 +360,15 @@ export default function EmployeeSetPasswordPage() {
                     name="password"
                     type={showPassword ? "text" : "password"}
                     value={password}
-                    onChange={(event) =>
-                      setPassword(event.target.value)
-                    }
+                    onChange={(event) => {
+                      setPassword(event.target.value);
+                      setErrorMessage("");
+                    }}
                     autoComplete="new-password"
-                    minLength={MIN_PASSWORD_LENGTH}
                     required
                     disabled={pageState === "saving"}
                     className="h-12 w-full rounded-xl border border-slate-300 bg-white px-4 pr-12 text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-[#005CA8] focus:ring-4 focus:ring-blue-100 disabled:cursor-not-allowed disabled:bg-slate-50"
-                    placeholder="Mindestens 8 Zeichen"
+                    placeholder="Sicheres Passwort eingeben"
                   />
 
                   <button
@@ -350,6 +391,35 @@ export default function EmployeeSetPasswordPage() {
                     )}
                   </button>
                 </div>
+
+                <div className="mt-4 space-y-2">
+                  <PasswordRequirement
+                    fulfilled={passwordChecks.minLength}
+                    label={`Mindestens ${MIN_PASSWORD_LENGTH} Zeichen`}
+                  />
+
+                  <PasswordRequirement
+                    fulfilled={passwordChecks.hasLowercase}
+                    label="Mindestens ein Kleinbuchstabe"
+                  />
+
+                  <PasswordRequirement
+                    fulfilled={passwordChecks.hasUppercase}
+                    label="Mindestens ein Großbuchstabe"
+                  />
+
+                  <PasswordRequirement
+                    fulfilled={passwordChecks.hasNumber}
+                    label="Mindestens eine Zahl"
+                  />
+
+                  <PasswordRequirement
+                    fulfilled={
+                      passwordChecks.hasSpecialCharacter
+                    }
+                    label="Mindestens ein Sonderzeichen"
+                  />
+                </div>
               </div>
 
               <div>
@@ -368,14 +438,20 @@ export default function EmployeeSetPasswordPage() {
                       showPasswordRepeat ? "text" : "password"
                     }
                     value={passwordRepeat}
-                    onChange={(event) =>
-                      setPasswordRepeat(event.target.value)
-                    }
+                    onChange={(event) => {
+                      setPasswordRepeat(event.target.value);
+                      setErrorMessage("");
+                    }}
                     autoComplete="new-password"
-                    minLength={MIN_PASSWORD_LENGTH}
                     required
                     disabled={pageState === "saving"}
-                    className="h-12 w-full rounded-xl border border-slate-300 bg-white px-4 pr-12 text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-[#005CA8] focus:ring-4 focus:ring-blue-100 disabled:cursor-not-allowed disabled:bg-slate-50"
+                    className={`h-12 w-full rounded-xl border bg-white px-4 pr-12 text-slate-900 outline-none transition placeholder:text-slate-400 focus:ring-4 disabled:cursor-not-allowed disabled:bg-slate-50 ${
+                      passwordsMatch
+                        ? "border-emerald-400 focus:border-emerald-500 focus:ring-emerald-100"
+                        : passwordRepeatHasError
+                          ? "border-red-400 focus:border-red-500 focus:ring-red-100"
+                          : "border-slate-300 focus:border-[#005CA8] focus:ring-blue-100"
+                    }`}
                     placeholder="Passwort erneut eingeben"
                   />
 
@@ -401,13 +477,18 @@ export default function EmployeeSetPasswordPage() {
                     )}
                   </button>
                 </div>
-              </div>
 
-              <p className="text-xs leading-5 text-slate-500">
-                Verwende mindestens 8 Zeichen. Eine Kombination
-                aus Groß- und Kleinbuchstaben, Zahlen und
-                Sonderzeichen erhöht die Sicherheit.
-              </p>
+                {passwordsMatch ? (
+                  <p className="mt-2 flex items-center gap-2 text-xs font-medium text-emerald-600">
+                    <Check size={15} strokeWidth={3} />
+                    Die Passwörter stimmen überein.
+                  </p>
+                ) : passwordRepeatHasError ? (
+                  <p className="mt-2 text-xs font-medium text-red-600">
+                    Die Passwörter stimmen nicht überein.
+                  </p>
+                ) : null}
+              </div>
 
               {errorMessage ? (
                 <div
@@ -420,8 +501,8 @@ export default function EmployeeSetPasswordPage() {
 
               <button
                 type="submit"
-                disabled={pageState === "saving"}
-                className="flex h-12 w-full items-center justify-center rounded-xl bg-[#005CA8] font-semibold text-white transition hover:bg-[#004b8a] disabled:cursor-not-allowed disabled:opacity-70"
+                disabled={!canSubmit}
+                className="flex h-12 w-full items-center justify-center rounded-xl bg-[#005CA8] font-semibold text-white transition hover:bg-[#004b8a] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {pageState === "saving" ? (
                   <>
@@ -437,5 +518,37 @@ export default function EmployeeSetPasswordPage() {
         )}
       </section>
     </main>
+  );
+}
+
+type PasswordRequirementProps = {
+  fulfilled: boolean;
+  label: string;
+};
+
+function PasswordRequirement({
+  fulfilled,
+  label,
+}: PasswordRequirementProps) {
+  return (
+    <div
+      className={`flex items-center gap-2 text-xs transition ${
+        fulfilled
+          ? "font-medium text-emerald-600"
+          : "text-slate-400"
+      }`}
+    >
+      <span
+        className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border transition ${
+          fulfilled
+            ? "border-emerald-500 bg-emerald-500 text-white"
+            : "border-slate-300 bg-white text-transparent"
+        }`}
+      >
+        <Check size={13} strokeWidth={3} />
+      </span>
+
+      <span>{label}</span>
+    </div>
   );
 }

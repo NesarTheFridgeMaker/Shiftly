@@ -2302,17 +2302,6 @@ const inactiveEmployees = employees
                   Einladungslink kopieren
                 </Button>
 
-                <Button
-                  variant="secondary"
-                  type="button"
-                  fullWidth
-                  loading={isCopyingInviteCode}
-                  disabled={isSendingInviteEmail || isCopyingInviteLink}
-                  onClick={handleCopyInviteCode}
-                  className="sm:col-span-2"
-                >
-                  Einladungscode kopieren
-                </Button>
               </div>
 
               <p className="text-xs leading-5 text-[#64748B]">
