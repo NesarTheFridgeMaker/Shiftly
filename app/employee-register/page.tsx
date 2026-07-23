@@ -1,29 +1,31 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { supabase } from "@/lib/supabaseClient";
 import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import { Eye, EyeOff } from "lucide-react";
 
+import DiperaPopup from "@/components/DiperaPopup";
+import { supabase } from "@/lib/supabaseClient";
 
 function EmployeeRegisterContent() {
-  const router = useRouter();
   const searchParams = useSearchParams();
-  const [inviteCode, setInviteCode] = useState("");
-  useEffect(() => {
-  const invite = searchParams.get("invite");
 
-  if (invite) {
-    setInviteCode(invite);
-  }
-}, [searchParams]);
+  const [inviteCode, setInviteCode] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
 
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+
   const [isLoading, setIsLoading] = useState(false);
+
   const [popupMessage, setPopupMessage] = useState("");
+  const [popupTitle, setPopupTitle] = useState("");
+  const [popupVariant, setPopupVariant] = useState<
+    "info" | "success" | "warning" | "danger"
+  >("info");
   const [showPopup, setShowPopup] = useState(false);
 
   const hasMinLength = password.length >= 8;
@@ -31,91 +33,124 @@ function EmployeeRegisterContent() {
   const hasNumber = /\d/.test(password);
   const hasSpecialChar = /[^A-Za-z0-9]/.test(password);
 
-  function showDiperaPopup(text: string) {
-    setPopupMessage(text);
+  const passwordsMatch =
+    confirmPassword.length > 0 && password === confirmPassword;
+
+  const passwordIsValid =
+    hasMinLength && hasUppercase && hasNumber && hasSpecialChar;
+
+  useEffect(() => {
+    const invite = searchParams.get("invite");
+
+    if (invite) {
+      setInviteCode(invite.toUpperCase());
+    }
+  }, [searchParams]);
+
+  function showDiperaPopup(
+    message: string,
+    options?: {
+      title?: string;
+      variant?: "info" | "success" | "warning" | "danger";
+    },
+  ) {
+    setPopupMessage(message);
+    setPopupTitle(options?.title ?? "");
+    setPopupVariant(options?.variant ?? "info");
     setShowPopup(true);
   }
 
-async function handleRegister() {
-  if (isLoading) return;
+  async function handleRegister() {
+    if (isLoading) return;
 
-  const cleanedInviteCode = inviteCode.trim().toUpperCase();
-  const cleanedEmail = email.trim().toLowerCase();
+    const cleanedInviteCode = inviteCode.trim().toUpperCase();
+    const cleanedEmail = email.trim().toLowerCase();
 
-  if (
-    !cleanedInviteCode ||
-    !cleanedEmail ||
-    !password ||
-    !confirmPassword
-  ) {
-    showDiperaPopup("Bitte fülle alle Felder aus.");
-    return;
-  }
-
-  if (password !== confirmPassword) {
-    showDiperaPopup("Die Passwörter stimmen nicht überein.");
-    return;
-  }
-
-  if (
-    !hasMinLength ||
-    !hasUppercase ||
-    !hasNumber ||
-    !hasSpecialChar
-  ) {
-    showDiperaPopup("Bitte erfülle alle Passwortanforderungen.");
-    return;
-  }
-
-  setIsLoading(true);
-
-  try {
-    /*
-     * Beim Testen kann im selben Browser noch ein Owner oder Admin
-     * angemeldet sein. Diese Sitzung zuerst beenden.
-     */
-    await supabase.auth.signOut();
-
-    /*
-     * 1. Einladung serverseitig prüfen
-     */
-    const validateResponse = await fetch(
-      "/api/employee-register/validate",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          inviteCode: cleanedInviteCode,
-        }),
-      }
-    );
-
-    const validateResult = (await validateResponse.json()) as {
-      success?: boolean;
-      message?: string;
-      role?: string;
-    };
-
-    if (!validateResponse.ok || !validateResult.success) {
-      showDiperaPopup(
-        validateResult.message ??
-          "Der Einladungscode konnte nicht geprüft werden."
-      );
+    if (
+      !cleanedInviteCode ||
+      !cleanedEmail ||
+      !password ||
+      !confirmPassword
+    ) {
+      showDiperaPopup("Bitte fülle alle Felder aus.", {
+        title: "Angaben fehlen",
+        variant: "warning",
+      });
       return;
     }
 
-    /*
-     * 2. Normale Registrierung mit E-Mail-Bestätigung
-     */
-    const appUrl =
-      window.location.origin;
+    if (!passwordIsValid) {
+      showDiperaPopup("Bitte erfülle alle Passwortanforderungen.", {
+        title: "Passwort nicht sicher genug",
+        variant: "warning",
+      });
+      return;
+    }
 
-      console.log("VOR signUp");
+    if (password !== confirmPassword) {
+      showDiperaPopup("Die Passwörter stimmen nicht überein.", {
+        title: "Passwörter prüfen",
+        variant: "warning",
+      });
+      return;
+    }
 
-    const { data, error: signUpError } =
-      await supabase.auth.signUp({
+    setIsLoading(true);
+
+    try {
+      await supabase.auth.signOut();
+
+      const validateResponse = await fetch(
+        "/api/employee-register/validate",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            inviteCode: cleanedInviteCode,
+          }),
+        },
+      );
+
+      let validateResult: {
+        success?: boolean;
+        message?: string;
+        role?: string;
+      } = {};
+
+      try {
+        validateResult = (await validateResponse.json()) as {
+          success?: boolean;
+          message?: string;
+          role?: string;
+        };
+      } catch {
+        showDiperaPopup(
+          "Die Einladung konnte nicht geprüft werden. Bitte versuche es erneut.",
+          {
+            title: "Einladung nicht verfügbar",
+            variant: "danger",
+          },
+        );
+        return;
+      }
+
+      if (!validateResponse.ok || !validateResult.success) {
+        showDiperaPopup(
+          validateResult.message ??
+            "Der Einladungscode konnte nicht geprüft werden.",
+          {
+            title: "Einladung ungültig",
+            variant: "warning",
+          },
+        );
+        return;
+      }
+
+      const appUrl = window.location.origin;
+
+      const { data, error: signUpError } = await supabase.auth.signUp({
         email: cleanedEmail,
         password,
         options: {
@@ -127,86 +162,86 @@ async function handleRegister() {
         },
       });
 
-      console.log("NACH signUp", {
-  error: signUpError,
-  session: data.session,
-  user: data.user,
-});
+      if (signUpError) {
+        console.error("EMPLOYEE SIGN-UP ERROR:", signUpError);
 
-    if (signUpError) {
-      console.error(
-        "EMPLOYEE SIGN-UP ERROR:",
-        signUpError
-      );
+        const normalizedMessage = signUpError.message.toLowerCase();
 
-      const normalizedMessage =
-        signUpError.message.toLowerCase();
+        if (
+          normalizedMessage.includes("already") ||
+          normalizedMessage.includes("registered") ||
+          normalizedMessage.includes("exists")
+        ) {
+          showDiperaPopup(
+            "Für diese E-Mail-Adresse existiert bereits ein Dipera-Konto. Bitte melde dich mit deinem bestehenden Konto an oder verwende eine andere E-Mail-Adresse.",
+            {
+              title: "Konto bereits vorhanden",
+              variant: "warning",
+            },
+          );
+          return;
+        }
 
-      if (
-        normalizedMessage.includes("already") ||
-        normalizedMessage.includes("registered") ||
-        normalizedMessage.includes("exists")
-      ) {
         showDiperaPopup(
-          "Für diese E-Mail-Adresse existiert bereits ein Dipera-Konto. Bitte melde dich mit deinem bestehenden Konto an oder verwende eine andere E-Mail-Adresse."
+          signUpError.message ||
+            "Der Mitarbeiter-Zugang konnte nicht erstellt werden.",
+          {
+            title: "Registrierung fehlgeschlagen",
+            variant: "danger",
+          },
+        );
+        return;
+      }
+
+      if (!data.user) {
+        showDiperaPopup(
+          "Der Mitarbeiter-Zugang konnte nicht erstellt werden.",
+          {
+            title: "Registrierung fehlgeschlagen",
+            variant: "danger",
+          },
+        );
+        return;
+      }
+
+      setPassword("");
+      setConfirmPassword("");
+
+      if (data.session) {
+        await supabase.auth.signOut();
+
+        showDiperaPopup(
+          "Die Registrierung wurde angelegt. Bitte prüfe jetzt deine E-Mails und bestätige deine E-Mail-Adresse.",
+          {
+            title: "E-Mail bestätigen",
+            variant: "success",
+          },
         );
         return;
       }
 
       showDiperaPopup(
-        signUpError.message ||
-          "Der Mitarbeiter-Zugang konnte nicht erstellt werden."
+        "Fast geschafft! Wir haben dir eine Bestätigungs-E-Mail geschickt. Bitte öffne die E-Mail und bestätige deine Adresse, um die Registrierung abzuschließen.",
+        {
+          title: "E-Mail bestätigen",
+          variant: "success",
+        },
       );
-      return;
-    }
+    } catch (error) {
+      console.error("EMPLOYEE REGISTRATION ERROR:", error);
 
-    if (!data.user) {
       showDiperaPopup(
-        "Der Mitarbeiter-Zugang konnte nicht erstellt werden."
+        "Bei der Registrierung ist ein unerwarteter Fehler aufgetreten. Bitte versuche es erneut.",
+        {
+          title: "Registrierung fehlgeschlagen",
+          variant: "danger",
+        },
       );
-      return;
+    } finally {
+      setIsLoading(false);
     }
-
-    /*
-     * Bei aktivierter E-Mail-Bestätigung ist data.session normalerweise null.
-     * Der Benutzer wird erst nach Klick auf den E-Mail-Link angemeldet.
-     */
-    console.log("EMPLOYEE SIGN-UP RESULT:", {
-  userId: data.user?.id,
-  emailConfirmedAt: data.user?.email_confirmed_at,
-  hasSession: Boolean(data.session),
-  supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL,
-});
-
-if (data.session) {
-  await supabase.auth.signOut();
-
-  showDiperaPopup(
-    "Fehler bei der E-Mail-Bestätigung: Supabase hat den Zugang sofort freigeschaltet. Bitte prüfe die Browser-Konsole."
-  );
-
-  return;
-}
-
-showDiperaPopup(
-  "Fast geschafft! Wir haben dir eine Bestätigungs-E-Mail geschickt. Bitte öffne die E-Mail und bestätige deine Adresse, um die Registrierung abzuschließen."
-);
-
-setPassword("");
-setConfirmPassword("");
-  } catch (error) {
-    console.error(
-      "EMPLOYEE REGISTRATION ERROR:",
-      error
-    );
-
-    showDiperaPopup(
-      "Bei der Registrierung ist ein unerwarteter Fehler aufgetreten. Bitte versuche es erneut."
-    );
-  } finally {
-    setIsLoading(false);
   }
-}
+
   return (
     <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[#f7f7f8] p-4">
       <div className="absolute left-5 top-5 z-10 sm:left-10 sm:top-8">
@@ -219,6 +254,7 @@ setConfirmPassword("");
 
       <div className="pointer-events-none absolute inset-0">
         <div className="absolute -left-24 bottom-16 h-72 w-[55rem] rotate-[-18deg] rounded-full bg-gradient-to-r from-blue-100/40 via-white to-blue-200/30 blur-2xl" />
+
         <div className="absolute right-20 top-24 h-80 w-[38rem] rotate-[22deg] rounded-full bg-gradient-to-r from-white via-blue-100/50 to-slate-200/40 blur-2xl" />
 
         {[...Array(9)].map((_, index) => (
@@ -233,7 +269,6 @@ setConfirmPassword("");
             }}
           />
         ))}
-        
       </div>
 
       <section className="relative z-10 mt-16 w-full max-w-md rounded-3xl border border-white bg-white/95 p-6 shadow-2xl sm:mt-0 sm:p-8">
@@ -273,50 +308,127 @@ setConfirmPassword("");
             className="h-12 w-full rounded-xl border border-slate-300 bg-white px-4 text-black outline-none transition focus:border-[#005CA8] focus:ring-4 focus:ring-blue-100 disabled:cursor-not-allowed disabled:bg-slate-100"
           />
 
-          <input
-            type="password"
-            autoComplete="new-password"
-            placeholder="Passwort"
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
-            disabled={isLoading}
-            className="h-12 w-full rounded-xl border border-slate-300 bg-white px-4 text-black outline-none transition focus:border-[#005CA8] focus:ring-4 focus:ring-blue-100 disabled:cursor-not-allowed disabled:bg-slate-100"
-          />
+          <div className="relative">
+            <input
+              type={showPassword ? "text" : "password"}
+              autoComplete="new-password"
+              placeholder="Passwort"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              disabled={isLoading}
+              className="h-12 w-full rounded-xl border border-slate-300 bg-white px-4 pr-12 text-black outline-none transition focus:border-[#005CA8] focus:ring-4 focus:ring-blue-100 disabled:cursor-not-allowed disabled:bg-slate-100"
+            />
+
+            <button
+              type="button"
+              onClick={() => setShowPassword((current) => !current)}
+              disabled={isLoading}
+              aria-label={
+                showPassword ? "Passwort ausblenden" : "Passwort anzeigen"
+              }
+              className="absolute right-3 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-lg text-slate-500 transition hover:bg-slate-100 hover:text-slate-900 disabled:cursor-not-allowed"
+            >
+              {showPassword ? (
+                <EyeOff className="h-5 w-5" />
+              ) : (
+                <Eye className="h-5 w-5" />
+              )}
+            </button>
+          </div>
 
           <div className="-mt-1 space-y-1 text-sm">
-            <div className={`flex items-center gap-2 ${hasMinLength ? "text-green-600" : "text-slate-500"}`}>
+            <div
+              className={`flex items-center gap-2 ${
+                hasMinLength ? "text-green-600" : "text-slate-500"
+              }`}
+            >
               <span>{hasMinLength ? "✓" : "○"}</span>
               <span>Mindestens 8 Zeichen</span>
             </div>
-            <div className={`flex items-center gap-2 ${hasUppercase ? "text-green-600" : "text-slate-500"}`}>
+
+            <div
+              className={`flex items-center gap-2 ${
+                hasUppercase ? "text-green-600" : "text-slate-500"
+              }`}
+            >
               <span>{hasUppercase ? "✓" : "○"}</span>
               <span>Mindestens ein Großbuchstabe</span>
             </div>
-            <div className={`flex items-center gap-2 ${hasNumber ? "text-green-600" : "text-slate-500"}`}>
+
+            <div
+              className={`flex items-center gap-2 ${
+                hasNumber ? "text-green-600" : "text-slate-500"
+              }`}
+            >
               <span>{hasNumber ? "✓" : "○"}</span>
               <span>Mindestens eine Zahl</span>
             </div>
-            <div className={`flex items-center gap-2 ${hasSpecialChar ? "text-green-600" : "text-slate-500"}`}>
+
+            <div
+              className={`flex items-center gap-2 ${
+                hasSpecialChar ? "text-green-600" : "text-slate-500"
+              }`}
+            >
               <span>{hasSpecialChar ? "✓" : "○"}</span>
               <span>Mindestens ein Sonderzeichen</span>
             </div>
           </div>
 
-          <input
-            type="password"
-            autoComplete="new-password"
-            placeholder="Passwort wiederholen"
-            value={confirmPassword}
-            onChange={(event) => setConfirmPassword(event.target.value)}
-            disabled={isLoading}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") {
-                event.preventDefault();
-                void handleRegister();
+          <div className="relative">
+            <input
+              type={showConfirmPassword ? "text" : "password"}
+              autoComplete="new-password"
+              placeholder="Passwort wiederholen"
+              value={confirmPassword}
+              onChange={(event) => setConfirmPassword(event.target.value)}
+              disabled={isLoading}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  void handleRegister();
+                }
+              }}
+              className={[
+                "h-12 w-full rounded-xl border bg-white px-4 pr-12 text-black outline-none transition",
+                "focus:ring-4 disabled:cursor-not-allowed disabled:bg-slate-100",
+                confirmPassword.length === 0
+                  ? "border-slate-300 focus:border-[#005CA8] focus:ring-blue-100"
+                  : passwordsMatch
+                    ? "border-green-500 focus:border-green-600 focus:ring-green-100"
+                    : "border-red-400 focus:border-red-500 focus:ring-red-100",
+              ].join(" ")}
+            />
+
+            <button
+              type="button"
+              onClick={() => setShowConfirmPassword((current) => !current)}
+              disabled={isLoading}
+              aria-label={
+                showConfirmPassword
+                  ? "Passwortwiederholung ausblenden"
+                  : "Passwortwiederholung anzeigen"
               }
-            }}
-            className="h-12 w-full rounded-xl border border-slate-300 bg-white px-4 text-black outline-none transition focus:border-[#005CA8] focus:ring-4 focus:ring-blue-100 disabled:cursor-not-allowed disabled:bg-slate-100"
-          />
+              className="absolute right-3 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-lg text-slate-500 transition hover:bg-slate-100 hover:text-slate-900 disabled:cursor-not-allowed"
+            >
+              {showConfirmPassword ? (
+                <EyeOff className="h-5 w-5" />
+              ) : (
+                <Eye className="h-5 w-5" />
+              )}
+            </button>
+          </div>
+
+          {confirmPassword.length > 0 && (
+            <p
+              className={`-mt-2 text-sm ${
+                passwordsMatch ? "text-green-600" : "text-red-600"
+              }`}
+            >
+              {passwordsMatch
+                ? "✓ Die Passwörter stimmen überein."
+                : "Die Passwörter stimmen noch nicht überein."}
+            </p>
+          )}
 
           <button
             type="button"
@@ -339,32 +451,25 @@ setConfirmPassword("");
         </div>
       </section>
 
-      {showPopup && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-6 backdrop-blur-sm">
-          <div className="w-full max-w-lg rounded-3xl bg-[#0B1220]/95 p-8 text-center shadow-2xl">
-            <p className="mb-8 text-xl font-semibold leading-8 text-white sm:text-2xl">
-              {popupMessage}
-            </p>
-
-            <button
-              type="button"
-              onClick={() => setShowPopup(false)}
-              className="rounded-2xl bg-[#005CA8] px-10 py-4 font-semibold text-white transition hover:bg-[#004b8a]"
-            >
-              OK
-            </button>
-          </div>
-        </div>
-      )}
+      <DiperaPopup
+        open={showPopup}
+        title={popupTitle || undefined}
+        message={popupMessage}
+        variant={popupVariant}
+        onClose={() => setShowPopup(false)}
+      />
     </main>
   );
 }
+
 export default function EmployeeRegisterPage() {
   return (
     <Suspense
       fallback={
-        <div className="flex min-h-screen items-center justify-center">
-          <p>Registrierungsseite wird geladen...</p>
+        <div className="flex min-h-screen items-center justify-center bg-[#f7f7f8]">
+          <p className="text-sm text-slate-500">
+            Registrierungsseite wird geladen...
+          </p>
         </div>
       }
     >
