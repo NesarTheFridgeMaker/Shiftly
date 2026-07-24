@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 import Badge from "@/components/ui/Badge";
 import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
+import EmployeeDocumentsCard from "@/components/employees/EmployeeDocumentsCard";
 
 export type EmployeeCardEmployee = {
   id: string;
@@ -344,6 +345,7 @@ export default function EmployeeCard({
                     {isActive ? "Deaktivieren" : "Reaktivieren"}
                   </Button>
                 </div>
+                <EmployeeDocumentsCard employeeId={employee.id} />
               </div>
 
               {/* Rechter Bereich */}
