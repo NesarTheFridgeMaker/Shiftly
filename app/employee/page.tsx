@@ -722,7 +722,7 @@ export default function EmployeeOverviewPage() {
             <div className="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-[#EFF6FF] text-[#2563EB]">
               <FileText className="h-6 w-6" />
             </div>
-            <h3 className="text-xl font-semibold text-[#0F172A]">Lohndokumente</h3>
+            <h3 className="text-xl font-semibold text-[#0F172A]">Dokumente</h3>
             <p className="mt-2 text-sm leading-6 text-[#64748B]">
               Hier findest du später deine Lohnabrechnungen und Dokumente.
             </p>

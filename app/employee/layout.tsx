@@ -38,7 +38,7 @@ const moreLinks = [
   },
   {
     href: "/employee/documents",
-    label: "Lohndokumente",
+    label: "Dokumente",
     icon: FileText,
   },
   {

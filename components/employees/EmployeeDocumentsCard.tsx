@@ -105,6 +105,34 @@ function formatCategory(category: DocumentCategory) {
   );
 }
 
+function getCategoryBadgeClasses(
+  category: DocumentCategory,
+) {
+  switch (category) {
+    case "payslip":
+      return "border-emerald-200 bg-emerald-50 text-emerald-700";
+
+    case "employment_contract":
+      return "border-blue-200 bg-blue-50 text-blue-700";
+
+    case "certificate":
+      return "border-violet-200 bg-violet-50 text-violet-700";
+
+    case "tax":
+      return "border-amber-200 bg-amber-50 text-amber-700";
+
+    case "warning":
+      return "border-orange-200 bg-orange-50 text-orange-700";
+
+    case "termination":
+      return "border-red-200 bg-red-50 text-red-700";
+
+    default:
+      return "border-slate-200 bg-slate-50 text-slate-700";
+  }
+}
+
+
 function formatFileSize(sizeBytes: number) {
   if (sizeBytes < 1024) {
     return `${sizeBytes} B`;
@@ -197,8 +225,10 @@ export default function EmployeeDocumentsCard({
   const [isUploadExpanded, setIsUploadExpanded] =
   useState(false);
 
-const [isDocumentListExpanded, setIsDocumentListExpanded] =
-  useState(false);
+const [
+  isDocumentListExpanded,
+  setIsDocumentListExpanded,
+] = useState(false);
 
   const loadDocuments = useCallback(async () => {
     setIsLoading(true);
@@ -928,27 +958,36 @@ const [isDocumentListExpanded, setIsDocumentListExpanded] =
                         </div>
 
                         <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-semibold text-[#0F172A]">
-                            {document.title}
-                          </p>
+                          <div className="flex flex-wrap items-center gap-2">
+  <p className="min-w-0 truncate text-sm font-semibold text-[#0F172A]">
+    {document.title}
+  </p>
 
-                          <p className="mt-1 text-[11px] leading-4 text-[#64748B]">
-                            {formatCategory(
-                              document.category,
-                            )}
-                            {" · "}
-                            {formatFileType(
-                              document.mime_type,
-                            )}
-                            {" · "}
-                            {formatFileSize(
-                              document.size_bytes,
-                            )}
-                            {" · "}
-                            {formatDate(
-                              document.created_at,
-                            )}
-                          </p>
+  <span
+    className={[
+      "inline-flex shrink-0 items-center rounded-full border",
+      "px-2 py-0.5 text-[10px] font-semibold",
+      getCategoryBadgeClasses(document.category),
+    ].join(" ")}
+  >
+    {formatCategory(document.category)}
+  </span>
+</div>
+
+<p
+  className="mt-1 truncate text-[11px] text-[#94A3B8]"
+  title={document.file_name}
+>
+  {document.file_name}
+</p>
+
+<p className="mt-1 text-[11px] leading-4 text-[#64748B]">
+  Hochgeladen am {formatDate(document.created_at)}
+  {" · "}
+  {formatFileType(document.mime_type)}
+  {" · "}
+  {formatFileSize(document.size_bytes)}
+</p>
 
                           {document.description ? (
                             <p className="mt-2 line-clamp-2 text-xs leading-5 text-[#64748B]">
