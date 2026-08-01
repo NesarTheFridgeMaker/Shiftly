@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import '../../dashboard/pages/dashboard_page.dart';
+import '../../navigation/pages/main_shell.dart';
 import 'login_page.dart';
 import 'splash_page.dart';
 
@@ -74,7 +74,7 @@ class _AuthGateState extends State<AuthGate> {
     }
 
     if (_session != null) {
-      return const DashboardPage();
+      return const MainShell();
     }
 
     return const LoginPage();
