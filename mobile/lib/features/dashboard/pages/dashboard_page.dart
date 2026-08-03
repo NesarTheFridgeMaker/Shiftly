@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../../core/services/employee_service.dart';
 import '../../../shared/widgets/dipera_button.dart';
 import '../../../shared/widgets/dipera_card.dart';
+import '../../auth/providers/auth_providers.dart';
 
-class DashboardPage extends StatelessWidget {
+class DashboardPage extends ConsumerWidget {
   const DashboardPage({super.key});
 
   Future<void> _logout() async {
@@ -58,12 +61,9 @@ class DashboardPage extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
-    final user = Supabase.instance.client.auth.currentUser;
-
-    final displayName = user?.userMetadata?['full_name'] as String?;
-    final firstName = displayName?.trim().split(' ').first;
+    final employeeAsync = ref.watch(currentEmployeeProvider);
 
     return Scaffold(
       backgroundColor: const Color(0xFFF6F8FB),
@@ -81,15 +81,34 @@ class DashboardPage extends StatelessWidget {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(
-                                firstName == null || firstName.isEmpty
-                                    ? '${_getGreeting()} 👋'
-                                    : '${_getGreeting()}, $firstName 👋',
-                                style:
-                                    theme.textTheme.headlineSmall?.copyWith(
-                                  color: const Color(0xFF101828),
-                                  fontWeight: FontWeight.w800,
+                              employeeAsync.when(
+                                loading: () => Text(
+                                  '${_getGreeting()} 👋',
+                                  style: theme.textTheme.headlineSmall?.copyWith(
+                                    color: const Color(0xFF101828),
+                                    fontWeight: FontWeight.w800,
+                                  ),
                                 ),
+                                error: (error, stackTrace) => Text(
+                                  '${_getGreeting()} 👋',
+                                  style: theme.textTheme.headlineSmall?.copyWith(
+                                    color: const Color(0xFF101828),
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                                data: (employee) {
+                                  final firstName =
+                                      employee.name.trim().split(' ').first;
+
+                                  return Text(
+                                    '${_getGreeting()}, $firstName 👋',
+                                    style:
+                                        theme.textTheme.headlineSmall?.copyWith(
+                                      color: const Color(0xFF101828),
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                                  );
+                                },
                               ),
                               const SizedBox(height: 6),
                               Text(
@@ -143,16 +162,27 @@ class DashboardPage extends StatelessWidget {
 
                     const SizedBox(height: 28),
 
-                    _TodayCard(
-                      onClockIn: () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text(
-                              'Die Zeiterfassung verbinden wir als Nächstes.',
+                    employeeAsync.when(
+                      loading: () => const _TodayCard(
+                        status: EmployeeStatus.unknown,
+                        onClockIn: null,
+                      ),
+                      error: (error, stackTrace) => const _TodayCard(
+                        status: EmployeeStatus.unknown,
+                        onClockIn: null,
+                      ),
+                      data: (employee) => _TodayCard(
+                        status: employee.status,
+                        onClockIn: () {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text(
+                                'Die Zeiterfassung verbinden wir später.',
+                              ),
                             ),
-                          ),
-                        );
-                      },
+                          );
+                        },
+                      ),
                     ),
 
                     const SizedBox(height: 18),
@@ -216,10 +246,51 @@ class DashboardPage extends StatelessWidget {
 
 class _TodayCard extends StatelessWidget {
   const _TodayCard({
+    required this.status,
     required this.onClockIn,
   });
 
-  final VoidCallback onClockIn;
+  final EmployeeStatus status;
+  final VoidCallback? onClockIn;
+
+  String get statusText {
+    switch (status) {
+      case EmployeeStatus.checkedIn:
+        return 'Eingestempelt';
+      case EmployeeStatus.checkedOut:
+        return 'Nicht eingestempelt';
+      case EmployeeStatus.onBreak:
+        return 'Pause';
+      case EmployeeStatus.unknown:
+        return 'Status wird geladen';
+    }
+  }
+
+  String get buttonText {
+    switch (status) {
+      case EmployeeStatus.checkedIn:
+        return 'Zeiterfassung öffnen';
+      case EmployeeStatus.checkedOut:
+        return 'Einstempeln';
+      case EmployeeStatus.onBreak:
+        return 'Pause beenden';
+      case EmployeeStatus.unknown:
+        return 'Wird geladen';
+    }
+  }
+
+  IconData get buttonIcon {
+    switch (status) {
+      case EmployeeStatus.checkedIn:
+        return Icons.schedule_rounded;
+      case EmployeeStatus.checkedOut:
+        return Icons.login_rounded;
+      case EmployeeStatus.onBreak:
+        return Icons.play_arrow_rounded;
+      case EmployeeStatus.unknown:
+        return Icons.hourglass_empty_rounded;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -277,7 +348,7 @@ class _TodayCard extends StatelessWidget {
                     borderRadius: BorderRadius.circular(999),
                   ),
                   child: Text(
-                    'Noch nicht aktiv',
+                    statusText,
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: Colors.white,
                       fontWeight: FontWeight.w600,
@@ -303,8 +374,8 @@ class _TodayCard extends StatelessWidget {
             ),
             const SizedBox(height: 24),
             DiperaButton(
-              text: 'Einstempeln',
-              icon: const Icon(Icons.login_rounded),
+              text: buttonText,
+              icon: Icon(buttonIcon),
               onPressed: onClockIn,
             ),
           ],
