@@ -60,6 +60,12 @@ class DashboardPage extends ConsumerWidget {
         '${now.day}. ${months[now.month - 1]}';
   }
 
+  Future<void> _refreshDashboard(WidgetRef ref) async {
+    ref.invalidate(currentEmployeeProvider);
+
+    await ref.read(currentEmployeeProvider.future);
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
@@ -68,13 +74,15 @@ class DashboardPage extends ConsumerWidget {
     return Scaffold(
       backgroundColor: const Color(0xFFF6F8FB),
       body: SafeArea(
-        child: CustomScrollView(
-          slivers: [
-            SliverPadding(
-              padding: const EdgeInsets.fromLTRB(24, 20, 24, 36),
-              sliver: SliverList(
-                delegate: SliverChildListDelegate(
-                  [
+        child: RefreshIndicator(
+          onRefresh: () => _refreshDashboard(ref),
+          child: CustomScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            slivers: [
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(24, 20, 24, 36),
+                sliver: SliverList(
+                  delegate: SliverChildListDelegate([
                     Row(
                       children: [
                         Expanded(
@@ -84,29 +92,33 @@ class DashboardPage extends ConsumerWidget {
                               employeeAsync.when(
                                 loading: () => Text(
                                   '${_getGreeting()} 👋',
-                                  style: theme.textTheme.headlineSmall?.copyWith(
-                                    color: const Color(0xFF101828),
-                                    fontWeight: FontWeight.w800,
-                                  ),
+                                  style: theme.textTheme.headlineSmall
+                                      ?.copyWith(
+                                        color: const Color(0xFF101828),
+                                        fontWeight: FontWeight.w800,
+                                      ),
                                 ),
                                 error: (error, stackTrace) => Text(
                                   '${_getGreeting()} 👋',
-                                  style: theme.textTheme.headlineSmall?.copyWith(
-                                    color: const Color(0xFF101828),
-                                    fontWeight: FontWeight.w800,
-                                  ),
+                                  style: theme.textTheme.headlineSmall
+                                      ?.copyWith(
+                                        color: const Color(0xFF101828),
+                                        fontWeight: FontWeight.w800,
+                                      ),
                                 ),
                                 data: (employee) {
-                                  final firstName =
-                                      employee.name.trim().split(' ').first;
+                                  final firstName = employee.name
+                                      .trim()
+                                      .split(' ')
+                                      .first;
 
                                   return Text(
                                     '${_getGreeting()}, $firstName 👋',
-                                    style:
-                                        theme.textTheme.headlineSmall?.copyWith(
-                                      color: const Color(0xFF101828),
-                                      fontWeight: FontWeight.w800,
-                                    ),
+                                    style: theme.textTheme.headlineSmall
+                                        ?.copyWith(
+                                          color: const Color(0xFF101828),
+                                          fontWeight: FontWeight.w800,
+                                        ),
                                   );
                                 },
                               ),
@@ -187,9 +199,7 @@ class DashboardPage extends ConsumerWidget {
 
                     const SizedBox(height: 18),
 
-                    const _SectionTitle(
-                      title: 'Dein Überblick',
-                    ),
+                    const _SectionTitle(title: 'Dein Überblick'),
 
                     const SizedBox(height: 12),
 
@@ -199,13 +209,9 @@ class DashboardPage extends ConsumerWidget {
 
                     const Row(
                       children: [
-                        Expanded(
-                          child: _BalanceCard(),
-                        ),
+                        Expanded(child: _BalanceCard()),
                         SizedBox(width: 14),
-                        Expanded(
-                          child: _VacationCard(),
-                        ),
+                        Expanded(child: _VacationCard()),
                       ],
                     ),
 
@@ -233,11 +239,11 @@ class DashboardPage extends ConsumerWidget {
                         );
                       },
                     ),
-                  ],
+                  ]),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -245,10 +251,7 @@ class DashboardPage extends ConsumerWidget {
 }
 
 class _TodayCard extends StatelessWidget {
-  const _TodayCard({
-    required this.status,
-    required this.onClockIn,
-  });
+  const _TodayCard({required this.status, required this.onClockIn});
 
   final EmployeeStatus status;
   final VoidCallback? onClockIn;
@@ -304,10 +307,7 @@ class _TodayCard extends StatelessWidget {
           gradient: const LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [
-              Color(0xFF173FCE),
-              Color(0xFF2F62F5),
-            ],
+            colors: [Color(0xFF173FCE), Color(0xFF2F62F5)],
           ),
           borderRadius: BorderRadius.circular(20),
         ),
@@ -398,10 +398,7 @@ class _NextShiftCard extends StatelessWidget {
         foregroundColor: Color(0xFF175CD3),
         backgroundColor: Color(0xFFEFF8FF),
       ),
-      trailing: Icon(
-        Icons.chevron_right_rounded,
-        color: Color(0xFF98A2B3),
-      ),
+      trailing: Icon(Icons.chevron_right_rounded, color: Color(0xFF98A2B3)),
     );
   }
 }
@@ -502,19 +499,13 @@ class _FeatureIcon extends StatelessWidget {
         color: backgroundColor,
         borderRadius: BorderRadius.circular(15),
       ),
-      child: Icon(
-        icon,
-        color: foregroundColor,
-        size: 25,
-      ),
+      child: Icon(icon, color: foregroundColor, size: 25),
     );
   }
 }
 
 class _SectionTitle extends StatelessWidget {
-  const _SectionTitle({
-    required this.title,
-  });
+  const _SectionTitle({required this.title});
 
   final String title;
 
@@ -523,9 +514,9 @@ class _SectionTitle extends StatelessWidget {
     return Text(
       title,
       style: Theme.of(context).textTheme.titleMedium?.copyWith(
-            color: const Color(0xFF344054),
-            fontWeight: FontWeight.w700,
-          ),
+        color: const Color(0xFF344054),
+        fontWeight: FontWeight.w700,
+      ),
     );
   }
 }
