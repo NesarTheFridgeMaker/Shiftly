@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/services/employee_service.dart';
+import '../../../core/services/shift_service.dart';
 import '../../../shared/widgets/dipera_button.dart';
 import '../../../shared/widgets/dipera_card.dart';
 import '../../auth/providers/auth_providers.dart';
@@ -62,14 +63,19 @@ class DashboardPage extends ConsumerWidget {
 
   Future<void> _refreshDashboard(WidgetRef ref) async {
     ref.invalidate(currentEmployeeProvider);
+    ref.invalidate(todayShiftsProvider);
 
-    await ref.read(currentEmployeeProvider.future);
+    await Future.wait([
+      ref.read(currentEmployeeProvider.future),
+      ref.read(todayShiftsProvider.future),
+    ]);
   }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final employeeAsync = ref.watch(currentEmployeeProvider);
+    final todayShiftsAsync = ref.watch(todayShiftsProvider);
 
     return Scaffold(
       backgroundColor: const Color(0xFFF6F8FB),
@@ -177,24 +183,53 @@ class DashboardPage extends ConsumerWidget {
                     employeeAsync.when(
                       loading: () => const _TodayCard(
                         status: EmployeeStatus.unknown,
+                        shifts: [],
+                        isLoadingShifts: true,
+                        hasShiftError: false,
                         onClockIn: null,
                       ),
                       error: (error, stackTrace) => const _TodayCard(
                         status: EmployeeStatus.unknown,
+                        shifts: [],
+                        isLoadingShifts: false,
+                        hasShiftError: true,
                         onClockIn: null,
                       ),
-                      data: (employee) => _TodayCard(
-                        status: employee.status,
-                        onClockIn: () {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text(
-                                'Die Zeiterfassung verbinden wir später.',
-                              ),
-                            ),
-                          );
-                        },
-                      ),
+                      data: (employee) {
+                        return todayShiftsAsync.when(
+                          loading: () => _TodayCard(
+                            status: employee.status,
+                            shifts: const [],
+                            isLoadingShifts: true,
+                            hasShiftError: false,
+                            onClockIn: null,
+                          ),
+                          error: (error, stackTrace) => _TodayCard(
+                            status: employee.status,
+                            shifts: const [],
+                            isLoadingShifts: false,
+                            hasShiftError: true,
+                            onClockIn: () {
+                              ref.invalidate(todayShiftsProvider);
+                            },
+                          ),
+                          data: (shifts) => _TodayCard(
+                            status: employee.status,
+                            shifts: shifts,
+                            isLoadingShifts: false,
+                            hasShiftError: false,
+                            onClockIn: () {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text(
+                                    'Die Zeiterfassung verbinden wir später.',
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                        );
+                      },
                     ),
 
                     const SizedBox(height: 18),
@@ -251,9 +286,18 @@ class DashboardPage extends ConsumerWidget {
 }
 
 class _TodayCard extends StatelessWidget {
-  const _TodayCard({required this.status, required this.onClockIn});
+  const _TodayCard({
+    required this.status,
+    required this.shifts,
+    required this.isLoadingShifts,
+    required this.hasShiftError,
+    required this.onClockIn,
+  });
 
   final EmployeeStatus status;
+  final List<EmployeeShift> shifts;
+  final bool isLoadingShifts;
+  final bool hasShiftError;
   final VoidCallback? onClockIn;
 
   String get statusText {
@@ -270,6 +314,10 @@ class _TodayCard extends StatelessWidget {
   }
 
   String get buttonText {
+    if (hasShiftError) {
+      return 'Erneut versuchen';
+    }
+
     switch (status) {
       case EmployeeStatus.checkedIn:
         return 'Zeiterfassung öffnen';
@@ -283,6 +331,10 @@ class _TodayCard extends StatelessWidget {
   }
 
   IconData get buttonIcon {
+    if (hasShiftError) {
+      return Icons.refresh_rounded;
+    }
+
     switch (status) {
       case EmployeeStatus.checkedIn:
         return Icons.schedule_rounded;
@@ -293,6 +345,101 @@ class _TodayCard extends StatelessWidget {
       case EmployeeStatus.unknown:
         return Icons.hourglass_empty_rounded;
     }
+  }
+
+  Widget _buildShiftInformation(BuildContext context) {
+    final theme = Theme.of(context);
+
+    if (isLoadingShifts) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Schicht wird geladen …',
+            style: theme.textTheme.headlineSmall?.copyWith(
+              color: Colors.white,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 7),
+          Text(
+            'Deine geplante Arbeitszeit wird abgerufen.',
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: Colors.white.withValues(alpha: 0.78),
+            ),
+          ),
+        ],
+      );
+    }
+
+    if (hasShiftError) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Schichten konnten nicht geladen werden',
+            style: theme.textTheme.titleLarge?.copyWith(
+              color: Colors.white,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 7),
+          Text(
+            'Ziehe die Seite nach unten oder versuche es erneut.',
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: Colors.white.withValues(alpha: 0.78),
+            ),
+          ),
+        ],
+      );
+    }
+
+    if (shifts.isEmpty) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Heute keine Schicht geplant',
+            style: theme.textTheme.titleLarge?.copyWith(
+              color: Colors.white,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 7),
+          Text(
+            'Für heute wurde keine Arbeitszeit eingetragen.',
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: Colors.white.withValues(alpha: 0.78),
+            ),
+          ),
+        ],
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        for (var index = 0; index < shifts.length; index++) ...[
+          Text(
+            shifts[index].formattedTime,
+            style: theme.textTheme.headlineSmall?.copyWith(
+              color: Colors.white,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          if (index < shifts.length - 1) const SizedBox(height: 6),
+        ],
+        const SizedBox(height: 7),
+        Text(
+          shifts.length == 1
+              ? 'Deine geplante Arbeitszeit'
+              : '${shifts.length} Schichten für heute',
+          style: theme.textTheme.bodyMedium?.copyWith(
+            color: Colors.white.withValues(alpha: 0.78),
+          ),
+        ),
+      ],
+    );
   }
 
   @override
@@ -358,20 +505,7 @@ class _TodayCard extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 24),
-            Text(
-              '09:00 – 17:30 Uhr',
-              style: theme.textTheme.headlineSmall?.copyWith(
-                color: Colors.white,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-            const SizedBox(height: 7),
-            Text(
-              'Deine geplante Arbeitszeit',
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: Colors.white.withValues(alpha: 0.78),
-              ),
-            ),
+            _buildShiftInformation(context),
             const SizedBox(height: 24),
             DiperaButton(
               text: buttonText,
