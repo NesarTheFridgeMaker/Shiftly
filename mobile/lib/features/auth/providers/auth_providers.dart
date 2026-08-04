@@ -21,8 +21,9 @@ final employeeServiceProvider = Provider<EmployeeService>((ref) {
   return EmployeeService(client);
 });
 
-final currentEmployeeProvider =
-    FutureProvider.autoDispose<EmployeeBasicData>((ref) async {
+final currentEmployeeProvider = FutureProvider.autoDispose<EmployeeBasicData>((
+  ref,
+) async {
   final service = ref.watch(employeeServiceProvider);
 
   return service.getCurrentEmployee();
@@ -34,15 +35,22 @@ final shiftServiceProvider = Provider<ShiftService>((ref) {
   return ShiftService(client);
 });
 
-final todayShiftsProvider =
-    FutureProvider.autoDispose<List<EmployeeShift>>((ref) async {
-  final employee = await ref.watch(
-    currentEmployeeProvider.future,
-  );
+final todayShiftsProvider = FutureProvider.autoDispose<List<EmployeeShift>>((
+  ref,
+) async {
+  final employee = await ref.watch(currentEmployeeProvider.future);
 
   final shiftService = ref.watch(shiftServiceProvider);
 
-  return shiftService.getTodayShifts(
-    employeeId: employee.id,
-  );
+  return shiftService.getTodayShifts(employeeId: employee.id);
+});
+
+final nextShiftProvider = FutureProvider.autoDispose<EmployeeShift?>((
+  ref,
+) async {
+  final employee = await ref.watch(currentEmployeeProvider.future);
+
+  final shiftService = ref.watch(shiftServiceProvider);
+
+  return shiftService.getNextShift(employeeId: employee.id);
 });

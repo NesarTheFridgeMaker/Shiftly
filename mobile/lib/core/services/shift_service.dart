@@ -18,6 +18,16 @@ class EmployeeShift {
         '${_formatDatabaseTime(endTime)} Uhr';
   }
 
+  DateTime get startsAt {
+    final parts = startTime.split(':');
+
+    final hour = parts.isNotEmpty ? int.tryParse(parts[0]) ?? 0 : 0;
+    final minute = parts.length > 1 ? int.tryParse(parts[1]) ?? 0 : 0;
+    final second = parts.length > 2 ? int.tryParse(parts[2]) ?? 0 : 0;
+
+    return DateTime(date.year, date.month, date.day, hour, minute, second);
+  }
+
   static String _formatDatabaseTime(String value) {
     final parts = value.split(':');
 
@@ -42,14 +52,40 @@ class ShiftService {
 
     final data = await _client
         .from('shifts')
-        .select(
-          'id, shift_date, start_time, end_time',
-        )
+        .select('id, shift_date, start_time, end_time')
         .eq('employee_id', employeeId)
         .eq('shift_date', today)
         .order('start_time', ascending: true);
 
-    return (data as List<dynamic>).map((row) {
+    return _mapShifts(data);
+  }
+
+  Future<EmployeeShift?> getNextShift({required String employeeId}) async {
+    final now = DateTime.now();
+    final today = _formatDateForDatabase(now);
+
+    final data = await _client
+        .from('shifts')
+        .select('id, shift_date, start_time, end_time')
+        .eq('employee_id', employeeId)
+        .gte('shift_date', today)
+        .order('shift_date', ascending: true)
+        .order('start_time', ascending: true)
+        .limit(50);
+
+    final shifts = _mapShifts(data);
+
+    for (final shift in shifts) {
+      if (shift.startsAt.isAfter(now)) {
+        return shift;
+      }
+    }
+
+    return null;
+  }
+
+  List<EmployeeShift> _mapShifts(List<dynamic> data) {
+    return data.map((row) {
       final map = row as Map<String, dynamic>;
 
       return EmployeeShift(

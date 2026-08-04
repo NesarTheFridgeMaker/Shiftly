@@ -64,10 +64,12 @@ class DashboardPage extends ConsumerWidget {
   Future<void> _refreshDashboard(WidgetRef ref) async {
     ref.invalidate(currentEmployeeProvider);
     ref.invalidate(todayShiftsProvider);
+    ref.invalidate(nextShiftProvider);
 
     await Future.wait([
       ref.read(currentEmployeeProvider.future),
       ref.read(todayShiftsProvider.future),
+      ref.read(nextShiftProvider.future),
     ]);
   }
 
@@ -76,6 +78,7 @@ class DashboardPage extends ConsumerWidget {
     final theme = Theme.of(context);
     final employeeAsync = ref.watch(currentEmployeeProvider);
     final todayShiftsAsync = ref.watch(todayShiftsProvider);
+    final nextShiftAsync = ref.watch(nextShiftProvider);
 
     return Scaffold(
       backgroundColor: const Color(0xFFF6F8FB),
@@ -238,7 +241,23 @@ class DashboardPage extends ConsumerWidget {
 
                     const SizedBox(height: 12),
 
-                    const _NextShiftCard(),
+                    nextShiftAsync.when(
+                      loading: () => const _NextShiftCard(
+                        shift: null,
+                        isLoading: true,
+                        hasError: false,
+                      ),
+                      error: (error, stackTrace) => const _NextShiftCard(
+                        shift: null,
+                        isLoading: false,
+                        hasError: true,
+                      ),
+                      data: (shift) => _NextShiftCard(
+                        shift: shift,
+                        isLoading: false,
+                        hasError: false,
+                      ),
+                    ),
 
                     const SizedBox(height: 14),
 
@@ -520,19 +539,91 @@ class _TodayCard extends StatelessWidget {
 }
 
 class _NextShiftCard extends StatelessWidget {
-  const _NextShiftCard();
+  const _NextShiftCard({
+    required this.shift,
+    required this.isLoading,
+    required this.hasError,
+  });
+
+  final EmployeeShift? shift;
+  final bool isLoading;
+  final bool hasError;
+
+  String _formatShiftDate(DateTime date) {
+    final now = DateTime.now();
+
+    final today = DateTime(now.year, now.month, now.day);
+
+    final shiftDay = DateTime(date.year, date.month, date.day);
+
+    final difference = shiftDay.difference(today).inDays;
+
+    if (difference == 0) {
+      return 'Heute';
+    }
+
+    if (difference == 1) {
+      return 'Morgen';
+    }
+
+    const weekdays = [
+      'Montag',
+      'Dienstag',
+      'Mittwoch',
+      'Donnerstag',
+      'Freitag',
+      'Samstag',
+      'Sonntag',
+    ];
+
+    const months = [
+      'Januar',
+      'Februar',
+      'März',
+      'April',
+      'Mai',
+      'Juni',
+      'Juli',
+      'August',
+      'September',
+      'Oktober',
+      'November',
+      'Dezember',
+    ];
+
+    return '${weekdays[date.weekday - 1]}, '
+        '${date.day}. ${months[date.month - 1]}';
+  }
+
+  String get subtitle {
+    if (isLoading) {
+      return 'Wird geladen …';
+    }
+
+    if (hasError) {
+      return 'Konnte nicht geladen werden';
+    }
+
+    if (shift == null) {
+      return 'Keine kommende Schicht geplant';
+    }
+
+    return '${_formatShiftDate(shift!.date)} · ${shift!.formattedTime}';
+  }
 
   @override
   Widget build(BuildContext context) {
-    return const DiperaCard(
+    return DiperaCard(
       title: 'Nächste Schicht',
-      subtitle: 'Samstag · 11:00 – 19:00 Uhr',
-      leading: _FeatureIcon(
+      subtitle: subtitle,
+      leading: const _FeatureIcon(
         icon: Icons.calendar_month_outlined,
         foregroundColor: Color(0xFF175CD3),
         backgroundColor: Color(0xFFEFF8FF),
       ),
-      trailing: Icon(Icons.chevron_right_rounded, color: Color(0xFF98A2B3)),
+      trailing: hasError
+          ? const Icon(Icons.error_outline_rounded, color: Color(0xFFD92D20))
+          : const Icon(Icons.chevron_right_rounded, color: Color(0xFF98A2B3)),
     );
   }
 }
