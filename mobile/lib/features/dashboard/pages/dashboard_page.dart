@@ -7,6 +7,7 @@ import '../../../core/services/shift_service.dart';
 import '../../../shared/widgets/dipera_button.dart';
 import '../../../shared/widgets/dipera_card.dart';
 import '../../auth/providers/auth_providers.dart';
+import '../../documents/pages/documents_page.dart';
 
 class DashboardPage extends ConsumerWidget {
   const DashboardPage({super.key});
@@ -271,7 +272,7 @@ class DashboardPage extends ConsumerWidget {
 
                     const SizedBox(height: 18),
 
-                    DiperaCard(
+                                        DiperaCard(
                       title: 'Dokumente',
                       subtitle: 'Neue Dokumente und Lohnabrechnungen',
                       leading: const _FeatureIcon(
@@ -284,11 +285,9 @@ class DashboardPage extends ConsumerWidget {
                         color: Color(0xFF98A2B3),
                       ),
                       onTap: () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text(
-                              'Die Dokumentenansicht folgt später.',
-                            ),
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => const DocumentsPage(),
                           ),
                         );
                       },

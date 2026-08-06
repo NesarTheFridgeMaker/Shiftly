@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../shared/widgets/dipera_card.dart';
+import '../../documents/pages/documents_page.dart';
 
 class MorePage extends StatelessWidget {
   const MorePage({super.key});
@@ -64,10 +65,13 @@ class MorePage extends StatelessWidget {
               icon: Icons.description_outlined,
               foregroundColor: const Color(0xFF6941C6),
               backgroundColor: const Color(0xFFF4EBFF),
-              onTap: () => _showComingSoon(
-                context,
-                'Dokumente',
-              ),
+              onTap: () {
+  Navigator.of(context).push(
+    MaterialPageRoute(
+      builder: (_) => const DocumentsPage(),
+    ),
+  );
+},
             ),
             const SizedBox(height: 14),
             _MoreEntry(

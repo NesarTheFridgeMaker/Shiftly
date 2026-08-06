@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/services/auth_service.dart';
 import '../../../core/services/employee_service.dart';
 import '../../../core/services/shift_service.dart';
+import '../../../core/services/document_service.dart';
 
 final supabaseClientProvider = Provider<SupabaseClient>((ref) {
   return Supabase.instance.client;
@@ -107,3 +108,22 @@ DateTime _parseMonthKey(String monthKey) {
 
   return DateTime(year, month, 1);
 }
+
+final documentServiceProvider = Provider<DocumentService>((ref) {
+  final client = ref.watch(supabaseClientProvider);
+
+  return DocumentService(client);
+});
+
+final employeeDocumentsProvider =
+    FutureProvider.autoDispose<List<EmployeeDocument>>((ref) async {
+  final employee = await ref.watch(
+    currentEmployeeProvider.future,
+  );
+
+  final service = ref.watch(documentServiceProvider);
+
+  return service.getEmployeeDocuments(
+    employeeId: employee.id,
+  );
+});
