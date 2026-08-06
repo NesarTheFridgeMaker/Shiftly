@@ -5,6 +5,7 @@ import '../../../core/services/auth_service.dart';
 import '../../../core/services/employee_service.dart';
 import '../../../core/services/shift_service.dart';
 import '../../../core/services/document_service.dart';
+import '../../../core/services/absence_service.dart';
 
 final supabaseClientProvider = Provider<SupabaseClient>((ref) {
   return Supabase.instance.client;
@@ -29,6 +30,13 @@ final currentEmployeeProvider = FutureProvider.autoDispose<EmployeeBasicData>((
 
   return service.getCurrentEmployee();
 });
+
+final currentEmployeeProfileProvider =
+    FutureProvider.autoDispose<EmployeeProfileData>((ref) async {
+      final service = ref.watch(employeeServiceProvider);
+
+      return service.getCurrentEmployeeProfile();
+    });
 
 final shiftServiceProvider = Provider<ShiftService>((ref) {
   final client = ref.watch(supabaseClientProvider);
@@ -117,13 +125,24 @@ final documentServiceProvider = Provider<DocumentService>((ref) {
 
 final employeeDocumentsProvider =
     FutureProvider.autoDispose<List<EmployeeDocument>>((ref) async {
-  final employee = await ref.watch(
-    currentEmployeeProvider.future,
-  );
+      final employee = await ref.watch(currentEmployeeProvider.future);
 
-  final service = ref.watch(documentServiceProvider);
+      final service = ref.watch(documentServiceProvider);
 
-  return service.getEmployeeDocuments(
-    employeeId: employee.id,
-  );
+      return service.getEmployeeDocuments(employeeId: employee.id);
+    });
+
+final absenceServiceProvider = Provider<AbsenceService>((ref) {
+  final client = ref.watch(supabaseClientProvider);
+
+  return AbsenceService(client);
 });
+
+final employeeAbsencesProvider =
+    FutureProvider.autoDispose<List<EmployeeAbsence>>((ref) async {
+      final employee = await ref.watch(currentEmployeeProvider.future);
+
+      final service = ref.watch(absenceServiceProvider);
+
+      return service.getEmployeeAbsences(employeeId: employee.id);
+    });

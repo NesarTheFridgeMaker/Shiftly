@@ -3,6 +3,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../shared/widgets/dipera_card.dart';
 import '../../documents/pages/documents_page.dart';
+import '../../profile/pages/profile_page.dart';
+import '../../absences/pages/absences_page.dart';
 
 class MorePage extends StatelessWidget {
   const MorePage({super.key});
@@ -53,10 +55,13 @@ class MorePage extends StatelessWidget {
               icon: Icons.beach_access_rounded,
               foregroundColor: const Color(0xFFB54708),
               backgroundColor: const Color(0xFFFFFAEB),
-              onTap: () => _showComingSoon(
-                context,
-                'Abwesenheiten',
-              ),
+              onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => const AbsencesPage(),
+                  ),
+                );
+              },
             ),
             const SizedBox(height: 14),
             _MoreEntry(
@@ -80,10 +85,13 @@ class MorePage extends StatelessWidget {
               icon: Icons.person_outline_rounded,
               foregroundColor: const Color(0xFF175CD3),
               backgroundColor: const Color(0xFFEFF8FF),
-              onTap: () => _showComingSoon(
-                context,
-                'Profil',
-              ),
+              onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => const ProfilePage(),
+                  ),
+                );
+              },
             ),
             const SizedBox(height: 14),
             _MoreEntry(
