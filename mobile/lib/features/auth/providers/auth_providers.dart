@@ -54,3 +54,56 @@ final nextShiftProvider = FutureProvider.autoDispose<EmployeeShift?>((
 
   return shiftService.getNextShift(employeeId: employee.id);
 });
+
+final monthShiftsProvider = FutureProvider.autoDispose
+    .family<List<EmployeeShift>, String>((ref, monthKey) async {
+      final month = _parseMonthKey(monthKey);
+
+      final employee = await ref.watch(currentEmployeeProvider.future);
+
+      final shiftService = ref.watch(shiftServiceProvider);
+
+      return shiftService.getMonthShifts(
+        employeeId: employee.id,
+        year: month.year,
+        month: month.month,
+      );
+    });
+
+final teamMonthShiftsProvider = FutureProvider.autoDispose
+    .family<List<EmployeeShift>, String>((ref, monthKey) async {
+      final month = _parseMonthKey(monthKey);
+
+      final employee = await ref.watch(currentEmployeeProvider.future);
+
+      final businessId = employee.businessId;
+
+      if (businessId == null || businessId.isEmpty) {
+        throw StateError('Dem Mitarbeiter ist kein Betrieb zugeordnet.');
+      }
+
+      final shiftService = ref.watch(shiftServiceProvider);
+
+      return shiftService.getTeamMonthShifts(
+        businessId: businessId,
+        year: month.year,
+        month: month.month,
+      );
+    });
+
+DateTime _parseMonthKey(String monthKey) {
+  final parts = monthKey.split('-');
+
+  if (parts.length != 2) {
+    throw ArgumentError('Ungültiger Monatsschlüssel: $monthKey');
+  }
+
+  final year = int.tryParse(parts[0]);
+  final month = int.tryParse(parts[1]);
+
+  if (year == null || month == null || month < 1 || month > 12) {
+    throw ArgumentError('Ungültiger Monatsschlüssel: $monthKey');
+  }
+
+  return DateTime(year, month, 1);
+}
