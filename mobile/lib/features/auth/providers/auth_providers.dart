@@ -6,6 +6,7 @@ import '../../../core/services/employee_service.dart';
 import '../../../core/services/shift_service.dart';
 import '../../../core/services/document_service.dart';
 import '../../../core/services/absence_service.dart';
+import '../../../core/services/push_notification_service.dart';
 
 final supabaseClientProvider = Provider<SupabaseClient>((ref) {
   return Supabase.instance.client;
@@ -146,3 +147,17 @@ final employeeAbsencesProvider =
 
       return service.getEmployeeAbsences(employeeId: employee.id);
     });
+
+final pushNotificationServiceProvider = Provider<PushNotificationService>((
+  ref,
+) {
+  final client = ref.watch(supabaseClientProvider);
+
+  final service = PushNotificationService(client);
+
+  ref.onDispose(() {
+    service.dispose();
+  });
+
+  return service;
+});

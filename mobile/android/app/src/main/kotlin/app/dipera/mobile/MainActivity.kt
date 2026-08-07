@@ -1,4 +1,4 @@
-package com.example.mobile
+package app.dipera.mobile
 
 import io.flutter.embedding.android.FlutterActivity
 

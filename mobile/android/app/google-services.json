@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "561570389657",
+    "project_id": "dipera",
+    "storage_bucket": "dipera.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:561570389657:android:daf6a12142cd6bbb146208",
+        "android_client_info": {
+          "package_name": "app.dipera.mobile"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCKdeLWdjueJxRVfPn_rU5B_nIyWle3Kwg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:561570389657:android:8569b4c258876dc4146208",
+        "android_client_info": {
+          "package_name": "com.example.mobile"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCKdeLWdjueJxRVfPn_rU5B_nIyWle3Kwg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

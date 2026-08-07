@@ -1,29 +1,28 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/services/auth_service.dart';
+import '../../auth/providers/auth_providers.dart';
 import '../../navigation/pages/main_shell.dart';
 import 'access_denied_page.dart';
 import 'login_page.dart';
 import 'splash_page.dart';
 
-enum _AuthGateStatus {
-  checking,
-  signedOut,
-  allowed,
-  denied,
-}
+enum _AuthGateStatus { checking, signedOut, allowed, denied }
 
-class AuthGate extends StatefulWidget {
+class AuthGate extends ConsumerStatefulWidget {
   const AuthGate({super.key});
 
   @override
-  State<AuthGate> createState() => _AuthGateState();
+  ConsumerState<AuthGate> createState() {
+    return _AuthGateState();
+  }
 }
 
-class _AuthGateState extends State<AuthGate> {
+class _AuthGateState extends ConsumerState<AuthGate> {
   late final AuthService _authService;
   late final StreamSubscription<AuthState> _authSubscription;
 
@@ -33,16 +32,15 @@ class _AuthGateState extends State<AuthGate> {
   int _requestId = 0;
   bool _isDenyingAccess = false;
 
+  String? _pushInitializedForUserId;
+
   @override
   void initState() {
     super.initState();
 
-    _authService = AuthService(
-      Supabase.instance.client,
-    );
+    _authService = AuthService(Supabase.instance.client);
 
-    _authSubscription =
-        Supabase.instance.client.auth.onAuthStateChange.listen(
+    _authSubscription = Supabase.instance.client.auth.onAuthStateChange.listen(
       (authState) {
         unawaited(_evaluateSession(authState.session));
       },
@@ -54,11 +52,7 @@ class _AuthGateState extends State<AuthGate> {
       },
     );
 
-    unawaited(
-      _evaluateSession(
-        Supabase.instance.client.auth.currentSession,
-      ),
-    );
+    unawaited(_evaluateSession(Supabase.instance.client.auth.currentSession));
   }
 
   Future<void> _evaluateSession(Session? session) async {
@@ -69,6 +63,8 @@ class _AuthGateState extends State<AuthGate> {
     final requestId = ++_requestId;
 
     if (session == null) {
+      _pushInitializedForUserId = null;
+
       if (!mounted || requestId != _requestId) {
         return;
       }
@@ -89,11 +85,9 @@ class _AuthGateState extends State<AuthGate> {
     }
 
     try {
-      final result = await _authService
-          .checkEmployeeAccess()
-          .timeout(
-            const Duration(seconds: 10),
-          );
+      final result = await _authService.checkEmployeeAccess().timeout(
+        const Duration(seconds: 10),
+      );
 
       if (!mounted || requestId != _requestId) {
         return;
@@ -105,12 +99,22 @@ class _AuthGateState extends State<AuthGate> {
           _deniedMessage = null;
         });
 
+        /*
+         * Push ist keine Voraussetzung für den Zugriff
+         * auf Dipera.
+         *
+         * Deshalb wird die Initialisierung bewusst
+         * unabhängig vom Login-Flow ausgeführt.
+         */
+        unawaited(_initializePushForUser(session.user.id));
+
         return;
       }
 
       await _denyAndSignOut(
         result.errorMessage ??
-            'Dieser Zugang darf die Mitarbeiter-App nicht verwenden.',
+            'Dieser Zugang darf die Mitarbeiter-App '
+                'nicht verwenden.',
         requestId,
       );
     } on TimeoutException {
@@ -144,19 +148,59 @@ class _AuthGateState extends State<AuthGate> {
     }
   }
 
-  Future<void> _denyAndSignOut(
-    String message,
-    int requestId,
-  ) async {
-    _isDenyingAccess = true;
+  Future<void> _initializePushForUser(String userId) async {
+    /*
+     * Auth-Events können mehrfach eintreffen.
+     * Für denselben angemeldeten Benutzer initialisieren
+     * wir Push deshalb nur einmal.
+     */
+    if (_pushInitializedForUserId == userId) {
+      return;
+    }
+
+    _pushInitializedForUserId = userId;
 
     try {
-      await _authService.signOut().timeout(
-            const Duration(seconds: 5),
-          );
+      final service = ref.read(pushNotificationServiceProvider);
+
+      final token = await service.initialize();
+
+      if (token == null) {
+        debugPrint(
+          'PUSH: Für diesen Benutzer wurde '
+          'kein FCM-Token erzeugt.',
+        );
+
+        return;
+      }
+
+      debugPrint('PUSH: FCM-Token erfolgreich erhalten.');
+    } catch (error, stackTrace) {
+      /*
+       * Push darf niemals verhindern, dass der
+       * Mitarbeiter die App verwenden kann.
+       */
+      debugPrint('PUSH: Initialisierung fehlgeschlagen: $error');
+
+      debugPrintStack(stackTrace: stackTrace);
+
+      /*
+       * Bei einem echten Initialisierungsfehler darf
+       * später erneut versucht werden.
+       */
+      _pushInitializedForUserId = null;
+    }
+  }
+
+  Future<void> _denyAndSignOut(String message, int requestId) async {
+    _isDenyingAccess = true;
+    _pushInitializedForUserId = null;
+
+    try {
+      await _authService.signOut().timeout(const Duration(seconds: 5));
     } catch (_) {
-      // Der Zugriff bleibt auch dann gesperrt,
-      // wenn das Abmelden vorübergehend fehlschlägt.
+      // Zugriff bleibt auch bei fehlgeschlagenem
+      // Sign-out gesperrt.
     }
 
     if (!mounted || requestId != _requestId) {
@@ -185,6 +229,7 @@ class _AuthGateState extends State<AuthGate> {
 
   void _returnToLogin() {
     _requestId++;
+    _pushInitializedForUserId = null;
 
     setState(() {
       _status = _AuthGateStatus.signedOut;
@@ -196,6 +241,7 @@ class _AuthGateState extends State<AuthGate> {
   void dispose() {
     _requestId++;
     _authSubscription.cancel();
+
     super.dispose();
   }
 
@@ -210,8 +256,10 @@ class _AuthGateState extends State<AuthGate> {
 
       case _AuthGateStatus.denied:
         return AccessDeniedPage(
-          message: _deniedMessage ??
-              'Dieser Zugang darf die Mitarbeiter-App nicht verwenden.',
+          message:
+              _deniedMessage ??
+              'Dieser Zugang darf die Mitarbeiter-App '
+                  'nicht verwenden.',
           onBackToLogin: _returnToLogin,
         );
 
