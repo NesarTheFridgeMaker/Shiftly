@@ -198,6 +198,62 @@ export default function EmployeesPage() {
   const [isSavingLocationTracking, setIsSavingLocationTracking] =
     useState(false);
 
+    async function handleTestPush() {
+  const employeeId = "0a1e0fcc-3bba-481a-8c4e-498178da8577";
+
+  try {
+    const { data, error } = await supabase.functions.invoke(
+      "send-push",
+      {
+        body: {
+          employeeId,
+          title: "Dipera Test",
+          body: "Die erste echte Dipera Push-Benachrichtigung funktioniert 🎉",
+        },
+      },
+    );
+
+    console.log("PUSH DATA:", data);
+    console.log("PUSH ERROR:", error);
+
+    if (error) {
+      showToast({
+        type: "error",
+        title: "Test-Push fehlgeschlagen",
+        description: error.message,
+      });
+
+      return;
+    }
+
+    if (!data?.success) {
+      showToast({
+        type: "error",
+        title: "Test-Push fehlgeschlagen",
+        description:
+          data?.error ??
+          "Die Push-Nachricht konnte nicht versendet werden.",
+      });
+
+      return;
+    }
+
+    showToast({
+      type: "success",
+      title: "Test-Push versendet",
+      description: `${data.sent} von ${data.totalDevices} Geräten erreicht.`,
+    });
+  } catch (error) {
+    console.error("TEST PUSH ERROR:", error);
+
+    showToast({
+      type: "error",
+      title: "Test-Push fehlgeschlagen",
+      description: "Beim Versand ist ein technischer Fehler aufgetreten.",
+    });
+  }
+}
+
   async function loadEmployees() {
     setIsLoading(true);
 
@@ -1779,6 +1835,15 @@ const inactiveEmployees = employees
         description="Verwalte Mitarbeiter, Rollen, PINs, Lohndaten und Einladungen."
         action={
           <PageActions>
+
+          <Button
+            variant="secondary"
+            type="button"
+            onClick={handleTestPush}
+          >
+            🧪 Test Push
+          </Button>
+
             <Button
             variant="primary"
             type="button"
