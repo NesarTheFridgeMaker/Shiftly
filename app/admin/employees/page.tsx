@@ -1836,13 +1836,6 @@ const inactiveEmployees = employees
         action={
           <PageActions>
 
-          <Button
-            variant="secondary"
-            type="button"
-            onClick={handleTestPush}
-          >
-            🧪 Test Push
-          </Button>
 
             <Button
             variant="primary"
