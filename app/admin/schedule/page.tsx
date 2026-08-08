@@ -412,6 +412,57 @@ export default function SchedulePage() {
     });
   }
 
+async function sendPushNotification(
+  employeeId: string,
+  title: string,
+  body: string,
+  data: Record<string, string> = {},
+) {
+  try {
+    const { data: result, error } =
+      await supabase.functions.invoke(
+        "send-push",
+        {
+          body: {
+            employeeId,
+            title,
+            body,
+            data,
+          },
+        },
+      );
+
+    console.log("PUSH DATA:", result);
+    console.log("PUSH ERROR:", error);
+
+    if (error) {
+      console.error(
+        "PUSH INVOKE ERROR:",
+        error,
+      );
+
+      return false;
+    }
+
+    if (!result?.success) {
+      console.error(
+        "PUSH FUNCTION ERROR:",
+        result,
+      );
+
+      return false;
+    }
+
+    return true;
+  } catch (error) {
+    console.error(
+      "PUSH ERROR:",
+      error,
+    );
+
+    return false;
+  }
+}
   function showConfirm(text: string, action: () => void | Promise<void>) {
     setConfirmMessage(text);
     setConfirmAction(() => action);
@@ -676,44 +727,145 @@ export default function SchedulePage() {
     );
   }
 
-  async function handlePublishSelectedWeek() {
-    const businessId = await getBusinessId();
+async function handlePublishSelectedWeek() {
+  const businessId = await getBusinessId();
 
-    if (!businessId) {
-      showError("Betrieb nicht gefunden", "Bitte lade die Seite neu und versuche es erneut.");
-      return;
-    }
-
-    const weekDates = getWeekDays(selectedWeekStart).map((day) => day.date);
-    const shiftsToPublish = shifts.filter((shift) =>
-      weekDates.includes(shift.shift_date),
+  if (!businessId) {
+    showError(
+      "Betrieb nicht gefunden",
+      "Bitte lade die Seite neu und versuche es erneut.",
     );
-
-    if (shiftsToPublish.length === 0) {
-      showWarning("Keine Schichten vorhanden", "In dieser Woche gibt es keine Schichten zum Veröffentlichen.");
-      return;
-    }
-
-    showConfirm(
-      `${shiftsToPublish.length} Schichten dieser Woche veröffentlichen?`,
-      async () => {
-        const { error } = await supabase
-          .from("shifts")
-          .update({ is_published: true })
-          .eq("business_id", businessId)
-          .in("shift_date", weekDates);
-
-        if (error) {
-          console.error(error);
-          showError("Dienstplan konnte nicht veröffentlicht werden", error.message);
-          return;
-        }
-
-        await loadShifts();
-        showSuccess("Dienstplan veröffentlicht", "Die Schichten sind jetzt für Mitarbeiter sichtbar.");
-      },
-    );
+    return;
   }
+
+  const weekDates = getWeekDays(selectedWeekStart).map(
+    (day) => day.date,
+  );
+
+  const shiftsToPublish = shifts.filter((shift) =>
+    weekDates.includes(shift.shift_date),
+  );
+
+  if (shiftsToPublish.length === 0) {
+    showWarning(
+      "Keine Schichten vorhanden",
+      "In dieser Woche gibt es keine Schichten zum Veröffentlichen.",
+    );
+    return;
+  }
+
+  /*
+   * Nur noch nicht veröffentlichte Schichten berücksichtigen.
+   *
+   * Dadurch schicken wir bei erneutem Klick auf
+   * "Veröffentlichen" nicht jedes Mal dieselben Pushs.
+   *
+   * Bearbeitete/verschobene Schichten werden ohnehin wieder
+   * auf is_published = false gesetzt und dadurch hier erneut
+   * berücksichtigt.
+   */
+  const unpublishedShifts = shiftsToPublish.filter(
+    (shift) => !shift.is_published,
+  );
+
+  if (unpublishedShifts.length === 0) {
+    showInfo(
+      "Bereits veröffentlicht",
+      "Alle Schichten dieser Woche sind bereits veröffentlicht.",
+    );
+    return;
+  }
+
+  showConfirm(
+    `${unpublishedShifts.length} noch nicht veröffentlichte Schichten dieser Woche veröffentlichen?`,
+    async () => {
+      const { error } = await supabase
+        .from("shifts")
+        .update({
+          is_published: true,
+        })
+        .eq("business_id", businessId)
+        .in("shift_date", weekDates)
+        .eq("is_published", false);
+
+      if (error) {
+        console.error(
+          "PUBLISH SCHEDULE ERROR:",
+          error,
+        );
+
+        showError(
+          "Dienstplan konnte nicht veröffentlicht werden",
+          error.message,
+        );
+
+        return;
+      }
+
+      /*
+       * Jeder Mitarbeiter erhält höchstens einen Push,
+       * unabhängig davon, wie viele Schichten er in
+       * dieser Woche hat.
+       */
+      const affectedEmployeeIds = [
+        ...new Set(
+          unpublishedShifts.map(
+            (shift) => shift.employee_id,
+          ),
+        ),
+      ];
+
+      const weekStart = weekDates[0];
+      const weekEnd = weekDates[6];
+
+      let successfulPushes = 0;
+      let failedPushes = 0;
+
+      for (const affectedEmployeeId of affectedEmployeeIds) {
+        const pushWasSuccessful =
+          await sendPushNotification(
+            affectedEmployeeId,
+            "Dienstplan aktualisiert",
+            `Dein Dienstplan für den Zeitraum ${formatDateForDisplay(
+              weekStart,
+            )} bis ${formatDateForDisplay(
+              weekEnd,
+            )} ist jetzt verfügbar.`,
+            {
+              type: "schedule_published",
+              weekStart,
+              weekEnd,
+            },
+          );
+
+        if (pushWasSuccessful) {
+          successfulPushes++;
+        } else {
+          failedPushes++;
+        }
+      }
+
+      await loadShifts();
+
+      showSuccess(
+        "Dienstplan veröffentlicht",
+        affectedEmployeeIds.length === 1
+          ? "Der Dienstplan wurde veröffentlicht und der Mitarbeiter benachrichtigt."
+          : `Der Dienstplan wurde veröffentlicht. ${successfulPushes} von ${affectedEmployeeIds.length} Mitarbeitern wurden per Push benachrichtigt.`,
+      );
+
+      /*
+       * Ein Push-Fehler darf die Veröffentlichung
+       * niemals rückgängig machen.
+       */
+      if (failedPushes > 0) {
+        console.warn(
+          `PUSH: ${failedPushes} Benachrichtigung(en) konnten nicht zugestellt werden.`,
+        );
+      }
+    },
+  );
+}
 
   function prefillNewShift(selectedDate: string, selectedEmployeeId = "") {
     setEmployeeId(selectedEmployeeId);
