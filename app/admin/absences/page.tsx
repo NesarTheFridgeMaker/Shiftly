@@ -337,78 +337,184 @@ export default function AbsencesPage() {
     });
   }
 
-  async function handleUpdateRequestStatus(id: string, newStatus: string) {
-    const businessId = await getBusinessId();
+  async function sendPushNotification(
+  targetEmployeeId: string,
+  notificationTitle: string,
+  notificationBody: string,
+  data: Record<string, string> = {},
+) {
+  try {
+    const { data: result, error } =
+      await supabase.functions.invoke(
+        "send-push",
+        {
+          body: {
+            employeeId: targetEmployeeId,
+            title: notificationTitle,
+            body: notificationBody,
+            data,
+          },
+        },
+      );
 
-    if (!businessId) {
-      showToast({
-        type: "error",
-        title: "Betrieb nicht gefunden",
-        description: "Der Antrag konnte nicht aktualisiert werden.",
-      });
-      return;
-    }
-
-    const selectedAbsence = absences.find((absence) => absence.id === id);
-
-    if (!selectedAbsence) {
-      showToast({
-        type: "error",
-        title: "Antrag nicht gefunden",
-        description: "Bitte lade die Seite neu und versuche es erneut.",
-      });
-      return;
-    }
-
-    const { error } = await supabase
-      .from("absences")
-      .update({ request_status: newStatus })
-      .eq("id", id)
-      .eq("business_id", businessId);
+    console.log("PUSH DATA:", result);
+    console.log("PUSH ERROR:", error);
 
     if (error) {
-      console.error("Absence status update error:", error);
-      showToast({
-        type: "error",
-        title: "Antrag konnte nicht aktualisiert werden",
-        description: error.message,
-      });
-      return;
+      console.error("PUSH INVOKE ERROR:", error);
+      return false;
     }
 
-    const statusText = newStatus === "approved" ? "genehmigt" : "abgelehnt";
+    if (!result?.success) {
+      console.error("PUSH FUNCTION ERROR:", result);
+      return false;
+    }
 
-    const { error: notificationError } = await supabase
+    return true;
+  } catch (error) {
+    console.error("PUSH ERROR:", error);
+    return false;
+  }
+}
+
+  async function handleUpdateRequestStatus(
+  id: string,
+  newStatus: string,
+) {
+  const businessId = await getBusinessId();
+
+  if (!businessId) {
+    showToast({
+      type: "error",
+      title: "Betrieb nicht gefunden",
+      description: "Der Antrag konnte nicht aktualisiert werden.",
+    });
+    return;
+  }
+
+  const selectedAbsence = absences.find(
+    (absence) => absence.id === id,
+  );
+
+  if (!selectedAbsence) {
+    showToast({
+      type: "error",
+      title: "Antrag nicht gefunden",
+      description: "Bitte lade die Seite neu und versuche es erneut.",
+    });
+    return;
+  }
+
+  /*
+   * Keine erneute Benachrichtigung bei identischem Status.
+   */
+  if (selectedAbsence.request_status === newStatus) {
+    return;
+  }
+
+  const { error } = await supabase
+    .from("absences")
+    .update({
+      request_status: newStatus,
+    })
+    .eq("id", id)
+    .eq("business_id", businessId);
+
+  if (error) {
+    console.error(
+      "Absence status update error:",
+      error,
+    );
+
+    showToast({
+      type: "error",
+      title: "Antrag konnte nicht aktualisiert werden",
+      description: error.message,
+    });
+
+    return;
+  }
+
+  const isApproved = newStatus === "approved";
+
+  const statusText = isApproved
+    ? "genehmigt"
+    : "abgelehnt";
+
+  const notificationTitle = isApproved
+    ? "Urlaubsantrag genehmigt"
+    : "Urlaubsantrag abgelehnt";
+
+  const notificationMessage =
+    `Dein Urlaubsantrag vom ${formatDate(
+      selectedAbsence.start_date,
+    )} bis ${formatDate(
+      selectedAbsence.end_date,
+    )} wurde ${statusText}.`;
+
+  /*
+   * Interne Dipera-Benachrichtigung speichern.
+   */
+  const { error: notificationError } =
+    await supabase
       .from("notifications")
       .insert([
         {
           business_id: businessId,
           employee_id: selectedAbsence.employee_id,
-          title: "Urlaubsantrag beantwortet",
-          message: `Dein Urlaubsantrag vom ${selectedAbsence.start_date} bis ${selectedAbsence.end_date} wurde ${statusText}.`,
+          title: notificationTitle,
+          message: notificationMessage,
           type: "vacation_response",
           is_read: false,
         },
       ]);
 
-    if (notificationError) {
-      console.error(notificationError);
-      showToast({
-        type: "warning",
-        title: "Benachrichtigung konnte nicht erstellt werden",
-        description: "Der Antrag wurde trotzdem aktualisiert.",
-      });
-    }
-
-    await loadAbsences(businessId);
+  if (notificationError) {
+    console.error(
+      "NOTIFICATION INSERT ERROR:",
+      notificationError,
+    );
 
     showToast({
-      type: "success",
-      title:
-        newStatus === "approved" ? "Antrag genehmigt" : "Antrag abgelehnt",
-      description: `Der Antrag von ${selectedAbsence.employee_name} wurde ${statusText}.`,
+      type: "warning",
+      title: "Benachrichtigung konnte nicht erstellt werden",
+      description:
+        "Der Antrag wurde trotzdem aktualisiert.",
     });
   }
+
+  /*
+   * Echten Push versenden.
+   */
+  const pushWasSuccessful =
+    await sendPushNotification(
+      selectedAbsence.employee_id,
+      notificationTitle,
+      notificationMessage,
+      {
+        type: "vacation_response",
+        absenceId: selectedAbsence.id,
+        status: newStatus,
+      },
+    );
+
+  if (!pushWasSuccessful) {
+    console.warn(
+      `PUSH: Benachrichtigung für Abwesenheitsantrag ${selectedAbsence.id} konnte nicht zugestellt werden.`,
+    );
+  }
+
+  await loadAbsences(businessId);
+
+  showToast({
+    type: "success",
+    title: isApproved
+      ? "Antrag genehmigt"
+      : "Antrag abgelehnt",
+    description:
+      `Der Antrag von ${selectedAbsence.employee_name} wurde ${statusText}.`,
+  });
+}
 
   async function handleDeleteAbsence(id: string) {
     const businessId = await getBusinessId();

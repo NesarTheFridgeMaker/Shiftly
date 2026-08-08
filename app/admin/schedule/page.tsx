@@ -608,29 +608,89 @@ async function sendPushNotification(
     setShowShiftDialog(true);
   }
 
-  async function handleDeleteShift(id: string) {
-    const businessId = await getBusinessId();
+async function handleDeleteShift(id: string) {
+  const businessId = await getBusinessId();
 
-    if (!businessId) {
-      showError("Betrieb nicht gefunden", "Bitte lade die Seite neu und versuche es erneut.");
-      return;
-    }
-
-    const { error } = await supabase
-      .from("shifts")
-      .delete()
-      .eq("id", id)
-      .eq("business_id", businessId);
-
-    if (error) {
-      console.error(error);
-      showError("Fehler", "Die Aktion konnte nicht ausgeführt werden.");
-      return;
-    }
-
-    await loadShifts();
-    showSuccess("Schicht gelöscht", "Die Schicht wurde aus dem Plan entfernt.");
+  if (!businessId) {
+    showError(
+      "Betrieb nicht gefunden",
+      "Bitte lade die Seite neu und versuche es erneut.",
+    );
+    return;
   }
+
+  /*
+   * Schicht VOR dem Löschen sichern.
+   * Danach existiert sie nicht mehr in Supabase.
+   */
+  const shiftToDelete = shifts.find(
+    (shift) => shift.id === id,
+  );
+
+  if (!shiftToDelete) {
+    showError(
+      "Schicht nicht gefunden",
+      "Bitte lade die Seite neu und versuche es erneut.",
+    );
+    return;
+  }
+
+  const { error } = await supabase
+    .from("shifts")
+    .delete()
+    .eq("id", id)
+    .eq("business_id", businessId);
+
+  if (error) {
+    console.error("SHIFT DELETE ERROR:", error);
+
+    showError(
+      "Schicht konnte nicht gelöscht werden",
+      error.message || "Bitte versuche es erneut.",
+    );
+
+    return;
+  }
+
+  /*
+   * Nur benachrichtigen, wenn die Schicht bereits
+   * veröffentlicht und damit für den Mitarbeiter
+   * sichtbar war.
+   */
+  if (shiftToDelete.is_published) {
+    const pushWasSuccessful =
+      await sendPushNotification(
+        shiftToDelete.employee_id,
+        "Schicht entfernt",
+        `Deine Schicht am ${formatDateForDisplay(
+          shiftToDelete.shift_date,
+        )} von ${formatShiftTime(
+          shiftToDelete.start_time,
+          shiftToDelete.end_time,
+        )} wurde aus dem Dienstplan entfernt.`,
+        {
+          type: "shift_deleted",
+          shiftId: shiftToDelete.id,
+          shiftDate: shiftToDelete.shift_date,
+        },
+      );
+
+    if (!pushWasSuccessful) {
+      console.warn(
+        `PUSH: Benachrichtigung über gelöschte Schicht ${shiftToDelete.id} konnte nicht zugestellt werden.`,
+      );
+    }
+  }
+
+  await loadShifts();
+
+  showSuccess(
+    "Schicht gelöscht",
+    shiftToDelete.is_published
+      ? "Die Schicht wurde entfernt und der Mitarbeiter benachrichtigt."
+      : "Die Schicht wurde aus dem Entwurf entfernt.",
+  );
+}
 
   function findAbsenceForShift(selectedEmployeeId: string, shiftDate: string) {
     return absences.find(

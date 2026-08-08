@@ -370,6 +370,46 @@ const [
     }
   }
 
+  async function sendPushNotification(
+  targetEmployeeId: string,
+  notificationTitle: string,
+  notificationBody: string,
+  data: Record<string, string> = {},
+) {
+  try {
+    const { data: result, error } =
+      await supabase.functions.invoke(
+        "send-push",
+        {
+          body: {
+            employeeId: targetEmployeeId,
+            title: notificationTitle,
+            body: notificationBody,
+            data,
+          },
+        },
+      );
+
+    console.log("PUSH DATA:", result);
+    console.log("PUSH ERROR:", error);
+
+    if (error) {
+      console.error("PUSH INVOKE ERROR:", error);
+      return false;
+    }
+
+    if (!result?.success) {
+      console.error("PUSH FUNCTION ERROR:", result);
+      return false;
+    }
+
+    return true;
+  } catch (error) {
+    console.error("PUSH ERROR:", error);
+    return false;
+  }
+}
+
   async function handleUpload(
     event: FormEvent<HTMLFormElement>,
   ) {
@@ -503,6 +543,30 @@ const [
         insertedDocument as unknown as EmployeeDocument,
         ...currentDocuments,
       ]);
+
+      const isPayslip = category === "payslip";
+
+const pushWasSuccessful =
+  await sendPushNotification(
+    employeeId,
+    isPayslip
+      ? "Neue Lohnabrechnung verfügbar"
+      : "Neues Dokument verfügbar",
+    isPayslip
+      ? "Für dich wurde eine neue Lohnabrechnung bereitgestellt."
+      : `Für dich wurde das Dokument „${trimmedTitle}“ bereitgestellt.`,
+    {
+      type: "document_uploaded",
+      documentId,
+      category,
+    },
+  );
+
+if (!pushWasSuccessful) {
+  console.warn(
+    `PUSH: Benachrichtigung für Dokument ${documentId} konnte nicht zugestellt werden.`,
+  );
+}
 
       setTitle("");
       setCategory("payslip");
