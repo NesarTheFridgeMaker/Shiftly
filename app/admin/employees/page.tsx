@@ -15,7 +15,6 @@ import Badge from "@/components/ui/Badge";
 import Input from "@/components/ui/Input";
 import Select from "@/components/ui/Select";
 import Textarea from "@/components/ui/Textarea";
-import { useSearchParams } from "next/navigation";
 
 import { useToast } from "@/components/ui/ToastProvider";
 import TableSkeleton from "@/components/skeletons/TableSkeleton";
@@ -23,9 +22,17 @@ import StatsSkeleton from "@/components/skeletons/StatsSkeleton";
 import { FaWhatsapp } from "react-icons/fa";
 import EmployeeInviteCard from "@/components/employees/EmployeeInviteCard";
 import EmployeeCard from "@/components/employees/EmployeeCard";
-import EmployeePayrollDialog from "@/components/employees/EmployeePayrollDialog";
 
 type LocationTrackingMode = "required" | "remote_allowed" | "disabled";
+type EmploymentScope = "full_time" | "part_time";
+type EmploymentType =
+  | "regular"
+  | "minijob"
+  | "working_student"
+  | "trainee"
+  | "short_term"
+  | "intern";
+type WageType = "hourly" | "fixed_hourly" | "salary";
 
 type Employee = {
   id: string;
@@ -37,12 +44,17 @@ type Employee = {
   hours: string;
   vacation_days_per_year: number;
   work_days_per_week: number;
-  wage_type?: "hourly" | "fixed_hourly" | "salary";
+  wage_type?: WageType;
   hourly_rate?: number | null;
   monthly_salary?: number | null;
   datev_personnel_number?: string | null;
   cost_center?: string | null;
   eligible_for_surcharges?: boolean;
+  birth_date?: string | null;
+  employment_start_date?: string | null;
+  employment_end_date?: string | null;
+  employment_scope?: EmploymentScope | null;
+  employment_type?: EmploymentType | null;
 
   location_tracking_mode: LocationTrackingMode;
   location_tracking_note: string | null;
@@ -89,17 +101,7 @@ type CreatedEmployeeInvite = {
   deliveryMethod: "email" | "whatsapp";
 };
 
-function formatAccountStatus(status: string) {
-  if (status === "active") return "Aktiv";
-  if (status === "inactive") return "Deaktiviert";
-  return status;
-}
 
-function getAccountStatusColor(status: string) {
-  if (status === "active") return "text-green-600";
-  if (status === "inactive") return "text-yellow-500";
-  return "text-black";
-}
 
 function formatNoteDate(dateString: string) {
   return new Date(dateString).toLocaleString("de-DE", {
@@ -143,7 +145,15 @@ export default function EmployeesPage() {
   const [name, setName] = useState("");
   const [role, setRole] = useState("Mitarbeiter");
   const [pin, setPin] = useState("");
+  const [birthDate, setBirthDate] = useState("");
+  const [employmentStartDate, setEmploymentStartDate] = useState("");
+  const [employmentEndDate, setEmploymentEndDate] = useState("");
+
+  const [employmentScope, setEmploymentScope] = useState<EmploymentScope>("full_time");
+
+  const [employmentType, setEmploymentType] = useState<EmploymentType>("regular");
   const [monthlyHours, setMonthlyHours] = useState("173");
+  const [weeklyHours, setWeeklyHours] = useState("40");
   const [vacationDays, setVacationDays] = useState("");
   const [workDaysPerWeek, setWorkDaysPerWeek] = useState("5");
 
@@ -155,9 +165,7 @@ export default function EmployeesPage() {
   const [employeeLimit, setEmployeeLimit] = useState<number | null>(null);
   const [isOpeningBillingPortal, setIsOpeningBillingPortal] = useState(false);
 
-  const [newEmployeeWageType, setNewEmployeeWageType] = useState<
-    "hourly" | "fixed_hourly" | "salary"
-  >("hourly");
+  const [newEmployeeWageType, setNewEmployeeWageType] = useState<WageType>("hourly");
 
   const [newEmployeeHourlyRate, setNewEmployeeHourlyRate] = useState("");
   const [newEmployeeMonthlySalary, setNewEmployeeMonthlySalary] = useState("");
@@ -168,14 +176,24 @@ export default function EmployeesPage() {
   const [editingPayrollEmployee, setEditingPayrollEmployee] =
     useState<EmployeeWithTargetHours | null>(null);
 
-  const [editWageType, setEditWageType] = useState<
-    "hourly" | "fixed_hourly" | "salary"
-  >("hourly");
+  const [editWageType, setEditWageType] = useState<WageType>("hourly");
 
   const [editHourlyRate, setEditHourlyRate] = useState("");
   const [editMonthlySalary, setEditMonthlySalary] = useState("");
   const [editDatevPersonnelNumber, setEditDatevPersonnelNumber] = useState("");
   const [editCostCenter, setEditCostCenter] = useState("");
+
+  const [editBirthDate, setEditBirthDate] = useState("");
+  const [editEmploymentStartDate, setEditEmploymentStartDate] = useState("");
+  const [editEmploymentEndDate, setEditEmploymentEndDate] = useState("");
+  const [editEmploymentScope, setEditEmploymentScope] =
+    useState<EmploymentScope>("full_time");
+  const [editEmploymentType, setEditEmploymentType] =
+    useState<EmploymentType>("regular");
+  const [editWeeklyHours, setEditWeeklyHours] = useState("");
+  const [editMonthlyHours, setEditMonthlyHours] = useState("");
+  const [editVacationDays, setEditVacationDays] = useState("");
+  const [editWorkDaysPerWeek, setEditWorkDaysPerWeek] = useState("");
 
   const [unsavedMonthlyHours, setUnsavedMonthlyHours] = useState<
     Record<string, boolean>
@@ -197,62 +215,6 @@ export default function EmployeesPage() {
 
   const [isSavingLocationTracking, setIsSavingLocationTracking] =
     useState(false);
-
-    async function handleTestPush() {
-  const employeeId = "0a1e0fcc-3bba-481a-8c4e-498178da8577";
-
-  try {
-    const { data, error } = await supabase.functions.invoke(
-      "send-push",
-      {
-        body: {
-          employeeId,
-          title: "Dipera Test",
-          body: "Die erste echte Dipera Push-Benachrichtigung funktioniert 🎉",
-        },
-      },
-    );
-
-    console.log("PUSH DATA:", data);
-    console.log("PUSH ERROR:", error);
-
-    if (error) {
-      showToast({
-        type: "error",
-        title: "Test-Push fehlgeschlagen",
-        description: error.message,
-      });
-
-      return;
-    }
-
-    if (!data?.success) {
-      showToast({
-        type: "error",
-        title: "Test-Push fehlgeschlagen",
-        description:
-          data?.error ??
-          "Die Push-Nachricht konnte nicht versendet werden.",
-      });
-
-      return;
-    }
-
-    showToast({
-      type: "success",
-      title: "Test-Push versendet",
-      description: `${data.sent} von ${data.totalDevices} Geräten erreicht.`,
-    });
-  } catch (error) {
-    console.error("TEST PUSH ERROR:", error);
-
-    showToast({
-      type: "error",
-      title: "Test-Push fehlgeschlagen",
-      description: "Beim Versand ist ein technischer Fehler aufgetreten.",
-    });
-  }
-}
 
   async function loadEmployees() {
     setIsLoading(true);
@@ -305,7 +267,7 @@ export default function EmployeesPage() {
       const { data: employeeData, error: employeeError } = await supabase
         .from("employees")
         .select(
-          "id, name, role, pin, status, account_status, hours, vacation_days_per_year, work_days_per_week, wage_type, hourly_rate, monthly_salary, datev_personnel_number, cost_center, eligible_for_surcharges, location_tracking_mode, location_tracking_note",
+          "id, name, role, pin, status, account_status, hours, vacation_days_per_year, work_days_per_week, wage_type, hourly_rate, monthly_salary, datev_personnel_number, cost_center, eligible_for_surcharges, birth_date, employment_start_date, employment_end_date, employment_scope, employment_type, location_tracking_mode, location_tracking_note",
         )
         .eq("business_id", businessId)
         .order("created_at", { ascending: false });
@@ -423,7 +385,6 @@ export default function EmployeesPage() {
     }
   }
 
-  const canManageAdmins = currentUserRole === "owner";
   const canEditPayroll = currentUserRole === "owner";
   const canEditLocationTracking =
     currentUserRole === "owner" || currentUserRole === "admin";
@@ -437,10 +398,6 @@ export default function EmployeesPage() {
   setExpandedEmployeeId(null);
 }, [employeeSearch]);
 
-  function showDiperaPopup(message: string) {
-    setPopupMessage(message);
-    setShowPopup(true);
-  }
 
   async function handleOpenBillingPortal() {
     if (isOpeningBillingPortal) return;
@@ -507,6 +464,40 @@ export default function EmployeesPage() {
       const employeeName = name.trim();
       const employeePin = pin.trim();
 
+      if (!birthDate) {
+  showToast({
+    type: "warning",
+    title: "Geburtsdatum fehlt",
+    description: "Bitte gib das Geburtsdatum des Mitarbeiters ein.",
+  });
+
+  return;
+}
+
+if (!employmentStartDate) {
+  showToast({
+    type: "warning",
+    title: "Eintrittsdatum fehlt",
+    description: "Bitte gib das Eintrittsdatum des Mitarbeiters ein.",
+  });
+
+  return;
+}
+
+if (
+  employmentEndDate &&
+  employmentEndDate < employmentStartDate
+) {
+  showToast({
+    type: "warning",
+    title: "Ungültiges Austrittsdatum",
+    description:
+      "Das Austrittsdatum darf nicht vor dem Eintrittsdatum liegen.",
+  });
+
+  return;
+}
+
       if (!employeeName || !employeePin) {
         showToast({
           type: "warning",
@@ -525,16 +516,36 @@ export default function EmployeesPage() {
         return;
       }
 
-      const parsedMonthlyHours = Number(monthlyHours);
+      const parsedWeeklyHours = Number(weeklyHours.replace(",", "."));
+      const parsedMonthlyHours = Number(monthlyHours.replace(",", "."));
 
-      if (!Number.isFinite(parsedMonthlyHours) || parsedMonthlyHours <= 0) {
-        showToast({
-          type: "warning",
-          title: "Ungültige Sollstunden",
-          description: "Bitte gib gültige Monats-Sollstunden ein.",
-        });
-        return;
-      }
+      if (
+  !Number.isFinite(parsedWeeklyHours) ||
+  parsedWeeklyHours <= 0
+) {
+  showToast({
+    type: "warning",
+    title: "Ungültige Wochen-Sollstunden",
+    description:
+      "Bitte gib gültige Wochen-Sollstunden ein.",
+  });
+
+  return;
+}
+
+if (
+  !Number.isFinite(parsedMonthlyHours) ||
+  parsedMonthlyHours <= 0
+) {
+  showToast({
+    type: "warning",
+    title: "Ungültige Monats-Sollstunden",
+    description:
+      "Bitte gib gültige Monats-Sollstunden ein.",
+  });
+
+  return;
+}
 
       const parsedVacationDays = vacationDays ? Number(vacationDays) : 24;
       const parsedWorkDays = Number(workDaysPerWeek);
@@ -689,6 +700,11 @@ export default function EmployeesPage() {
         .insert([
           {
             name: employeeName,
+            birth_date: birthDate,
+            employment_start_date: employmentStartDate,
+            employment_end_date: employmentEndDate || null,
+            employment_scope: employmentScope,
+            employment_type: employmentType,
             role,
             pin: employeePin,
             status: "not_checked_in",
@@ -731,7 +747,7 @@ export default function EmployeesPage() {
         .insert([
           {
             employee_id: insertedEmployee.id,
-            weekly_hours: Math.round(parsedMonthlyHours / 4.33),
+            weekly_hours: parsedWeeklyHours,
             monthly_hours: parsedMonthlyHours,
           },
         ]);
@@ -789,9 +805,15 @@ export default function EmployeesPage() {
       }
 
       setName("");
+      setBirthDate("");
+      setEmploymentStartDate("");
+      setEmploymentEndDate("");
+      setEmploymentScope("full_time");
+      setEmploymentType("regular");
       setRole("Mitarbeiter");
       setPin("");
       setMonthlyHours("173");
+      setWeeklyHours("40");
       setVacationDays("");
       setWorkDaysPerWeek("5");
       setNewEmployeeWageType("hourly");
@@ -1302,6 +1324,8 @@ async function handleOpenWhatsAppInvite() {
       }.`,
     });
   }
+  // Bearbeitet nur die Monats-Sollstunden.
+  // Wochen-Sollstunden bleiben ein eigenständiger Vertragswert.
   async function handleUpdateMonthlyHours(
     employeeId: string,
     newMonthlyHours: number,
@@ -1339,8 +1363,6 @@ async function handleOpenWhatsAppInvite() {
       return;
     }
 
-    const calculatedWeeklyHours = Math.round(newMonthlyHours / 4.33);
-
     const { data: existingTarget, error: existingError } = await supabase
       .from("employee_target_hours")
       .select("id")
@@ -1362,7 +1384,6 @@ async function handleOpenWhatsAppInvite() {
         .from("employee_target_hours")
         .update({
           monthly_hours: newMonthlyHours,
-          weekly_hours: calculatedWeeklyHours,
         })
         .eq("id", existingTarget.id);
 
@@ -1380,7 +1401,7 @@ async function handleOpenWhatsAppInvite() {
         {
           employee_id: employeeId,
           monthly_hours: newMonthlyHours,
-          weekly_hours: calculatedWeeklyHours,
+          weekly_hours: employee.weekly_target_hours,
         },
       ]);
 
@@ -1671,12 +1692,22 @@ async function handleOpenWhatsAppInvite() {
       showToast({
         type: "error",
         title: "Keine Berechtigung",
-        description: "Du darfst Lohndaten nicht bearbeiten.",
+        description: "Du darfst Mitarbeiter- und Lohndaten nicht bearbeiten.",
       });
       return;
     }
 
     setEditingPayrollEmployee(employee);
+
+    setEditBirthDate(employee.birth_date ?? "");
+    setEditEmploymentStartDate(employee.employment_start_date ?? "");
+    setEditEmploymentEndDate(employee.employment_end_date ?? "");
+    setEditEmploymentScope(employee.employment_scope ?? "full_time");
+    setEditEmploymentType(employee.employment_type ?? "regular");
+    setEditWeeklyHours(String(employee.weekly_target_hours ?? 40));
+    setEditMonthlyHours(String(employee.monthly_target_hours ?? 173));
+    setEditVacationDays(String(employee.vacation_days_per_year ?? 24));
+    setEditWorkDaysPerWeek(String(employee.work_days_per_week ?? 5));
 
     setEditWageType(
       employee.wage_type === "fixed_hourly"
@@ -1703,6 +1734,19 @@ async function handleOpenWhatsAppInvite() {
     setEditEligibleForSurcharges(employee.eligible_for_surcharges ?? true);
   }
 
+  function closeEmployeeEditDialog() {
+    setEditingPayrollEmployee(null);
+    setEditBirthDate("");
+    setEditEmploymentStartDate("");
+    setEditEmploymentEndDate("");
+    setEditEmploymentScope("full_time");
+    setEditEmploymentType("regular");
+    setEditWeeklyHours("");
+    setEditMonthlyHours("");
+    setEditVacationDays("");
+    setEditWorkDaysPerWeek("");
+  }
+
   async function handleSaveEmployeePayroll() {
     if (!editingPayrollEmployee) return;
 
@@ -1710,7 +1754,83 @@ async function handleOpenWhatsAppInvite() {
       showToast({
         type: "error",
         title: "Keine Berechtigung",
-        description: "Du darfst Lohndaten nicht bearbeiten.",
+        description: "Du darfst Mitarbeiter- und Lohndaten nicht bearbeiten.",
+      });
+      return;
+    }
+
+    if (!editBirthDate) {
+      showToast({
+        type: "warning",
+        title: "Geburtsdatum fehlt",
+        description: "Bitte gib das Geburtsdatum des Mitarbeiters ein.",
+      });
+      return;
+    }
+
+    if (!editEmploymentStartDate) {
+      showToast({
+        type: "warning",
+        title: "Eintrittsdatum fehlt",
+        description: "Bitte gib das Eintrittsdatum des Mitarbeiters ein.",
+      });
+      return;
+    }
+
+    if (
+      editEmploymentEndDate &&
+      editEmploymentEndDate < editEmploymentStartDate
+    ) {
+      showToast({
+        type: "warning",
+        title: "Ungültiges Austrittsdatum",
+        description:
+          "Das Austrittsdatum darf nicht vor dem Eintrittsdatum liegen.",
+      });
+      return;
+    }
+
+    const weeklyTargetHours = Number(editWeeklyHours.replace(",", "."));
+    const monthlyTargetHours = Number(editMonthlyHours.replace(",", "."));
+    const vacationDaysPerYear = Number(editVacationDays.replace(",", "."));
+    const workDays = Number(editWorkDaysPerWeek);
+
+    if (!Number.isFinite(weeklyTargetHours) || weeklyTargetHours <= 0) {
+      showToast({
+        type: "warning",
+        title: "Ungültige Wochen-Sollstunden",
+        description: "Bitte gib gültige Wochen-Sollstunden ein.",
+      });
+      return;
+    }
+
+    if (!Number.isFinite(monthlyTargetHours) || monthlyTargetHours <= 0) {
+      showToast({
+        type: "warning",
+        title: "Ungültige Monats-Sollstunden",
+        description: "Bitte gib gültige Monats-Sollstunden ein.",
+      });
+      return;
+    }
+
+    if (
+      !Number.isInteger(workDays) ||
+      workDays < 1 ||
+      workDays > 7
+    ) {
+      showToast({
+        type: "warning",
+        title: "Ungültige Arbeitstage",
+        description: "Arbeitstage pro Woche müssen zwischen 1 und 7 liegen.",
+      });
+      return;
+    }
+
+    if (!Number.isFinite(vacationDaysPerYear) || vacationDaysPerYear < 0) {
+      showToast({
+        type: "warning",
+        title: "Ungültige Urlaubstage",
+        description: "Bitte gib gültige Urlaubstage ein.",
       });
       return;
     }
@@ -1726,38 +1846,145 @@ async function handleOpenWhatsAppInvite() {
         ? Number(editMonthlySalary.replace(",", "."))
         : null;
 
-    const { error } = await supabase
-      .from("employees")
-      .update({
-        wage_type: editWageType,
-        hourly_rate: hourlyRate,
-        monthly_salary: monthlySalary,
-        datev_personnel_number: editDatevPersonnelNumber.trim() || null,
-        cost_center: editCostCenter.trim() || null,
-        eligible_for_surcharges: editEligibleForSurcharges,
-      })
-      .eq("id", editingPayrollEmployee.id);
-
-    if (error) {
-      console.error(error);
+    if (
+      (editWageType === "hourly" || editWageType === "fixed_hourly") &&
+      (hourlyRate === null || !Number.isFinite(hourlyRate) || hourlyRate < 0)
+    ) {
       showToast({
-        type: "error",
-        title: "Lohndaten konnten nicht gespeichert werden",
-        description: error.message,
+        type: "warning",
+        title: "Ungültiger Stundenlohn",
+        description: "Bitte gib einen gültigen Stundenlohn ein.",
       });
       return;
     }
 
+    if (
+      editWageType === "salary" &&
+      (monthlySalary === null ||
+        !Number.isFinite(monthlySalary) ||
+        monthlySalary < 0)
+    ) {
+      showToast({
+        type: "warning",
+        title: "Ungültiges Monatsgehalt",
+        description: "Bitte gib ein gültiges Monatsgehalt ein.",
+      });
+      return;
+    }
+
+    const businessId = await getBusinessId();
+
+    if (!businessId) {
+      showToast({
+        type: "error",
+        title: "Betrieb nicht gefunden",
+        description: "Die Mitarbeiterdaten konnten nicht gespeichert werden.",
+      });
+      return;
+    }
+
+    const { error: employeeUpdateError } = await supabase
+      .from("employees")
+      .update({
+        birth_date: editBirthDate,
+        employment_start_date: editEmploymentStartDate,
+        employment_end_date: editEmploymentEndDate || null,
+        employment_scope: editEmploymentScope,
+        employment_type: editEmploymentType,
+        vacation_days_per_year: vacationDaysPerYear,
+        work_days_per_week: workDays,
+        wage_type: editWageType,
+        hourly_rate:
+          editWageType === "hourly" || editWageType === "fixed_hourly"
+            ? hourlyRate
+            : null,
+        monthly_salary: editWageType === "salary" ? monthlySalary : null,
+        datev_personnel_number: editDatevPersonnelNumber.trim() || null,
+        cost_center: editCostCenter.trim() || null,
+        eligible_for_surcharges: editEligibleForSurcharges,
+      })
+      .eq("id", editingPayrollEmployee.id)
+      .eq("business_id", businessId);
+
+    if (employeeUpdateError) {
+      console.error("EMPLOYEE DATA UPDATE ERROR:", employeeUpdateError);
+
+      showToast({
+        type: "error",
+        title: "Mitarbeiterdaten konnten nicht gespeichert werden",
+        description: employeeUpdateError.message,
+      });
+      return;
+    }
+
+    const { data: existingTarget, error: targetLookupError } = await supabase
+      .from("employee_target_hours")
+      .select("id")
+      .eq("employee_id", editingPayrollEmployee.id)
+      .maybeSingle();
+
+    if (targetLookupError) {
+      console.error("TARGET HOURS LOOKUP ERROR:", targetLookupError);
+
+      showToast({
+        type: "error",
+        title: "Sollstunden konnten nicht geprüft werden",
+        description: targetLookupError.message,
+      });
+      return;
+    }
+
+    if (existingTarget) {
+      const { error: targetUpdateError } = await supabase
+        .from("employee_target_hours")
+        .update({
+          weekly_hours: weeklyTargetHours,
+          monthly_hours: monthlyTargetHours,
+        })
+        .eq("id", existingTarget.id);
+
+      if (targetUpdateError) {
+        console.error("TARGET HOURS UPDATE ERROR:", targetUpdateError);
+
+        showToast({
+          type: "error",
+          title: "Sollstunden konnten nicht gespeichert werden",
+          description: targetUpdateError.message,
+        });
+        return;
+      }
+    } else {
+      const { error: targetInsertError } = await supabase
+        .from("employee_target_hours")
+        .insert([
+          {
+            employee_id: editingPayrollEmployee.id,
+            weekly_hours: weeklyTargetHours,
+            monthly_hours: monthlyTargetHours,
+          },
+        ]);
+
+      if (targetInsertError) {
+        console.error("TARGET HOURS INSERT ERROR:", targetInsertError);
+
+        showToast({
+          type: "error",
+          title: "Sollstunden konnten nicht gespeichert werden",
+          description: targetInsertError.message,
+        });
+        return;
+      }
+    }
+
     const employeeName = editingPayrollEmployee.name;
 
-    setEditingPayrollEmployee(null);
-
+    closeEmployeeEditDialog();
     await loadEmployees();
 
     showToast({
       type: "success",
-      title: "Lohndaten gespeichert",
-      description: `Die Lohndaten von ${employeeName} wurden aktualisiert.`,
+      title: "Mitarbeiterdaten gespeichert",
+      description: `Die Stamm- und Lohndaten von ${employeeName} wurden aktualisiert.`,
     });
   }
 
@@ -1893,6 +2120,63 @@ const inactiveEmployees = employees
                 disabled={isSaving}
               />
 
+              <Input
+                label="Geburtsdatum"
+                type="date"
+                value={birthDate}
+                onChange={(event) => setBirthDate(event.target.value)}
+                disabled={isSaving}
+              />
+
+              <Input
+                label="Eintrittsdatum"
+                type="date"
+                value={employmentStartDate}
+                onChange={(event) => setEmploymentStartDate(event.target.value)}
+                disabled={isSaving}
+              />
+
+              <Input
+                label="Austrittsdatum"
+                type="date"
+                value={employmentEndDate}
+                onChange={(event) => setEmploymentEndDate(event.target.value)}
+                disabled={isSaving}
+              />
+
+              <Select
+                label="Arbeitszeitmodell"
+                value={employmentScope}
+                onChange={(event) =>
+                  setEmploymentScope(event.target.value as EmploymentScope)
+                }
+                disabled={isSaving}
+                options={[
+                  { value: "full_time", label: "Vollzeit" },
+                  { value: "part_time", label: "Teilzeit" },
+                ]}
+              />
+
+              <Select
+                label="Beschäftigungsart"
+                value={employmentType}
+                onChange={(event) =>
+                  setEmploymentType(event.target.value as EmploymentType)
+                }
+                disabled={isSaving}
+                options={[
+                  { value: "regular", label: "Reguläre Beschäftigung" },
+                  { value: "minijob", label: "Minijob" },
+                  { value: "working_student", label: "Werkstudent" },
+                  { value: "trainee", label: "Ausbildung" },
+                  {
+                    value: "short_term",
+                    label: "Kurzfristige Beschäftigung",
+                  },
+                  { value: "intern", label: "Praktikum" },
+                ]}
+              />
+
               <Select
                 label="Rolle"
                 value={role}
@@ -1921,10 +2205,22 @@ const inactiveEmployees = employees
               />
 
               <Input
+                label="Wochen-Sollstunden"
+                type="number"
+                min="0"
+                step="0.25"
+                placeholder="z. B. 38"
+                value={weeklyHours}
+                onChange={(event) => setWeeklyHours(event.target.value)}
+                disabled={isSaving}
+              />
+
+              <Input
                 label="Monats-Sollstunden"
                 type="number"
-                min="1"
-                placeholder="z. B. 160"
+                min="0"
+                step="0.01"
+                placeholder="z. B. 165.30"
                 value={monthlyHours}
                 onChange={(event) => setMonthlyHours(event.target.value)}
                 disabled={isSaving}
@@ -1935,7 +2231,7 @@ const inactiveEmployees = employees
                 value={newEmployeeWageType}
                 onChange={(event) =>
                   setNewEmployeeWageType(
-                    event.target.value as "hourly" | "fixed_hourly" | "salary",
+                    event.target.value as WageType,
                   )
                 }
                 disabled={isSaving}
@@ -2530,24 +2826,257 @@ const inactiveEmployees = employees
         </div>
       )}
 
-      <EmployeePayrollDialog
-  isOpen={Boolean(editingPayrollEmployee)}
-  employeeName={editingPayrollEmployee?.name ?? ""}
-  wageType={editWageType}
-  hourlyRate={editHourlyRate}
-  monthlySalary={editMonthlySalary}
-  datevPersonnelNumber={editDatevPersonnelNumber}
-  costCenter={editCostCenter}
-  eligibleForSurcharges={editEligibleForSurcharges}
-  onWageTypeChange={setEditWageType}
-  onHourlyRateChange={setEditHourlyRate}
-  onMonthlySalaryChange={setEditMonthlySalary}
-  onDatevPersonnelNumberChange={setEditDatevPersonnelNumber}
-  onCostCenterChange={setEditCostCenter}
-  onEligibleForSurchargesChange={setEditEligibleForSurcharges}
-  onClose={() => setEditingPayrollEmployee(null)}
-  onSave={handleSaveEmployeePayroll}
-/>
+      {editingPayrollEmployee && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#111827]/40 p-4 backdrop-blur-sm">
+          <div className="max-h-[92vh] w-full max-w-5xl overflow-y-auto rounded-3xl border border-[#E2E8F0] bg-white shadow-[0_24px_80px_rgba(15,23,42,0.18)]">
+            <div className="sticky top-0 z-10 border-b border-[#E2E8F0] bg-white px-6 py-5">
+              <h2 className="text-2xl font-semibold tracking-[-0.02em] text-[#0F172A]">
+                Mitarbeiterdaten bearbeiten
+              </h2>
+              <p className="mt-1 text-sm text-[#64748B]">
+                {editingPayrollEmployee.name}
+              </p>
+            </div>
+
+            <div className="space-y-8 p-6">
+              <div>
+                <h3 className="text-lg font-semibold text-[#0F172A]">
+                  Beschäftigungsdaten
+                </h3>
+
+                <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+                  <Input
+                    label="Geburtsdatum"
+                    type="date"
+                    value={editBirthDate}
+                    onChange={(event) => setEditBirthDate(event.target.value)}
+                  />
+
+                  <Input
+                    label="Eintrittsdatum"
+                    type="date"
+                    value={editEmploymentStartDate}
+                    onChange={(event) =>
+                      setEditEmploymentStartDate(event.target.value)
+                    }
+                  />
+
+                  <Input
+                    label="Austrittsdatum"
+                    type="date"
+                    value={editEmploymentEndDate}
+                    onChange={(event) =>
+                      setEditEmploymentEndDate(event.target.value)
+                    }
+                  />
+
+                  <Select
+                    label="Arbeitszeitmodell"
+                    value={editEmploymentScope}
+                    onChange={(event) =>
+                      setEditEmploymentScope(
+                        event.target.value as EmploymentScope,
+                      )
+                    }
+                    options={[
+                      { value: "full_time", label: "Vollzeit" },
+                      { value: "part_time", label: "Teilzeit" },
+                    ]}
+                  />
+
+                  <Select
+                    label="Beschäftigungsart"
+                    value={editEmploymentType}
+                    onChange={(event) =>
+                      setEditEmploymentType(
+                        event.target.value as EmploymentType,
+                      )
+                    }
+                    options={[
+                      { value: "regular", label: "Reguläre Beschäftigung" },
+                      { value: "minijob", label: "Minijob" },
+                      { value: "working_student", label: "Werkstudent" },
+                      { value: "trainee", label: "Ausbildung" },
+                      {
+                        value: "short_term",
+                        label: "Kurzfristige Beschäftigung",
+                      },
+                      { value: "intern", label: "Praktikum" },
+                    ]}
+                  />
+
+                  <Input
+                    label="Arbeitstage/Woche"
+                    type="number"
+                    min="1"
+                    max="7"
+                    value={editWorkDaysPerWeek}
+                    onChange={(event) =>
+                      setEditWorkDaysPerWeek(event.target.value)
+                    }
+                  />
+
+                  <Input
+                    label="Urlaubstage/Jahr"
+                    type="number"
+                    min="0"
+                    step="0.5"
+                    value={editVacationDays}
+                    onChange={(event) =>
+                      setEditVacationDays(event.target.value)
+                    }
+                  />
+                </div>
+              </div>
+
+              <div className="border-t border-[#E2E8F0] pt-6">
+                <h3 className="text-lg font-semibold text-[#0F172A]">
+                  Vertrags- und Sollstunden
+                </h3>
+
+                <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
+                  <Input
+                    label="Wochen-Sollstunden"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={editWeeklyHours}
+                    onChange={(event) =>
+                      setEditWeeklyHours(event.target.value)
+                    }
+                  />
+
+                  <Input
+                    label="Monats-Sollstunden"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={editMonthlyHours}
+                    onChange={(event) =>
+                      setEditMonthlyHours(event.target.value)
+                    }
+                  />
+                </div>
+
+                <p className="mt-3 text-xs leading-5 text-[#64748B]">
+                  Wochen- und Monats-Sollstunden sind eigenständige
+                  Vertragswerte und werden nicht automatisch ineinander
+                  umgerechnet.
+                </p>
+              </div>
+
+              <div className="border-t border-[#E2E8F0] pt-6">
+                <h3 className="text-lg font-semibold text-[#0F172A]">
+                  Vergütung und DATEV
+                </h3>
+
+                <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+                  <Select
+                    label="Lohnart"
+                    value={editWageType}
+                    onChange={(event) =>
+                      setEditWageType(event.target.value as WageType)
+                    }
+                    options={[
+                      {
+                        value: "hourly",
+                        label: "Stundenlohn nach Iststunden",
+                      },
+                      {
+                        value: "fixed_hourly",
+                        label: "Fixer Monatslohn auf Stundenbasis",
+                      },
+                      {
+                        value: "salary",
+                        label: "Festes Monatsgehalt",
+                      },
+                    ]}
+                  />
+
+                  {(editWageType === "hourly" ||
+                    editWageType === "fixed_hourly") && (
+                    <Input
+                      label="Stundenlohn"
+                      type="text"
+                      inputMode="decimal"
+                      placeholder="z. B. 15,50"
+                      value={editHourlyRate}
+                      onChange={(event) =>
+                        setEditHourlyRate(event.target.value)
+                      }
+                    />
+                  )}
+
+                  {editWageType === "salary" && (
+                    <Input
+                      label="Monatsgehalt"
+                      type="text"
+                      inputMode="decimal"
+                      placeholder="z. B. 2800,00"
+                      value={editMonthlySalary}
+                      onChange={(event) =>
+                        setEditMonthlySalary(event.target.value)
+                      }
+                    />
+                  )}
+
+                  <Input
+                    label="DATEV-Personalnummer"
+                    type="text"
+                    placeholder="Optional"
+                    value={editDatevPersonnelNumber}
+                    onChange={(event) =>
+                      setEditDatevPersonnelNumber(event.target.value)
+                    }
+                  />
+
+                  <Input
+                    label="Kostenstelle"
+                    type="text"
+                    placeholder="Optional"
+                    value={editCostCenter}
+                    onChange={(event) =>
+                      setEditCostCenter(event.target.value)
+                    }
+                  />
+
+                  <Select
+                    label="Zuschläge"
+                    value={editEligibleForSurcharges ? "yes" : "no"}
+                    onChange={(event) =>
+                      setEditEligibleForSurcharges(
+                        event.target.value === "yes",
+                      )
+                    }
+                    options={[
+                      { value: "yes", label: "Zuschlagsberechtigt" },
+                      { value: "no", label: "Keine Zuschläge" },
+                    ]}
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="sticky bottom-0 flex flex-col-reverse gap-3 border-t border-[#E2E8F0] bg-white px-6 py-5 sm:flex-row sm:justify-end">
+              <Button
+                variant="secondary"
+                type="button"
+                onClick={closeEmployeeEditDialog}
+              >
+                Abbrechen
+              </Button>
+
+              <Button
+                variant="primary"
+                type="button"
+                onClick={handleSaveEmployeePayroll}
+              >
+                Änderungen speichern
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
