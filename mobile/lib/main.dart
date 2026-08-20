@@ -6,12 +6,23 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'app/app.dart';
 import 'core/constants/app_environment.dart';
 import 'firebase_options.dart';
+import 'package:flutter/foundation.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   try {
     debugPrint('START 1: Flutter initialisiert');
+
+    debugPrint(
+  'KEY PREFIX: ${AppEnvironment.supabasePublishableKey.substring(0, 15)}',
+);
+debugPrint(
+  'KEY LENGTH: ${AppEnvironment.supabasePublishableKey.length}',
+);
+debugPrint(
+  'SUPABASE URL: ${AppEnvironment.supabaseUrl}',
+);
 
     AppEnvironment.validate();
     debugPrint('START 2: AppEnvironment gültig');

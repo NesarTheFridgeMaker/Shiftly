@@ -232,17 +232,15 @@ export default function EmployeeAbsencesPage() {
     setIsSubmitting(true);
 
     try {
-      const { error } = await supabase.from("absences").insert([
-        {
-          employee_id: employee.id,
-          employee_name: employee.name,
-          type: "vacation",
-          start_date: startDate,
-          end_date: endDate,
-          request_status: "pending",
-          business_id: businessId,
-        },
-      ]);
+      const { error } = await supabase.rpc(
+  "create_own_absence_request",
+  {
+    p_type_code: "vacation",
+    p_start_date: startDate,
+    p_end_date: endDate,
+    p_note: null,
+  }
+);
 
       if (error) {
         console.error(error);
@@ -284,10 +282,9 @@ export default function EmployeeAbsencesPage() {
   }
 
   async function handleHideAbsence(absenceId: string) {
-    const { error } = await supabase
-      .from("absences")
-      .update({ hidden_by_employee: true })
-      .eq("id", absenceId);
+    const { error } = await supabase.rpc("hide_own_absence", {
+  p_absence_id: absenceId,
+});
 
     if (error) {
       console.error(error);

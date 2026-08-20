@@ -16,6 +16,8 @@ class PunchPage extends ConsumerStatefulWidget {
 
 class _PunchPageState extends ConsumerState<PunchPage> {
   late DateTime _now;
+  DateTime? _businessClockBase;
+  Stopwatch? _businessClockStopwatch;
   Timer? _clockTimer;
   Timer? _successTimer;
 
@@ -25,13 +27,20 @@ class _PunchPageState extends ConsumerState<PunchPage> {
   void initState() {
     super.initState();
 
-    _now = DateTime.now();
+    _now = DateTime.utc(2000, 1, 1);
 
     _clockTimer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (!mounted) return;
 
+      final base = _businessClockBase;
+      final stopwatch = _businessClockStopwatch;
+
+      if (base == null || stopwatch == null) {
+        return;
+      }
+
       setState(() {
-        _now = DateTime.now();
+        _now = base.add(stopwatch.elapsed);
       });
     });
   }
@@ -39,6 +48,7 @@ class _PunchPageState extends ConsumerState<PunchPage> {
   @override
   void dispose() {
     _clockTimer?.cancel();
+    _businessClockStopwatch?.stop();
     _successTimer?.cancel();
     super.dispose();
   }
@@ -63,6 +73,16 @@ class _PunchPageState extends ConsumerState<PunchPage> {
 
   Future<void> _refresh() async {
     await ref.read(clockControllerProvider.notifier).load();
+  }
+
+  void _syncBusinessClock(String businessLocalNow) {
+    final parsed = _parseBusinessWallClock(businessLocalNow);
+
+    _businessClockStopwatch?.stop();
+
+    _businessClockBase = parsed;
+    _businessClockStopwatch = Stopwatch()..start();
+    _now = parsed;
   }
 
   String _formatCurrentTime(DateTime date) {
@@ -108,6 +128,13 @@ class _PunchPageState extends ConsumerState<PunchPage> {
     final clockState = ref.watch(clockControllerProvider);
 
     ref.listen<ClockState>(clockControllerProvider, (previous, next) {
+      final nextData = next.data;
+
+      if (nextData != null &&
+          previous?.data?.businessLocalNow != nextData.businessLocalNow) {
+        _syncBusinessClock(nextData.businessLocalNow);
+      }
+
       final successAction = next.successAction;
 
       if (successAction != null && previous?.successAction != successAction) {
@@ -158,6 +185,12 @@ class _PunchPageState extends ConsumerState<PunchPage> {
 
     final data = state.data!;
 
+    if (_businessClockBase == null) {
+      _syncBusinessClock(data.businessLocalNow);
+    }
+
+    final displayNow = _now;
+
     return RefreshIndicator(
       onRefresh: _refresh,
       child: ListView(
@@ -167,9 +200,9 @@ class _PunchPageState extends ConsumerState<PunchPage> {
           _Header(employee: data.employee),
           const SizedBox(height: 22),
           _ClockHeroCard(
-            now: _now,
-            formattedTime: _formatCurrentTime(_now),
-            formattedDate: _formatCurrentDate(_now),
+            now: displayNow,
+            formattedTime: _formatCurrentTime(displayNow),
+            formattedDate: _formatCurrentDate(displayNow),
             employee: data.employee,
             isProcessing: state.isProcessing,
           ),
@@ -804,7 +837,7 @@ class _LastEntryCard extends StatelessWidget {
           ),
           const SizedBox(height: 5),
           Text(
-            entry == null ? 'Keine' : _formatEntryTime(entry!.createdAt),
+            entry == null ? 'Keine' : _formatEntryTime(entry!.localCreatedAt),
             style: Theme.of(context).textTheme.titleMedium?.copyWith(
               color: const Color(0xFF101828),
               fontWeight: FontWeight.w800,
@@ -849,7 +882,7 @@ class _EntryCard extends StatelessWidget {
             ),
           ),
           Text(
-            _formatEntryTime(entry.createdAt),
+            _formatEntryTime(entry.localCreatedAt),
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
               color: const Color(0xFF667085),
               fontWeight: FontWeight.w700,
@@ -1254,11 +1287,48 @@ String _formatMinutes(int totalMinutes) {
   return '$hours Std. ${minutes.toString().padLeft(2, '0')} Min.';
 }
 
-String _formatEntryTime(DateTime date) {
-  final hour = date.hour.toString().padLeft(2, '0');
-  final minute = date.minute.toString().padLeft(2, '0');
+String _formatEntryTime(String? localCreatedAt) {
+  if (localCreatedAt == null || localCreatedAt.isEmpty) {
+    return '--:--';
+  }
 
-  return '$hour:$minute';
+  final match = RegExp(
+    r'^\d{4}-\d{2}-\d{2}T(\d{2}):(\d{2})',
+  ).firstMatch(localCreatedAt);
+
+  if (match == null) {
+    return '--:--';
+  }
+
+  return '${match.group(1)}:${match.group(2)}';
+}
+
+DateTime _parseBusinessWallClock(String value) {
+  final match = RegExp(
+    r'^(\d{4})-(\d{2})-(\d{2})T'
+    r'(\d{2}):(\d{2}):(\d{2})'
+    r'(?:\.(\d{1,6}))?$',
+  ).firstMatch(value);
+
+  if (match == null) {
+    throw FormatException(
+      'Ungültige Betriebszeit: $value',
+    );
+  }
+
+  final fraction = (match.group(7) ?? '').padRight(6, '0');
+  final microseconds = fraction.isEmpty ? 0 : int.parse(fraction);
+
+  return DateTime.utc(
+    int.parse(match.group(1)!),
+    int.parse(match.group(2)!),
+    int.parse(match.group(3)!),
+    int.parse(match.group(4)!),
+    int.parse(match.group(5)!),
+    int.parse(match.group(6)!),
+    microseconds ~/ 1000,
+    microseconds % 1000,
+  );
 }
 
 String _clockStatusShortLabel(ClockStatus status) {

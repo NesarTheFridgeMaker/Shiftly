@@ -43,6 +43,7 @@ type ShiftTemplate = {
   name: string;
   start_time: string;
   end_time: string;
+  planned_break_minutes: number;
 };
 
 type WorkType = {
@@ -161,6 +162,7 @@ export default function SettingsPage() {
   const [templateName, setTemplateName] = useState("");
   const [templateStart, setTemplateStart] = useState("");
   const [templateEnd, setTemplateEnd] = useState("");
+  const [templateBreakMinutes, setTemplateBreakMinutes] = useState("0");
 
   const [workTypes, setWorkTypes] = useState<WorkType[]>([]);
   const [workTypeName, setWorkTypeName] = useState("");
@@ -238,7 +240,7 @@ export default function SettingsPage() {
 
     const { data, error } = await supabase
       .from("shift_templates")
-      .select("id, name, start_time, end_time")
+      .select("id, name, start_time, end_time, planned_break_minutes")
       .eq("business_id", businessId)
       .order("name", { ascending: true });
 
@@ -266,6 +268,20 @@ export default function SettingsPage() {
       return;
     }
 
+    const parsedTemplateBreakMinutes = Number(templateBreakMinutes);
+
+if (
+  !Number.isInteger(parsedTemplateBreakMinutes) ||
+  parsedTemplateBreakMinutes < 0
+) {
+  showToast({
+    type: "warning",
+    title: "Ungültige Pause",
+    description: "Bitte gib die geplante Pause in ganzen Minuten an.",
+  });
+  return;
+}
+
     const businessId = await getBusinessId();
 
     if (!businessId) {
@@ -286,6 +302,7 @@ export default function SettingsPage() {
           name: templateName.trim(),
           start_time: templateStart,
           end_time: templateEnd,
+          planned_break_minutes: parsedTemplateBreakMinutes,
         },
       ]);
 
@@ -304,6 +321,7 @@ export default function SettingsPage() {
       setTemplateName("");
       setTemplateStart("");
       setTemplateEnd("");
+      setTemplateBreakMinutes("0");
 
       await loadShiftTemplates();
 
@@ -1395,28 +1413,36 @@ export default function SettingsPage() {
           description="Wiederkehrende Zeiten wie Früh-, Mittel- oder Spätschicht."
           action={<Badge variant="muted">{shiftTemplates.length}</Badge>}
         >
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-            <Input
-              label="Name"
-              value={templateName}
-              onChange={(event) => setTemplateName(event.target.value)}
-              placeholder="z. B. Frühschicht"
-            />
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-4">
+          <Input
+            label="Name"
+            value={templateName}
+            onChange={(event) => setTemplateName(event.target.value)}
+            placeholder="z. B. Frühschicht"
+          />
 
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              <TimeInput
-                label="Beginn"
-                value={templateStart}
-                onChange={setTemplateStart}
-              />
+          <TimeInput
+            label="Beginn"
+            value={templateStart}
+            onChange={setTemplateStart}
+          />
 
-              <TimeInput
-                label="Ende"
-                value={templateEnd}
-                onChange={setTemplateEnd}
-              />
-            </div>
-          </div>
+          <TimeInput
+            label="Ende"
+            value={templateEnd}
+            onChange={setTemplateEnd}
+          />
+
+          <Input
+            label="Geplante Pause (Min.)"
+            type="number"
+            min="0"
+            step="5"
+            value={templateBreakMinutes}
+            onChange={(event) => setTemplateBreakMinutes(event.target.value)}
+            placeholder="z. B. 30"
+          />
+        </div>
 
           <div className="mt-5">
             <Button
@@ -1443,6 +1469,12 @@ export default function SettingsPage() {
                       {template.start_time.slice(0, 5)} –{" "}
                       {template.end_time.slice(0, 5)}
                     </p>
+
+                      {template.planned_break_minutes > 0 && (
+                      <p className="mt-1 text-xs text-[#64748B]">
+                        Pause: {template.planned_break_minutes} Min.
+                      </p>
+                    )}
                   </div>
 
                   <Button

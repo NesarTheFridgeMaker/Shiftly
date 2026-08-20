@@ -44,13 +44,25 @@ type Absence = {
   start_date: string;
   end_date: string;
   request_status: string;
+  absence_type_id?: string | null;
 };
 
-function formatType(type: string) {
-  if (type === "vacation") return "Urlaub";
-  if (type === "sick") return "Krankheit";
-  return type;
-}
+type AbsenceType = {
+  id: string;
+  business_id: string;
+  code: string;
+  name: string;
+  category: string;
+  is_paid: boolean;
+  credits_time_account: boolean;
+  requires_approval: boolean;
+  requires_document: boolean;
+  datev_absence_code: string | null;
+  active: boolean;
+  sort_order: number;
+  subtract_worked_minutes: boolean;
+  credit_mode: string;
+};
 
 function formatRequestStatus(status: string) {
   if (status === "pending") return "Offen";
@@ -68,7 +80,23 @@ function getStatusBadgeVariant(status: string) {
 
 function getTypeBadgeVariant(type: string) {
   if (type === "vacation") return "primary" as const;
-  if (type === "sick") return "danger" as const;
+
+  if (
+    type === "sick" ||
+    type === "sick_child" ||
+    type === "work_accident"
+  ) {
+    return "danger" as const;
+  }
+
+  if (type === "paid_leave") {
+    return "success" as const;
+  }
+
+  if (type === "unpaid_leave") {
+    return "warning" as const;
+  }
+
   return "muted" as const;
 }
 
@@ -92,7 +120,8 @@ function calculateVacationDays(
 
   const totalDays =
     Math.floor(
-      (endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)
+      (endDate.getTime() - startDate.getTime()) /
+        (1000 * 60 * 60 * 24)
     ) + 1;
 
   const weeks = totalDays / 7;
@@ -128,31 +157,50 @@ export default function AbsencesPage() {
   const { showToast } = useToast();
 
   const [isLoading, setIsLoading] = useState(true);
+
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [absences, setAbsences] = useState<Absence[]>([]);
+  const [absenceTypes, setAbsenceTypes] = useState<AbsenceType[]>([]);
 
   const [employeeId, setEmployeeId] = useState("");
   const [type, setType] = useState("vacation");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
+
   const [isSaving, setIsSaving] = useState(false);
-  const [absenceToDelete, setAbsenceToDelete] = useState<string | null>(null);
+
+  const [absenceToDelete, setAbsenceToDelete] =
+    useState<string | null>(null);
+
+  function getAbsenceTypeByCode(code: string) {
+    return absenceTypes.find(
+      (absenceType) => absenceType.code === code
+    );
+  }
+
+  function formatType(code: string) {
+    return getAbsenceTypeByCode(code)?.name || code;
+  }
 
   async function loadEmployees(businessId: string) {
     const { data, error } = await supabase
       .from("employees")
-      .select("id,name,account_status,vacation_days_per_year,work_days_per_week")
+      .select(
+        "id,name,account_status,vacation_days_per_year,work_days_per_week"
+      )
       .eq("business_id", businessId)
       .eq("account_status", "active")
       .order("name", { ascending: true });
 
     if (error) {
       console.error(error);
+
       showToast({
         type: "error",
         title: "Mitarbeiter konnten nicht geladen werden",
         description: error.message,
       });
+
       return;
     }
 
@@ -168,15 +216,69 @@ export default function AbsencesPage() {
 
     if (error) {
       console.error(error);
+
       showToast({
         type: "error",
         title: "Abwesenheiten konnten nicht geladen werden",
         description: error.message,
       });
+
       return;
     }
 
     setAbsences(data || []);
+  }
+
+  async function loadAbsenceTypes(businessId: string) {
+    const { data, error } = await supabase
+      .from("absence_types")
+      .select(
+        `
+        id,
+        business_id,
+        code,
+        name,
+        category,
+        is_paid,
+        credits_time_account,
+        requires_approval,
+        requires_document,
+        datev_absence_code,
+        active,
+        sort_order,
+        subtract_worked_minutes,
+        credit_mode
+      `
+      )
+      .eq("business_id", businessId)
+      .eq("active", true)
+      .order("sort_order", { ascending: true })
+      .order("name", { ascending: true });
+
+    if (error) {
+      console.error("LOAD ABSENCE TYPES ERROR:", error);
+
+      showToast({
+        type: "error",
+        title: "Abwesenheitsarten konnten nicht geladen werden",
+        description: error.message,
+      });
+
+      return;
+    }
+
+    const loadedTypes = (data || []) as AbsenceType[];
+
+    setAbsenceTypes(loadedTypes);
+
+    if (
+      loadedTypes.length > 0 &&
+      !loadedTypes.some(
+        (absenceType) => absenceType.code === type
+      )
+    ) {
+      setType(loadedTypes[0].code);
+    }
   }
 
   async function loadPageData() {
@@ -189,12 +291,18 @@ export default function AbsencesPage() {
         showToast({
           type: "error",
           title: "Betrieb nicht gefunden",
-          description: "Die Abwesenheiten konnten nicht geladen werden.",
+          description:
+            "Die Abwesenheiten konnten nicht geladen werden.",
         });
+
         return;
       }
 
-      await Promise.all([loadEmployees(businessId), loadAbsences(businessId)]);
+      await Promise.all([
+        loadEmployees(businessId),
+        loadAbsences(businessId),
+        loadAbsenceTypes(businessId),
+      ]);
     } finally {
       setIsLoading(false);
     }
@@ -202,18 +310,21 @@ export default function AbsencesPage() {
 
   useEffect(() => {
     loadPageData();
+
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function handleAddAbsence() {
     if (isSaving) return;
 
-    if (!employeeId || !startDate || !endDate) {
+    if (!employeeId || !type || !startDate || !endDate) {
       showToast({
         type: "warning",
         title: "Angaben fehlen",
-        description: "Bitte wähle Mitarbeiter, Startdatum und Enddatum aus.",
+        description:
+          "Bitte wähle Mitarbeiter, Abwesenheitsart, Startdatum und Enddatum aus.",
       });
+
       return;
     }
 
@@ -221,8 +332,10 @@ export default function AbsencesPage() {
       showToast({
         type: "warning",
         title: "Ungültiger Zeitraum",
-        description: "Das Startdatum darf nicht nach dem Enddatum liegen.",
+        description:
+          "Das Startdatum darf nicht nach dem Enddatum liegen.",
       });
+
       return;
     }
 
@@ -232,8 +345,10 @@ export default function AbsencesPage() {
       showToast({
         type: "error",
         title: "Betrieb nicht gefunden",
-        description: "Die Abwesenheit konnte nicht gespeichert werden.",
+        description:
+          "Die Abwesenheit konnte nicht gespeichert werden.",
       });
+
       return;
     }
 
@@ -245,8 +360,24 @@ export default function AbsencesPage() {
       showToast({
         type: "error",
         title: "Mitarbeiter nicht gefunden",
-        description: "Bitte wähle einen gültigen Mitarbeiter aus.",
+        description:
+          "Bitte wähle einen gültigen Mitarbeiter aus.",
       });
+
+      return;
+    }
+
+    const selectedAbsenceType =
+      getAbsenceTypeByCode(type);
+
+    if (!selectedAbsenceType) {
+      showToast({
+        type: "error",
+        title: "Abwesenheitsart nicht gefunden",
+        description:
+          "Bitte lade die Seite neu und versuche es erneut.",
+      });
+
       return;
     }
 
@@ -264,26 +395,35 @@ export default function AbsencesPage() {
         title: "Abwesenheit überschneidet sich",
         description: `Es existiert bereits eine Abwesenheit vom ${formatDate(
           overlappingAbsence.start_date
-        )} bis ${formatDate(overlappingAbsence.end_date)}.`,
+        )} bis ${formatDate(
+          overlappingAbsence.end_date
+        )}.`,
       });
+
       return;
     }
 
+    /*
+     * Urlaubskontingent nur bei Urlaub prüfen.
+     */
     if (type === "vacation") {
-      const requestedVacationDays = calculateVacationDays(
-        startDate,
-        endDate,
-        selectedEmployee.work_days_per_week ?? 5
-      );
+      const requestedVacationDays =
+        calculateVacationDays(
+          startDate,
+          endDate,
+          selectedEmployee.work_days_per_week ?? 5
+        );
 
-      const approvedVacationDays = getApprovedVacationDaysForEmployee(
-        selectedEmployee.id,
-        absences,
-        selectedEmployee.work_days_per_week ?? 5
-      );
+      const approvedVacationDays =
+        getApprovedVacationDaysForEmployee(
+          selectedEmployee.id,
+          absences,
+          selectedEmployee.work_days_per_week ?? 5
+        );
 
       const remainingVacationDays =
-        (selectedEmployee.vacation_days_per_year ?? 24) - approvedVacationDays;
+        (selectedEmployee.vacation_days_per_year ?? 24) -
+        approvedVacationDays;
 
       if (requestedVacationDays > remainingVacationDays) {
         showToast({
@@ -291,230 +431,270 @@ export default function AbsencesPage() {
           title: "Nicht genügend Urlaubstage",
           description: `${selectedEmployee.name} hat nur noch ${remainingVacationDays} Urlaubstage verfügbar. Diese Abwesenheit umfasst ${requestedVacationDays} Tage.`,
         });
+
         return;
       }
     }
 
     setIsSaving(true);
 
-    const { error } = await supabase.from("absences").insert([
-      {
-        employee_id: selectedEmployee.id,
-        employee_name: selectedEmployee.name,
-        type,
-        start_date: startDate,
-        end_date: endDate,
-        request_status: "approved",
-        business_id: businessId,
-      },
-    ]);
+    try {
+      const { error } = await supabase.rpc(
+        "create_business_absence",
+        {
+          p_employee_id: selectedEmployee.id,
+          p_type_code: selectedAbsenceType.code,
+          p_start_date: startDate,
+          p_end_date: endDate,
+          p_note: null,
+        }
+      );
 
-    setIsSaving(false);
+      if (error) {
+        console.error(
+          "Absence insert error:",
+          error
+        );
 
-    if (error) {
-      console.error("Absence insert error:", error);
+        showToast({
+          type: "error",
+          title:
+            "Abwesenheit konnte nicht gespeichert werden",
+          description: error.message,
+        });
+
+        return;
+      }
+
+      setEmployeeId("");
+
+      const vacationTypeExists =
+        absenceTypes.some(
+          (absenceType) =>
+            absenceType.code === "vacation"
+        );
+
+      setType(
+        vacationTypeExists
+          ? "vacation"
+          : absenceTypes[0]?.code || ""
+      );
+
+      setStartDate("");
+      setEndDate("");
+
+      await loadAbsences(businessId);
+
+      showToast({
+        type: "success",
+        title: "Abwesenheit gespeichert",
+        description: `${selectedEmployee.name}: ${selectedAbsenceType.name} vom ${formatDate(
+          startDate
+        )} bis ${formatDate(
+          endDate
+        )} wurde eingetragen.`,
+      });
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  async function sendPushNotification(
+    targetEmployeeId: string,
+    notificationTitle: string,
+    notificationBody: string,
+    data: Record<string, string> = {}
+  ) {
+    try {
+      const { data: result, error } =
+        await supabase.functions.invoke(
+          "send-push",
+          {
+            body: {
+              employeeId: targetEmployeeId,
+              title: notificationTitle,
+              body: notificationBody,
+              data,
+            },
+          }
+        );
+
+      console.log("PUSH DATA:", result);
+      console.log("PUSH ERROR:", error);
+
+      if (error) {
+        console.error(
+          "PUSH INVOKE ERROR:",
+          error
+        );
+
+        return false;
+      }
+
+      if (!result?.success) {
+        console.error(
+          "PUSH FUNCTION ERROR:",
+          result
+        );
+
+        return false;
+      }
+
+      return true;
+    } catch (error) {
+      console.error(
+        "PUSH ERROR:",
+        error
+      );
+
+      return false;
+    }
+  }
+
+  async function handleUpdateRequestStatus(
+    id: string,
+    newStatus: string
+  ) {
+    const businessId = await getBusinessId();
+
+    if (!businessId) {
       showToast({
         type: "error",
-        title: "Abwesenheit konnte nicht gespeichert werden",
-        description: error.message,
+        title: "Betrieb nicht gefunden",
+        description:
+          "Der Antrag konnte nicht aktualisiert werden.",
       });
+
       return;
     }
 
-    setEmployeeId("");
-    setType("vacation");
-    setStartDate("");
-    setEndDate("");
+    const selectedAbsence = absences.find(
+      (absence) => absence.id === id
+    );
+
+    if (!selectedAbsence) {
+      showToast({
+        type: "error",
+        title: "Antrag nicht gefunden",
+        description:
+          "Bitte lade die Seite neu und versuche es erneut.",
+      });
+
+      return;
+    }
+
+    if (
+      selectedAbsence.request_status === newStatus
+    ) {
+      return;
+    }
+
+    const { error } = await supabase
+      .from("absences")
+      .update({
+        request_status: newStatus,
+      })
+      .eq("id", id)
+      .eq("business_id", businessId);
+
+    if (error) {
+      console.error(
+        "Absence status update error:",
+        error
+      );
+
+      showToast({
+        type: "error",
+        title:
+          "Antrag konnte nicht aktualisiert werden",
+        description: error.message,
+      });
+
+      return;
+    }
+
+    const isApproved =
+      newStatus === "approved";
+
+    const statusText = isApproved
+      ? "genehmigt"
+      : "abgelehnt";
+
+    const absenceTypeName =
+      formatType(selectedAbsence.type);
+
+    const notificationTitle = isApproved
+      ? `${absenceTypeName} genehmigt`
+      : `${absenceTypeName} abgelehnt`;
+
+    const notificationMessage =
+      `Deine Abwesenheit „${absenceTypeName}“ vom ${formatDate(
+        selectedAbsence.start_date
+      )} bis ${formatDate(
+        selectedAbsence.end_date
+      )} wurde ${statusText}.`;
+
+    const { error: notificationError } =
+      await supabase
+        .from("notifications")
+        .insert([
+          {
+            business_id: businessId,
+            employee_id:
+              selectedAbsence.employee_id,
+            title: notificationTitle,
+            message: notificationMessage,
+            type: "absence_response",
+            is_read: false,
+          },
+        ]);
+
+    if (notificationError) {
+      console.error(
+        "NOTIFICATION INSERT ERROR:",
+        notificationError
+      );
+
+      showToast({
+        type: "warning",
+        title:
+          "Benachrichtigung konnte nicht erstellt werden",
+        description:
+          "Der Antrag wurde trotzdem aktualisiert.",
+      });
+    }
+
+    const pushWasSuccessful =
+      await sendPushNotification(
+        selectedAbsence.employee_id,
+        notificationTitle,
+        notificationMessage,
+        {
+          type: "absence_response",
+          absenceId: selectedAbsence.id,
+          absenceType:
+            selectedAbsence.type,
+          status: newStatus,
+        }
+      );
+
+    if (!pushWasSuccessful) {
+      console.warn(
+        `PUSH: Benachrichtigung für Abwesenheitsantrag ${selectedAbsence.id} konnte nicht zugestellt werden.`
+      );
+    }
 
     await loadAbsences(businessId);
 
     showToast({
       type: "success",
-      title: "Abwesenheit gespeichert",
-      description: `${selectedEmployee.name} wurde vom ${formatDate(
-        startDate
-      )} bis ${formatDate(endDate)} eingetragen.`,
-    });
-  }
-
-  async function sendPushNotification(
-  targetEmployeeId: string,
-  notificationTitle: string,
-  notificationBody: string,
-  data: Record<string, string> = {},
-) {
-  try {
-    const { data: result, error } =
-      await supabase.functions.invoke(
-        "send-push",
-        {
-          body: {
-            employeeId: targetEmployeeId,
-            title: notificationTitle,
-            body: notificationBody,
-            data,
-          },
-        },
-      );
-
-    console.log("PUSH DATA:", result);
-    console.log("PUSH ERROR:", error);
-
-    if (error) {
-      console.error("PUSH INVOKE ERROR:", error);
-      return false;
-    }
-
-    if (!result?.success) {
-      console.error("PUSH FUNCTION ERROR:", result);
-      return false;
-    }
-
-    return true;
-  } catch (error) {
-    console.error("PUSH ERROR:", error);
-    return false;
-  }
-}
-
-  async function handleUpdateRequestStatus(
-  id: string,
-  newStatus: string,
-) {
-  const businessId = await getBusinessId();
-
-  if (!businessId) {
-    showToast({
-      type: "error",
-      title: "Betrieb nicht gefunden",
-      description: "Der Antrag konnte nicht aktualisiert werden.",
-    });
-    return;
-  }
-
-  const selectedAbsence = absences.find(
-    (absence) => absence.id === id,
-  );
-
-  if (!selectedAbsence) {
-    showToast({
-      type: "error",
-      title: "Antrag nicht gefunden",
-      description: "Bitte lade die Seite neu und versuche es erneut.",
-    });
-    return;
-  }
-
-  /*
-   * Keine erneute Benachrichtigung bei identischem Status.
-   */
-  if (selectedAbsence.request_status === newStatus) {
-    return;
-  }
-
-  const { error } = await supabase
-    .from("absences")
-    .update({
-      request_status: newStatus,
-    })
-    .eq("id", id)
-    .eq("business_id", businessId);
-
-  if (error) {
-    console.error(
-      "Absence status update error:",
-      error,
-    );
-
-    showToast({
-      type: "error",
-      title: "Antrag konnte nicht aktualisiert werden",
-      description: error.message,
-    });
-
-    return;
-  }
-
-  const isApproved = newStatus === "approved";
-
-  const statusText = isApproved
-    ? "genehmigt"
-    : "abgelehnt";
-
-  const notificationTitle = isApproved
-    ? "Urlaubsantrag genehmigt"
-    : "Urlaubsantrag abgelehnt";
-
-  const notificationMessage =
-    `Dein Urlaubsantrag vom ${formatDate(
-      selectedAbsence.start_date,
-    )} bis ${formatDate(
-      selectedAbsence.end_date,
-    )} wurde ${statusText}.`;
-
-  /*
-   * Interne Dipera-Benachrichtigung speichern.
-   */
-  const { error: notificationError } =
-    await supabase
-      .from("notifications")
-      .insert([
-        {
-          business_id: businessId,
-          employee_id: selectedAbsence.employee_id,
-          title: notificationTitle,
-          message: notificationMessage,
-          type: "vacation_response",
-          is_read: false,
-        },
-      ]);
-
-  if (notificationError) {
-    console.error(
-      "NOTIFICATION INSERT ERROR:",
-      notificationError,
-    );
-
-    showToast({
-      type: "warning",
-      title: "Benachrichtigung konnte nicht erstellt werden",
+      title: isApproved
+        ? "Antrag genehmigt"
+        : "Antrag abgelehnt",
       description:
-        "Der Antrag wurde trotzdem aktualisiert.",
+        `${absenceTypeName} von ${selectedAbsence.employee_name} wurde ${statusText}.`,
     });
   }
-
-  /*
-   * Echten Push versenden.
-   */
-  const pushWasSuccessful =
-    await sendPushNotification(
-      selectedAbsence.employee_id,
-      notificationTitle,
-      notificationMessage,
-      {
-        type: "vacation_response",
-        absenceId: selectedAbsence.id,
-        status: newStatus,
-      },
-    );
-
-  if (!pushWasSuccessful) {
-    console.warn(
-      `PUSH: Benachrichtigung für Abwesenheitsantrag ${selectedAbsence.id} konnte nicht zugestellt werden.`,
-    );
-  }
-
-  await loadAbsences(businessId);
-
-  showToast({
-    type: "success",
-    title: isApproved
-      ? "Antrag genehmigt"
-      : "Antrag abgelehnt",
-    description:
-      `Der Antrag von ${selectedAbsence.employee_name} wurde ${statusText}.`,
-  });
-}
 
   async function handleDeleteAbsence(id: string) {
     const businessId = await getBusinessId();
@@ -523,12 +703,16 @@ export default function AbsencesPage() {
       showToast({
         type: "error",
         title: "Betrieb nicht gefunden",
-        description: "Die Abwesenheit konnte nicht gelöscht werden.",
+        description:
+          "Die Abwesenheit konnte nicht gelöscht werden.",
       });
+
       return;
     }
 
-    const absence = absences.find((absence) => absence.id === id);
+    const absence = absences.find(
+      (absence) => absence.id === id
+    );
 
     const { error } = await supabase
       .from("absences")
@@ -537,12 +721,18 @@ export default function AbsencesPage() {
       .eq("business_id", businessId);
 
     if (error) {
-      console.error("Absence delete error:", error);
+      console.error(
+        "Absence delete error:",
+        error
+      );
+
       showToast({
         type: "error",
-        title: "Abwesenheit konnte nicht gelöscht werden",
+        title:
+          "Abwesenheit konnte nicht gelöscht werden",
         description: error.message,
       });
+
       return;
     }
 
@@ -552,51 +742,82 @@ export default function AbsencesPage() {
       type: "success",
       title: "Abwesenheit gelöscht",
       description: absence
-        ? `${absence.employee_name}: ${formatDate(absence.start_date)} bis ${formatDate(absence.end_date)} wurde entfernt.`
+        ? `${absence.employee_name}: ${formatType(
+            absence.type
+          )} vom ${formatDate(
+            absence.start_date
+          )} bis ${formatDate(
+            absence.end_date
+          )} wurde entfernt.`
         : "Die Abwesenheit wurde entfernt.",
     });
   }
 
   const pendingAbsences = absences.filter(
-    (absence) => absence.request_status === "pending"
+    (absence) =>
+      absence.request_status === "pending"
   );
 
   const approvedAbsences = absences.filter(
-    (absence) => absence.request_status === "approved"
+    (absence) =>
+      absence.request_status === "approved"
   );
 
   const rejectedAbsences = absences.filter(
-    (absence) => absence.request_status === "rejected"
+    (absence) =>
+      absence.request_status === "rejected"
   );
 
-  const sickAbsences = absences.filter((absence) => absence.type === "sick");
+  const sickAbsences = absences.filter(
+    (absence) =>
+      absence.type === "sick"
+  );
 
   const otherAbsences = absences.filter(
-    (absence) => absence.request_status !== "pending"
+    (absence) =>
+      absence.request_status !== "pending"
   );
 
   const employeeOptions = useMemo(
     () => [
-      { value: "", label: "Mitarbeiter auswählen" },
-      ...employees.map((employee) => ({
-        value: employee.id,
-        label: employee.name,
-      })),
+      {
+        value: "",
+        label: "Mitarbeiter auswählen",
+      },
+
+      ...employees.map(
+        (employee) => ({
+          value: employee.id,
+          label: employee.name,
+        })
+      ),
     ],
     [employees]
   );
 
-  const typeOptions = [
-    { value: "vacation", label: "Urlaub" },
-    { value: "sick", label: "Krankheit" },
-  ];
+  const typeOptions = useMemo(
+    () => [
+      {
+        value: "",
+        label: "Abwesenheitsart auswählen",
+      },
+
+      ...absenceTypes.map(
+        (absenceType) => ({
+          value: absenceType.code,
+          label: absenceType.name,
+        })
+      ),
+    ],
+    [absenceTypes]
+  );
 
   if (isLoading) {
     return (
       <div className="space-y-8">
         <PageHeader
           title="Abwesenheiten"
-          description="Verwalte Urlaub, Krankheit und offene Abwesenheitsanträge."
+          description="Verwalte Abwesenheiten und offene Anträge."
         />
 
         <StatsSkeleton />
@@ -607,14 +828,20 @@ export default function AbsencesPage() {
           title="Offene Anträge"
           description="Anträge, die noch genehmigt oder abgelehnt werden müssen."
         >
-          <TableSkeleton rows={3} columns={5} />
+          <TableSkeleton
+            rows={3}
+            columns={5}
+          />
         </Section>
 
         <Section
           title="Abwesenheitsübersicht"
           description="Alle genehmigten und abgelehnten Abwesenheiten."
         >
-          <TableSkeleton rows={6} columns={6} />
+          <TableSkeleton
+            rows={6}
+            columns={6}
+          />
         </Section>
       </div>
     );
@@ -624,7 +851,7 @@ export default function AbsencesPage() {
     <div className="space-y-8">
       <PageHeader
         title="Abwesenheiten"
-        description="Verwalte Urlaub, Krankheit und offene Abwesenheitsanträge."
+        description="Verwalte Urlaub, Krankheit, Freistellungen und weitere Abwesenheiten."
       />
 
       <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-4">
@@ -659,43 +886,122 @@ export default function AbsencesPage() {
 
       <Section
         title="Abwesenheit eintragen"
-        description="Trage Urlaub oder Krankheit direkt für einen Mitarbeiter ein."
+        description="Trage eine Abwesenheit direkt für einen Mitarbeiter ein."
       >
-        <div className="grid grid-cols-1 gap-4 xl:grid-cols-4">
-          <Select
-            label="Mitarbeiter"
-            value={employeeId}
-            onChange={(event) => setEmployeeId(event.target.value)}
-            options={employeeOptions}
+        {absenceTypes.length === 0 ? (
+          <EmptyState
+            compact
+            title="Keine Abwesenheitsarten vorhanden"
+            description="Lege zunächst aktive Abwesenheitsarten für diesen Betrieb an."
           />
+        ) : (
+          <>
+            <div className="grid grid-cols-1 gap-4 xl:grid-cols-4">
+              <Select
+                label="Mitarbeiter"
+                value={employeeId}
+                onChange={(event) =>
+                  setEmployeeId(
+                    event.target.value
+                  )
+                }
+                options={employeeOptions}
+              />
 
-          <Select
-            label="Art"
-            value={type}
-            onChange={(event) => setType(event.target.value)}
-            options={typeOptions}
-          />
+              <Select
+                label="Art"
+                value={type}
+                onChange={(event) =>
+                  setType(
+                    event.target.value
+                  )
+                }
+                options={typeOptions}
+              />
 
-          <Input
-            label="Von"
-            type="date"
-            value={startDate}
-            onChange={(event) => setStartDate(event.target.value)}
-          />
+              <Input
+                label="Von"
+                type="date"
+                value={startDate}
+                onChange={(event) =>
+                  setStartDate(
+                    event.target.value
+                  )
+                }
+              />
 
-          <Input
-            label="Bis"
-            type="date"
-            value={endDate}
-            onChange={(event) => setEndDate(event.target.value)}
-          />
-        </div>
+              <Input
+                label="Bis"
+                type="date"
+                value={endDate}
+                onChange={(event) =>
+                  setEndDate(
+                    event.target.value
+                  )
+                }
+              />
+            </div>
 
-        <div className="mt-6 flex justify-end">
-          <Button type="button" onClick={handleAddAbsence} loading={isSaving}>
-            Abwesenheit speichern
-          </Button>
-        </div>
+            {type && (
+              <div className="mt-4 rounded-2xl border border-[#E2E8F0] bg-[#F8FAFC] px-4 py-3">
+                {(() => {
+                  const selectedType =
+                    getAbsenceTypeByCode(type);
+
+                  if (!selectedType) {
+                    return null;
+                  }
+
+                  return (
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge
+                        variant={getTypeBadgeVariant(
+                          selectedType.code
+                        )}
+                      >
+                        {selectedType.name}
+                      </Badge>
+
+                      <Badge variant="muted">
+                        {selectedType.is_paid
+                          ? "Bezahlt"
+                          : "Unbezahlt"}
+                      </Badge>
+
+                      <Badge variant="muted">
+                        {selectedType.credits_time_account
+                          ? "Zeitkonto"
+                          : "Keine Zeitgutschrift"}
+                      </Badge>
+
+                      {selectedType.requires_document && (
+                        <Badge variant="warning">
+                          Nachweis erforderlich
+                        </Badge>
+                      )}
+
+                      {selectedType.requires_approval && (
+                        <Badge variant="primary">
+                          Genehmigung erforderlich
+                        </Badge>
+                      )}
+                    </div>
+                  );
+                })()}
+              </div>
+            )}
+
+            <div className="mt-6 flex justify-end">
+              <Button
+                type="button"
+                onClick={handleAddAbsence}
+                loading={isSaving}
+              >
+                Abwesenheit speichern
+              </Button>
+            </div>
+          </>
+        )}
       </Section>
 
       <Section
@@ -705,112 +1011,176 @@ export default function AbsencesPage() {
         {pendingAbsences.length > 0 ? (
           <>
             <div className="grid grid-cols-1 gap-4 xl:hidden">
-              {pendingAbsences.map((absence) => (
-                <div
-                  key={absence.id}
-                  className="rounded-3xl border border-[#E2E8F0] bg-[#F8FAFC] p-4 transition hover:-translate-y-0.5 hover:border-[#CBD5E1] hover:shadow-[0_16px_40px_rgba(15,23,42,0.08)]"
-                >
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <p className="text-base font-semibold text-[#0F172A]">
-                        {absence.employee_name}
-                      </p>
-                      <p className="mt-1 text-sm text-[#64748B]">
-                        {formatDate(absence.start_date)} bis{" "}
-                        {formatDate(absence.end_date)}
-                      </p>
+              {pendingAbsences.map(
+                (absence) => (
+                  <div
+                    key={absence.id}
+                    className="rounded-3xl border border-[#E2E8F0] bg-[#F8FAFC] p-4 transition hover:-translate-y-0.5 hover:border-[#CBD5E1] hover:shadow-[0_16px_40px_rgba(15,23,42,0.08)]"
+                  >
+                    <div className="flex items-start justify-between gap-4">
+                      <div>
+                        <p className="text-base font-semibold text-[#0F172A]">
+                          {
+                            absence.employee_name
+                          }
+                        </p>
+
+                        <p className="mt-1 text-sm text-[#64748B]">
+                          {formatDate(
+                            absence.start_date
+                          )}{" "}
+                          bis{" "}
+                          {formatDate(
+                            absence.end_date
+                          )}
+                        </p>
+                      </div>
+
+                      <Badge
+                        variant={getTypeBadgeVariant(
+                          absence.type
+                        )}
+                        dot
+                      >
+                        {formatType(
+                          absence.type
+                        )}
+                      </Badge>
                     </div>
 
-                    <Badge variant={getTypeBadgeVariant(absence.type)} dot>
-                      {formatType(absence.type)}
-                    </Badge>
-                  </div>
+                    <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+                      <Button
+                        type="button"
+                        variant="primary"
+                        fullWidth
+                        onClick={() =>
+                          handleUpdateRequestStatus(
+                            absence.id,
+                            "approved"
+                          )
+                        }
+                      >
+                        Genehmigen
+                      </Button>
 
-                  <div className="mt-4 flex flex-col gap-2 sm:flex-row">
-                    <Button
-                      type="button"
-                      variant="primary"
-                      fullWidth
-                      onClick={() =>
-                        handleUpdateRequestStatus(absence.id, "approved")
-                      }
-                    >
-                      Genehmigen
-                    </Button>
-
-                    <Button
-                      type="button"
-                      variant="danger"
-                      fullWidth
-                      onClick={() =>
-                        handleUpdateRequestStatus(absence.id, "rejected")
-                      }
-                    >
-                      Ablehnen
-                    </Button>
+                      <Button
+                        type="button"
+                        variant="danger"
+                        fullWidth
+                        onClick={() =>
+                          handleUpdateRequestStatus(
+                            absence.id,
+                            "rejected"
+                          )
+                        }
+                      >
+                        Ablehnen
+                      </Button>
+                    </div>
                   </div>
-                </div>
-              ))}
+                )
+              )}
             </div>
 
             <div className="hidden xl:block">
               <Table>
                 <TableHead>
                   <tr>
-                    <TableHeaderCell>Mitarbeiter</TableHeaderCell>
-                    <TableHeaderCell>Art</TableHeaderCell>
-                    <TableHeaderCell>Von</TableHeaderCell>
-                    <TableHeaderCell>Bis</TableHeaderCell>
-                    <TableHeaderCell>Aktionen</TableHeaderCell>
+                    <TableHeaderCell>
+                      Mitarbeiter
+                    </TableHeaderCell>
+
+                    <TableHeaderCell>
+                      Art
+                    </TableHeaderCell>
+
+                    <TableHeaderCell>
+                      Von
+                    </TableHeaderCell>
+
+                    <TableHeaderCell>
+                      Bis
+                    </TableHeaderCell>
+
+                    <TableHeaderCell>
+                      Aktionen
+                    </TableHeaderCell>
                   </tr>
                 </TableHead>
 
                 <TableBody>
-                  {pendingAbsences.map((absence) => (
-                    <TableRow key={absence.id}>
-                      <TableCell>
-                        <span className="font-semibold">
-                          {absence.employee_name}
-                        </span>
-                      </TableCell>
-
-                      <TableCell>
-                        <Badge variant={getTypeBadgeVariant(absence.type)} dot>
-                          {formatType(absence.type)}
-                        </Badge>
-                      </TableCell>
-
-                      <TableCell>{formatDate(absence.start_date)}</TableCell>
-
-                      <TableCell>{formatDate(absence.end_date)}</TableCell>
-
-                      <TableCell>
-                        <div className="flex justify-end gap-2">
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="primary"
-                            onClick={() =>
-                              handleUpdateRequestStatus(absence.id, "approved")
+                  {pendingAbsences.map(
+                    (absence) => (
+                      <TableRow
+                        key={absence.id}
+                      >
+                        <TableCell>
+                          <span className="font-semibold">
+                            {
+                              absence.employee_name
                             }
-                          >
-                            Genehmigen
-                          </Button>
+                          </span>
+                        </TableCell>
 
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="danger"
-                            onClick={() =>
-                              handleUpdateRequestStatus(absence.id, "rejected")
-                            }
+                        <TableCell>
+                          <Badge
+                            variant={getTypeBadgeVariant(
+                              absence.type
+                            )}
+                            dot
                           >
-                            Ablehnen
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                            {formatType(
+                              absence.type
+                            )}
+                          </Badge>
+                        </TableCell>
+
+                        <TableCell>
+                          {formatDate(
+                            absence.start_date
+                          )}
+                        </TableCell>
+
+                        <TableCell>
+                          {formatDate(
+                            absence.end_date
+                          )}
+                        </TableCell>
+
+                        <TableCell>
+                          <div className="flex justify-end gap-2">
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="primary"
+                              onClick={() =>
+                                handleUpdateRequestStatus(
+                                  absence.id,
+                                  "approved"
+                                )
+                              }
+                            >
+                              Genehmigen
+                            </Button>
+
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="danger"
+                              onClick={() =>
+                                handleUpdateRequestStatus(
+                                  absence.id,
+                                  "rejected"
+                                )
+                              }
+                            >
+                              Ablehnen
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    )
+                  )}
                 </TableBody>
               </Table>
             </div>
@@ -819,7 +1189,7 @@ export default function AbsencesPage() {
           <EmptyState
             compact
             title="Keine offenen Anträge"
-            description="Sobald Mitarbeiter Urlaub oder Abwesenheiten beantragen, erscheinen sie hier."
+            description="Sobald Mitarbeiter Abwesenheiten beantragen, erscheinen sie hier."
           />
         )}
       </Section>
@@ -831,118 +1201,200 @@ export default function AbsencesPage() {
         {otherAbsences.length > 0 ? (
           <>
             <div className="grid grid-cols-1 gap-4 xl:hidden">
-              {otherAbsences.map((absence) => (
-                <div
-                  key={absence.id}
-                  className="rounded-3xl border border-[#E2E8F0] bg-[#F8FAFC] p-4 transition hover:-translate-y-0.5 hover:border-[#CBD5E1] hover:shadow-[0_16px_40px_rgba(15,23,42,0.08)]"
-                >
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <p className="text-base font-semibold text-[#0F172A]">
-                        {absence.employee_name}
-                      </p>
-                      <p className="mt-1 text-sm text-[#64748B]">
-                        {formatDate(absence.start_date)} bis{" "}
-                        {formatDate(absence.end_date)}
-                      </p>
+              {otherAbsences.map(
+                (absence) => (
+                  <div
+                    key={absence.id}
+                    className="rounded-3xl border border-[#E2E8F0] bg-[#F8FAFC] p-4 transition hover:-translate-y-0.5 hover:border-[#CBD5E1] hover:shadow-[0_16px_40px_rgba(15,23,42,0.08)]"
+                  >
+                    <div className="flex items-start justify-between gap-4">
+                      <div>
+                        <p className="text-base font-semibold text-[#0F172A]">
+                          {
+                            absence.employee_name
+                          }
+                        </p>
+
+                        <p className="mt-1 text-sm text-[#64748B]">
+                          {formatDate(
+                            absence.start_date
+                          )}{" "}
+                          bis{" "}
+                          {formatDate(
+                            absence.end_date
+                          )}
+                        </p>
+                      </div>
+
+                      <Badge
+                        variant={getTypeBadgeVariant(
+                          absence.type
+                        )}
+                        dot
+                      >
+                        {formatType(
+                          absence.type
+                        )}
+                      </Badge>
                     </div>
 
-                    <Badge variant={getTypeBadgeVariant(absence.type)} dot>
-                      {formatType(absence.type)}
-                    </Badge>
-                  </div>
+                    <div className="mt-4 grid grid-cols-2 gap-3">
+                      <div className="rounded-2xl bg-white p-3">
+                        <p className="text-xs text-[#64748B]">
+                          Status
+                        </p>
 
-                  <div className="mt-4 grid grid-cols-2 gap-3">
-                    <div className="rounded-2xl bg-white p-3">
-                      <p className="text-xs text-[#64748B]">Status</p>
-                      <div className="mt-2">
-                        <Badge
-                          variant={getStatusBadgeVariant(absence.request_status)}
-                          dot
-                        >
-                          {formatRequestStatus(absence.request_status)}
-                        </Badge>
+                        <div className="mt-2">
+                          <Badge
+                            variant={getStatusBadgeVariant(
+                              absence.request_status
+                            )}
+                            dot
+                          >
+                            {formatRequestStatus(
+                              absence.request_status
+                            )}
+                          </Badge>
+                        </div>
+                      </div>
+
+                      <div className="rounded-2xl bg-white p-3">
+                        <p className="text-xs text-[#64748B]">
+                          Zeitraum
+                        </p>
+
+                        <p className="mt-2 text-sm font-semibold text-[#0F172A]">
+                          {formatDate(
+                            absence.start_date
+                          )}{" "}
+                          –{" "}
+                          {formatDate(
+                            absence.end_date
+                          )}
+                        </p>
                       </div>
                     </div>
 
-                    <div className="rounded-2xl bg-white p-3">
-                      <p className="text-xs text-[#64748B]">Zeitraum</p>
-                      <p className="mt-2 text-sm font-semibold text-[#0F172A]">
-                        {formatDate(absence.start_date)} –{" "}
-                        {formatDate(absence.end_date)}
-                      </p>
+                    <div className="mt-4">
+                      <Button
+                        type="button"
+                        variant="danger"
+                        fullWidth
+                        onClick={() =>
+                          setAbsenceToDelete(
+                            absence.id
+                          )
+                        }
+                      >
+                        Löschen
+                      </Button>
                     </div>
                   </div>
-
-                  <div className="mt-4">
-                    <Button
-                      type="button"
-                      variant="danger"
-                      fullWidth
-                      onClick={() => setAbsenceToDelete(absence.id)}
-                    >
-                      Löschen
-                    </Button>
-                  </div>
-                </div>
-              ))}
+                )
+              )}
             </div>
 
             <div className="hidden xl:block">
               <Table>
                 <TableHead>
                   <tr>
-                    <TableHeaderCell>Mitarbeiter</TableHeaderCell>
-                    <TableHeaderCell>Art</TableHeaderCell>
-                    <TableHeaderCell>Von</TableHeaderCell>
-                    <TableHeaderCell>Bis</TableHeaderCell>
-                    <TableHeaderCell>Status</TableHeaderCell>
-                    <TableHeaderCell>Aktionen</TableHeaderCell>
+                    <TableHeaderCell>
+                      Mitarbeiter
+                    </TableHeaderCell>
+
+                    <TableHeaderCell>
+                      Art
+                    </TableHeaderCell>
+
+                    <TableHeaderCell>
+                      Von
+                    </TableHeaderCell>
+
+                    <TableHeaderCell>
+                      Bis
+                    </TableHeaderCell>
+
+                    <TableHeaderCell>
+                      Status
+                    </TableHeaderCell>
+
+                    <TableHeaderCell>
+                      Aktionen
+                    </TableHeaderCell>
                   </tr>
                 </TableHead>
 
                 <TableBody>
-                  {otherAbsences.map((absence) => (
-                    <TableRow key={absence.id}>
-                      <TableCell>
-                        <span className="font-semibold">
-                          {absence.employee_name}
-                        </span>
-                      </TableCell>
+                  {otherAbsences.map(
+                    (absence) => (
+                      <TableRow
+                        key={absence.id}
+                      >
+                        <TableCell>
+                          <span className="font-semibold">
+                            {
+                              absence.employee_name
+                            }
+                          </span>
+                        </TableCell>
 
-                      <TableCell>
-                        <Badge variant={getTypeBadgeVariant(absence.type)} dot>
-                          {formatType(absence.type)}
-                        </Badge>
-                      </TableCell>
-
-                      <TableCell>{formatDate(absence.start_date)}</TableCell>
-
-                      <TableCell>{formatDate(absence.end_date)}</TableCell>
-
-                      <TableCell>
-                        <Badge
-                          variant={getStatusBadgeVariant(absence.request_status)}
-                          dot
-                        >
-                          {formatRequestStatus(absence.request_status)}
-                        </Badge>
-                      </TableCell>
-
-                      <TableCell>
-                        <div className="flex justify-end">
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="danger"
-                            onClick={() => setAbsenceToDelete(absence.id)}
+                        <TableCell>
+                          <Badge
+                            variant={getTypeBadgeVariant(
+                              absence.type
+                            )}
+                            dot
                           >
-                            Löschen
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                            {formatType(
+                              absence.type
+                            )}
+                          </Badge>
+                        </TableCell>
+
+                        <TableCell>
+                          {formatDate(
+                            absence.start_date
+                          )}
+                        </TableCell>
+
+                        <TableCell>
+                          {formatDate(
+                            absence.end_date
+                          )}
+                        </TableCell>
+
+                        <TableCell>
+                          <Badge
+                            variant={getStatusBadgeVariant(
+                              absence.request_status
+                            )}
+                            dot
+                          >
+                            {formatRequestStatus(
+                              absence.request_status
+                            )}
+                          </Badge>
+                        </TableCell>
+
+                        <TableCell>
+                          <div className="flex justify-end">
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="danger"
+                              onClick={() =>
+                                setAbsenceToDelete(
+                                  absence.id
+                                )
+                              }
+                            >
+                              Löschen
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    )
+                  )}
                 </TableBody>
               </Table>
             </div>
@@ -957,13 +1409,22 @@ export default function AbsencesPage() {
       </Section>
 
       <DiperaPopup
-        open={Boolean(absenceToDelete)}
+        open={Boolean(
+          absenceToDelete
+        )}
         message="Möchtest du diese Abwesenheit wirklich löschen?"
-        onClose={() => setAbsenceToDelete(null)}
+        onClose={() =>
+          setAbsenceToDelete(null)
+        }
         onConfirm={() => {
-          if (!absenceToDelete) return;
+          if (!absenceToDelete) {
+            return;
+          }
 
-          handleDeleteAbsence(absenceToDelete);
+          void handleDeleteAbsence(
+            absenceToDelete
+          );
+
           setAbsenceToDelete(null);
         }}
         confirmText="Löschen"

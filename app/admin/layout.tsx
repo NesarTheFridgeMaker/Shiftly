@@ -54,6 +54,7 @@ export default function AdminLayout({
   const [businessName, setBusinessName] = useState("");
   const [pendingRequests, setPendingRequests] = useState(0);
   const [pendingCorrectionRequests, setPendingCorrectionRequests] = useState(0);
+  const [openTimeConflicts, setOpenTimeConflicts] = useState(0);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [popupMessage, setPopupMessage] = useState("");
   const [showPopup, setShowPopup] = useState(false);
@@ -113,6 +114,25 @@ export default function AdminLayout({
     }
 
     setPendingCorrectionRequests(data?.length || 0);
+  }
+
+  async function loadOpenTimeConflicts() {
+    const businessId = await getBusinessId();
+
+    if (!businessId) return;
+
+    const { count, error } = await supabase
+      .from("time_conflicts")
+      .select("id", { count: "exact", head: true })
+      .eq("business_id", businessId)
+      .eq("status", "open");
+
+    if (error) {
+      console.error(error);
+      return;
+    }
+
+    setOpenTimeConflicts(count ?? 0);
   }
 
   async function getCurrentUserId() {
@@ -244,6 +264,7 @@ export default function AdminLayout({
 
       await loadPendingRequests();
       await loadPendingCorrectionRequests();
+      await loadOpenTimeConflicts();
       await loadNotifications();
 
       setCheckingAuth(false);
@@ -300,6 +321,18 @@ export default function AdminLayout({
           },
           async () => {
             await loadPendingCorrectionRequests();
+          }
+        )
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "time_conflicts",
+            filter: `business_id=eq.${businessId}`,
+          },
+          async () => {
+            await loadOpenTimeConflicts();
           }
         )
         .on(
@@ -415,7 +448,7 @@ export default function AdminLayout({
       icon: CalendarX,
     },
     {
-      label: "Korrekturanträge",
+      label: "Korrekturen",
       href: "/admin/corrections",
       icon: FileText,
     },
@@ -431,7 +464,9 @@ export default function AdminLayout({
 
   function getBadgeCount(href: string) {
     if (href === "/admin/absences") return pendingRequests;
-    if (href === "/admin/corrections") return pendingCorrectionRequests;
+    if (href === "/admin/corrections") {
+      return pendingCorrectionRequests + openTimeConflicts;
+    }
     return 0;
   }
 
@@ -462,13 +497,25 @@ export default function AdminLayout({
         </div>
 
         {!isCollapsed && badgeCount > 0 && (
-          <span className="rounded-full bg-[#2563EB] px-2 py-0.5 text-xs font-medium text-white">
+          <span
+            className={`rounded-full px-2 py-0.5 text-xs font-medium text-white ${
+              link.href === "/admin/corrections"
+                ? "bg-[#DC2626]"
+                : "bg-[#2563EB]"
+            }`}
+          >
             {badgeCount}
           </span>
         )}
 
         {isCollapsed && badgeCount > 0 && (
-          <span className="absolute right-2 top-2 h-2.5 w-2.5 rounded-full bg-[#2563EB]" />
+          <span
+            className={`absolute right-2 top-2 h-2.5 w-2.5 rounded-full ${
+              link.href === "/admin/corrections"
+                ? "bg-[#DC2626]"
+                : "bg-[#2563EB]"
+            }`}
+          />
         )}
       </a>
     );

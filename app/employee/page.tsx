@@ -55,6 +55,20 @@ type TimeEntry = {
   created_at: string;
 };
 
+type TodayClockData = {
+  employee: {
+    id: string;
+    name: string;
+    business_id: string;
+    status: string;
+  };
+  business_timezone: string;
+  local_date: string;
+  worked_minutes: number;
+  last_entry: TimeEntry | null;
+  entries: TimeEntry[];
+};
+
 type Absence = {
   id: string;
   employee_id: string;
@@ -71,23 +85,6 @@ type EmployeeTargetHour = {
   monthly_hours: number;
 };
 
-function toBerlinDate(date: Date) {
-  return new Date(
-    date.toLocaleString("en-US", {
-      timeZone: BUSINESS_TIME_ZONE,
-    })
-  );
-}
-
-function getLocalDateString(date = new Date()) {
-  const localDate = toBerlinDate(date);
-  const year = localDate.getFullYear();
-  const month = String(localDate.getMonth() + 1).padStart(2, "0");
-  const day = String(localDate.getDate()).padStart(2, "0");
-
-  return `${year}-${month}-${day}`;
-}
-
 function formatDate(dateString: string) {
   return new Date(dateString).toLocaleDateString("de-DE", {
     weekday: "short",
@@ -101,12 +98,16 @@ function formatTime(timeString?: string | null) {
   return timeString.slice(0, 5);
 }
 
-function formatDateTime(dateString: string) {
+function formatDateTime(
+  dateString: string,
+  timeZone = BUSINESS_TIME_ZONE
+) {
   return new Date(dateString).toLocaleString("de-DE", {
     day: "2-digit",
     month: "2-digit",
     hour: "2-digit",
     minute: "2-digit",
+    timeZone,
   });
 }
 
@@ -130,77 +131,37 @@ function formatMinutes(totalMinutes: number) {
   return `${hours}:${String(minutes).padStart(2, "0")} Std.`;
 }
 
-function calculateWorkedMinutes(entries: TimeEntry[]) {
-  const sortedEntries = [...entries].sort(
-    (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
-  );
+function getClockStatus(
+  status: string | null | undefined,
+  lastEntry: TimeEntry | null,
+  timeZone: string
+) {
+  const lastDescription = lastEntry
+    ? `Letzte Buchung: ${formatDateTime(lastEntry.created_at, timeZone)}`
+    : "Heute wurde noch keine Arbeitszeit erfasst.";
 
-  let totalMinutes = 0;
-  let workStart: Date | null = null;
-  let pauseStart: Date | null = null;
-
-  sortedEntries.forEach((entry) => {
-    const entryDate = toBerlinDate(new Date(entry.created_at));
-
-    if (entry.action === "check_in") {
-      workStart = entryDate;
-      pauseStart = null;
-    }
-
-    if (entry.action === "break_start" && workStart) {
-      totalMinutes += (entryDate.getTime() - workStart.getTime()) / 60000;
-      workStart = null;
-      pauseStart = entryDate;
-    }
-
-    if (entry.action === "break_end" && pauseStart) {
-      workStart = entryDate;
-      pauseStart = null;
-    }
-
-    if (entry.action === "check_out" && workStart) {
-      totalMinutes += (entryDate.getTime() - workStart.getTime()) / 60000;
-      workStart = null;
-      pauseStart = null;
-    }
-  });
-
-  return Math.max(0, Math.round(totalMinutes));
-}
-
-function getCurrentClockStatus(entries: TimeEntry[]) {
-  const lastEntry = [...entries].sort(
-    (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-  )[0];
-
-  if (!lastEntry) {
-    return {
-      label: "Nicht eingestempelt",
-      variant: "muted" as const,
-      description: "Heute wurde noch keine Arbeitszeit erfasst.",
-    };
-  }
-
-  if (lastEntry.action === "check_in" || lastEntry.action === "break_end") {
+  if (status === "checked_in") {
     return {
       label: "Eingestempelt",
       variant: "success" as const,
-      description: `Letzte Buchung: ${formatDateTime(lastEntry.created_at)}`,
+      description: lastDescription,
     };
   }
 
-  if (lastEntry.action === "break_start") {
+  if (status === "on_break") {
     return {
       label: "In Pause",
       variant: "warning" as const,
-      description: `Pause gestartet: ${formatDateTime(lastEntry.created_at)}`,
+      description: lastEntry
+        ? `Pause gestartet: ${formatDateTime(lastEntry.created_at, timeZone)}`
+        : "Deine Arbeitszeit ist aktuell pausiert.",
     };
   }
 
   return {
-    label: "Ausgestempelt",
+    label: "Nicht eingestempelt",
     variant: "muted" as const,
-    description: `Letzte Buchung: ${formatDateTime(lastEntry.created_at)}`,
+    description: lastDescription,
   };
 }
 
@@ -212,6 +173,10 @@ export default function EmployeeOverviewPage() {
   const [business, setBusiness] = useState<Business | null>(null);
   const [targetHours, setTargetHours] = useState<EmployeeTargetHour | null>(null);
   const [todayEntries, setTodayEntries] = useState<TimeEntry[]>([]);
+  const [todayWorkedMinutes, setTodayWorkedMinutes] = useState(0);
+  const [todayClockStatus, setTodayClockStatus] = useState("not_checked_in");
+  const [todayLastEntry, setTodayLastEntry] = useState<TimeEntry | null>(null);
+  const [businessTimeZone, setBusinessTimeZone] = useState(BUSINESS_TIME_ZONE);
   const [upcomingShifts, setUpcomingShifts] = useState<Shift[]>([]);
   const [absences, setAbsences] = useState<Absence[]>([]);
 
@@ -244,14 +209,34 @@ export default function EmployeeOverviewPage() {
         return;
       }
 
-      const today = getLocalDateString();
+      const { data: todayClockRaw, error: todayClockError } =
+        await supabase.rpc("get_my_today_clock_data");
+
+        console.log("WORKED MINUTES RPC:", todayClockRaw?.worked_minutes);
+        console.log("TODAY CLOCK RPC DATA:", todayClockRaw);
+
+      if (todayClockError) {
+        throw todayClockError;
+      }
+
+      const todayClock = todayClockRaw as TodayClockData;
+
+      if (!todayClock?.local_date) {
+        throw new Error("Heutige Zeiterfassungsdaten sind unvollständig.");
+      }
+
+      const today = todayClock.local_date;
       const monthStart = `${today.slice(0, 8)}01`;
 
-      const nextMonth = new Date(`${monthStart}T00:00:00`);
-      nextMonth.setMonth(nextMonth.getMonth() + 1);
-      const monthEnd = getLocalDateString(nextMonth);
+      const [year, month] = monthStart.split("-").map(Number);
+      const nextMonthYear = month === 12 ? year + 1 : year;
+      const nextMonthValue = month === 12 ? 1 : month + 1;
+      const monthEnd = `${nextMonthYear}-${String(nextMonthValue).padStart(
+        2,
+        "0"
+      )}-01`;
 
-      const [employeeResult, businessResult, targetResult, entriesResult, shiftsResult, absencesResult] =
+      const [employeeResult, businessResult, targetResult, shiftsResult, absencesResult] =
         await Promise.all([
           supabase
             .from("employees")
@@ -269,14 +254,6 @@ export default function EmployeeOverviewPage() {
             .select("employee_id, weekly_hours, monthly_hours")
             .eq("employee_id", profile.employee_id)
             .maybeSingle(),
-          supabase
-            .from("time_entries")
-            .select("id, employee_id, employee_name, action, created_at")
-            .eq("business_id", profile.business_id)
-            .eq("employee_id", profile.employee_id)
-            .gte("created_at", `${today}T00:00:00`)
-            .lt("created_at", `${today}T23:59:59`)
-            .order("created_at", { ascending: true }),
           supabase
             .from("shifts")
             .select("id, employee_id, employee_name, shift_date, start_time, end_time, work_type_name")
@@ -299,14 +276,23 @@ export default function EmployeeOverviewPage() {
       if (employeeResult.error) throw employeeResult.error;
       if (businessResult.error) throw businessResult.error;
       if (targetResult.error) console.error(targetResult.error);
-      if (entriesResult.error) throw entriesResult.error;
       if (shiftsResult.error) throw shiftsResult.error;
       if (absencesResult.error) throw absencesResult.error;
 
       setEmployee(employeeResult.data as Employee);
       setBusiness(businessResult.data as Business);
       setTargetHours((targetResult.data as EmployeeTargetHour | null) || null);
-      setTodayEntries((entriesResult.data || []) as TimeEntry[]);
+
+      setTodayEntries(todayClock.entries || []);
+      setTodayWorkedMinutes(todayClock.worked_minutes || 0);
+      setTodayClockStatus(
+        todayClock.employee?.status || "not_checked_in"
+      );
+      setTodayLastEntry(todayClock.last_entry || null);
+      setBusinessTimeZone(
+        todayClock.business_timezone || BUSINESS_TIME_ZONE
+      );
+
       setUpcomingShifts((shiftsResult.data || []) as Shift[]);
       setAbsences((absencesResult.data || []) as Absence[]);
     } catch (error) {
@@ -326,14 +312,11 @@ export default function EmployeeOverviewPage() {
   }, []);
 
   const clockStatus = useMemo(
-    () => getCurrentClockStatus(todayEntries),
-    [todayEntries]
+    () => getClockStatus(todayClockStatus, todayLastEntry, businessTimeZone),
+    [todayClockStatus, todayLastEntry, businessTimeZone]
   );
 
-  const workedToday = useMemo(
-    () => calculateWorkedMinutes(todayEntries),
-    [todayEntries]
-  );
+  const workedToday = todayWorkedMinutes;
 
   const nextShift = upcomingShifts[0] || null;
   const pendingAbsences = absences.filter(
@@ -538,8 +521,8 @@ export default function EmployeeOverviewPage() {
                 </h2>
 
                 <p className="mt-2 max-w-xl text-sm leading-6 text-[#64748B]">
-                  {clockStatus.description} Die mobile Stempelung wird später mit
-                  einer Standortprüfung abgesichert.
+                  {clockStatus.description} Deine Stempelungen werden über die
+                  zentrale Zeiterfassung des Betriebs verarbeitet.
                 </p>
               </div>
 

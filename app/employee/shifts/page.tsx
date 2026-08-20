@@ -223,6 +223,11 @@ export default function EmployeeShiftsPage() {
       setBusinessName(business.name);
       setEmployee(employeeData as Employee);
       setEmployeeId(typedProfile.employee_id);
+      const { data: todayClockData, error: todayClockError } =
+  await supabase.rpc("get_my_today_clock_data");
+
+console.log("TODAY CLOCK RPC DATA:", todayClockData);
+console.log("TODAY CLOCK RPC ERROR:", todayClockError);
 
       await loadTeamShifts(selectedWeekStart);
     } finally {

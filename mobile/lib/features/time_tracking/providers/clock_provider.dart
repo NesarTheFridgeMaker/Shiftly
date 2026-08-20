@@ -110,6 +110,11 @@ class ClockController extends StateNotifier<ClockState> {
         data: ClockData(
           employee: refreshedData.employee.copyWith(status: result.status),
           entries: refreshedData.entries,
+          workedMinutes: refreshedData.workedMinutes,
+          lastEntry: refreshedData.lastEntry,
+          businessTimezone: refreshedData.businessTimezone,
+          localDate: refreshedData.localDate,
+          businessLocalNow: refreshedData.businessLocalNow,
         ),
         isProcessing: false,
         isLocating: false,

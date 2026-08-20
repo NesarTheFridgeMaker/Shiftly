@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../constants/app_environment.dart';
+import 'package:flutter/foundation.dart';
 
 enum ClockAction { checkIn, breakStart, breakEnd, checkOut }
 
@@ -13,13 +14,10 @@ ClockStatus parseClockStatus(String? value) {
   switch (value) {
     case 'not_checked_in':
       return ClockStatus.notCheckedIn;
-
     case 'checked_in':
       return ClockStatus.checkedIn;
-
     case 'on_break':
       return ClockStatus.onBreak;
-
     default:
       return ClockStatus.unknown;
   }
@@ -29,13 +27,10 @@ String clockActionDatabaseValue(ClockAction action) {
   switch (action) {
     case ClockAction.checkIn:
       return 'check_in';
-
     case ClockAction.breakStart:
       return 'break_start';
-
     case ClockAction.breakEnd:
       return 'break_end';
-
     case ClockAction.checkOut:
       return 'check_out';
   }
@@ -45,16 +40,12 @@ String clockActionLabel(String action) {
   switch (action) {
     case 'check_in':
       return 'Eingestempelt';
-
     case 'break_start':
       return 'Pause gestartet';
-
     case 'break_end':
       return 'Pause beendet';
-
     case 'check_out':
       return 'Ausgestempelt';
-
     default:
       return action;
   }
@@ -96,74 +87,62 @@ class ClockEntry {
     required this.employeeName,
     required this.action,
     required this.createdAt,
+    this.localCreatedAt,
   });
 
   final String id;
   final String employeeId;
   final String employeeName;
   final String action;
+
+  /// Absoluter Zeitpunkt für Datenlogik/Audit.
   final DateTime createdAt;
+
+  /// Bereits serverseitig in die Betriebszeitzone umgerechnete Wandzeit.
+  ///
+  /// Beispiel:
+  /// 2026-08-16T10:07:00.273
+  ///
+  /// Darf nicht mit toLocal() oder toUtc() umgerechnet werden.
+  final String? localCreatedAt;
 }
 
 class ClockData {
-  const ClockData({required this.employee, required this.entries});
+  const ClockData({
+    required this.employee,
+    required this.entries,
+    required this.workedMinutes,
+    required this.lastEntry,
+    required this.businessTimezone,
+    required this.localDate,
+    required this.businessLocalNow,
+  });
 
   final ClockEmployee employee;
   final List<ClockEntry> entries;
+  final int workedMinutes;
+  final ClockEntry? lastEntry;
 
-  int get workedMinutes {
-    final sortedEntries = [...entries]
-      ..sort((first, second) => first.createdAt.compareTo(second.createdAt));
+  /// IANA-Zeitzone des Betriebs, z. B. Europe/Berlin.
+  final String businessTimezone;
 
-    var totalMinutes = 0;
-    DateTime? workStart;
+  /// Lokales Kalenderdatum des Betriebs.
+  final String localDate;
 
-    for (final entry in sortedEntries) {
-      if (entry.action == 'check_in') {
-        workStart = entry.createdAt;
-        continue;
-      }
-
-      if (entry.action == 'break_start') {
-        if (workStart != null && entry.createdAt.isAfter(workStart)) {
-          totalMinutes += entry.createdAt.difference(workStart).inMinutes;
-        }
-
-        workStart = null;
-        continue;
-      }
-
-      if (entry.action == 'break_end') {
-        workStart = entry.createdAt;
-        continue;
-      }
-
-      if (entry.action == 'check_out') {
-        if (workStart != null && entry.createdAt.isAfter(workStart)) {
-          totalMinutes += entry.createdAt.difference(workStart).inMinutes;
-        }
-
-        workStart = null;
-      }
-    }
-
-    return totalMinutes < 0 ? 0 : totalMinutes;
-  }
-
-  ClockEntry? get lastEntry {
-    if (entries.isEmpty) {
-      return null;
-    }
-
-    final sortedEntries = [...entries]
-      ..sort((first, second) => first.createdAt.compareTo(second.createdAt));
-
-    return sortedEntries.last;
-  }
+  /// Aktuelle Betriebs-Wandzeit beim RPC-Load.
+  ///
+  /// Beispiel:
+  /// 2026-08-16T12:10:22.806
+  ///
+  /// Bewusst als String, damit keine Gerätezeitzonen-Konvertierung erfolgt.
+  final String businessLocalNow;
 }
 
 class ClockApiResult {
-  const ClockApiResult({required this.entry, required this.status});
+  const ClockApiResult({
+    required this.entry,
+    required this.status,
+  });
 
   final ClockEntry entry;
   final ClockStatus status;
@@ -188,7 +167,9 @@ class ClockService {
         .maybeSingle();
 
     if (profile == null || profile['role'] != 'employee') {
-      throw StateError('Es wurde kein gültiges Mitarbeiterprofil gefunden.');
+      throw StateError(
+        'Es wurde kein gültiges Mitarbeiterprofil gefunden.',
+      );
     }
 
     final employeeId = profile['employee_id'] as String?;
@@ -198,18 +179,14 @@ class ClockService {
         employeeId.isEmpty ||
         businessId == null ||
         businessId.isEmpty) {
-      throw StateError('Mitarbeiter oder Betrieb ist nicht zugeordnet.');
+      throw StateError(
+        'Mitarbeiter oder Betrieb ist nicht zugeordnet.',
+      );
     }
 
     final employeeData = await _client
         .from('employees')
-        .select('''
-          id,
-          name,
-          status,
-          business_id,
-          location_tracking_mode
-          ''')
+        .select('id, name, business_id, location_tracking_mode')
         .eq('id', employeeId)
         .eq('business_id', businessId)
         .maybeSingle();
@@ -224,60 +201,105 @@ class ClockService {
         .eq('id', businessId)
         .maybeSingle();
 
+    final todayClockRaw =
+        await _client.rpc('get_my_today_clock_data');
+        debugPrint(
+  'FLUTTER WORKED MINUTES RPC: ${todayClockRaw['worked_minutes']}',
+);
+
+    if (todayClockRaw is! Map<String, dynamic>) {
+      throw StateError(
+        'Die heutigen Zeiterfassungsdaten sind ungültig.',
+      );
+    }
+
+    final rpcEmployee = todayClockRaw['employee'];
+    final rpcEntries = todayClockRaw['entries'];
+    final rpcLastEntry = todayClockRaw['last_entry'];
+
+    if (rpcEmployee is! Map<String, dynamic>) {
+      throw StateError(
+        'Die Mitarbeiterdaten der Zeiterfassung fehlen.',
+      );
+    }
+
+    final businessLocalNow =
+        todayClockRaw['business_local_now'] as String?;
+
+    if (businessLocalNow == null || businessLocalNow.isEmpty) {
+      throw StateError('Die aktuelle Betriebszeit fehlt.');
+    }
+
     final employee = ClockEmployee(
       id: employeeId,
-      name: (employeeData['name'] as String?)?.trim() ?? 'Mitarbeiter',
+      name:
+          (employeeData['name'] as String?)?.trim() ?? 'Mitarbeiter',
       businessId: businessId,
-      businessName: (businessData?['name'] as String?)?.trim() ?? 'Betrieb',
-      status: parseClockStatus(employeeData['status'] as String?),
+      businessName:
+          (businessData?['name'] as String?)?.trim() ?? 'Betrieb',
+      status: parseClockStatus(
+        rpcEmployee['status'] as String?,
+      ),
       locationTrackingMode:
-          (employeeData['location_tracking_mode'] as String?) ?? 'required',
+          (employeeData['location_tracking_mode'] as String?) ??
+              'required',
     );
 
-    final entries = await loadTodayEntries(
-      employeeId: employeeId,
-      businessId: businessId,
-    );
+    final entries = <ClockEntry>[];
 
-    return ClockData(employee: employee, entries: entries);
+    if (rpcEntries is List) {
+      for (final row in rpcEntries) {
+        if (row is Map<String, dynamic>) {
+          entries.add(_clockEntryFromRpc(row));
+        }
+      }
+    }
+
+    final lastEntry =
+        rpcLastEntry is Map<String, dynamic>
+            ? _clockEntryFromRpc(rpcLastEntry)
+            : null;
+
+    return ClockData(
+      employee: employee,
+      entries: entries,
+      workedMinutes:
+          (todayClockRaw['worked_minutes'] as num?)?.toInt() ?? 0,
+      lastEntry: lastEntry,
+      businessTimezone:
+          (todayClockRaw['business_timezone'] as String?) ??
+              'Europe/Berlin',
+      localDate:
+          (todayClockRaw['local_date'] as String?) ?? '',
+      businessLocalNow: businessLocalNow,
+    );
   }
 
-  Future<List<ClockEntry>> loadTodayEntries({
-    required String employeeId,
-    required String businessId,
-  }) async {
-    final now = DateTime.now();
+  ClockEntry _clockEntryFromRpc(
+    Map<String, dynamic> row,
+  ) {
+    final createdAtRaw = row['created_at'] as String?;
+    final localCreatedAtRaw =
+        row['local_created_at'] as String?;
 
-    final dayStart = DateTime(now.year, now.month, now.day);
-
-    final nextDayStart = dayStart.add(const Duration(days: 1));
-
-    final data = await _client
-        .from('time_entries')
-        .select('''
-          id,
-          employee_id,
-          employee_name,
-          action,
-          created_at
-          ''')
-        .eq('business_id', businessId)
-        .eq('employee_id', employeeId)
-        .gte('created_at', dayStart.toUtc().toIso8601String())
-        .lt('created_at', nextDayStart.toUtc().toIso8601String())
-        .order('created_at', ascending: true);
-
-    return (data as List<dynamic>).map((row) {
-      final map = row as Map<String, dynamic>;
-
-      return ClockEntry(
-        id: map['id'] as String,
-        employeeId: map['employee_id'] as String,
-        employeeName: (map['employee_name'] as String?) ?? '',
-        action: map['action'] as String,
-        createdAt: DateTime.parse(map['created_at'] as String).toLocal(),
+    if (createdAtRaw == null ||
+        createdAtRaw.isEmpty ||
+        localCreatedAtRaw == null ||
+        localCreatedAtRaw.isEmpty) {
+      throw StateError(
+        'Zeitstempel der Stempelung sind unvollständig.',
       );
-    }).toList();
+    }
+
+    return ClockEntry(
+      id: row['id'] as String,
+      employeeId: row['employee_id'] as String,
+      employeeName:
+          (row['employee_name'] as String?) ?? '',
+      action: row['action'] as String,
+      createdAt: DateTime.parse(createdAtRaw),
+      localCreatedAt: localCreatedAtRaw,
+    );
   }
 
   Future<ClockApiResult> performClockAction({
@@ -291,31 +313,47 @@ class ClockService {
     final session = _client.auth.currentSession;
 
     if (session == null) {
-      throw const AuthException('Deine Anmeldung ist abgelaufen.');
+      throw const AuthException(
+        'Deine Anmeldung ist abgelaufen.',
+      );
     }
 
-    final baseUrl = AppEnvironment.apiBaseUrl.replaceAll(RegExp(r'/$'), '');
+    final baseUrl =
+        AppEnvironment.apiBaseUrl.replaceAll(
+      RegExp(r'/$'),
+      '',
+    );
 
     final response = await http.post(
-      Uri.parse('$baseUrl/api/time-entries/clock'),
+      Uri.parse(
+        '$baseUrl/api/time-entries/clock',
+      ),
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': 'Bearer ${session.accessToken}',
+        'Authorization':
+            'Bearer ${session.accessToken}',
       },
       body: jsonEncode({
-        'action': clockActionDatabaseValue(action),
-        if (latitude != null) 'latitude': latitude,
-        if (longitude != null) 'longitude': longitude,
-        if (accuracy != null) 'accuracy': accuracy,
+        'action':
+            clockActionDatabaseValue(action),
+        if (latitude != null)
+          'latitude': latitude,
+        if (longitude != null)
+          'longitude': longitude,
+        if (accuracy != null)
+          'accuracy': accuracy,
         if (capturedAt != null)
-          'capturedAt': capturedAt.toUtc().toIso8601String(),
+          'capturedAt':
+              capturedAt.toUtc().toIso8601String(),
       }),
     );
 
     final decoded = jsonDecode(response.body);
 
     if (decoded is! Map<String, dynamic>) {
-      throw StateError('Die Serverantwort war ungültig.');
+      throw StateError(
+        'Die Serverantwort war ungültig.',
+      );
     }
 
     if (response.statusCode < 200 ||
@@ -330,23 +368,40 @@ class ClockService {
         );
       }
 
-      throw StateError('Die Stempelung konnte nicht gespeichert werden.');
+      throw StateError(
+        'Die Stempelung konnte nicht gespeichert werden.',
+      );
     }
 
-    final entry = decoded['entry'] as Map<String, dynamic>;
-    final employeeResult = decoded['employee'] as Map<String, dynamic>;
+    final entry =
+        decoded['entry'] as Map<String, dynamic>;
+
+    final employeeResult =
+        decoded['employee'] as Map<String, dynamic>;
+
+    final absoluteCreatedAt =
+        DateTime.parse(
+          entry['createdAt'] as String,
+        ).toUtc();
 
     return ClockApiResult(
       entry: ClockEntry(
-        id:
-            (entry['id'] as String?) ??
+        id: (entry['id'] as String?) ??
             'temporary-${DateTime.now().millisecondsSinceEpoch}',
         employeeId: employee.id,
         employeeName: employee.name,
-        action: entry['action'] as String? ?? clockActionDatabaseValue(action),
-        createdAt: DateTime.parse(entry['createdAt'] as String).toLocal(),
+        action:
+            entry['action'] as String? ??
+                clockActionDatabaseValue(action),
+        createdAt: absoluteCreatedAt,
+
+        // Keine Gerätezeit daraus erzeugen.
+        // Der Provider lädt direkt anschließend den RPC neu.
+        localCreatedAt: null,
       ),
-      status: parseClockStatus(employeeResult['status'] as String?),
+      status: parseClockStatus(
+        employeeResult['status'] as String?,
+      ),
     );
   }
 }

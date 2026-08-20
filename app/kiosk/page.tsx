@@ -15,7 +15,6 @@ type EmployeeStatus = "not_checked_in" | "checked_in" | "on_break";
 type Employee = {
   id: string;
   name: string;
-  pin: string;
   status: EmployeeStatus;
 };
 
@@ -206,7 +205,7 @@ export default function KioskPage() {
 
     const { data, error } = await supabase
       .from("employees")
-      .select("id, name, pin, status")
+      .select("id, name, status")
       .eq("business_id", businessId)
       .eq("account_status", "active")
       .order("name", { ascending: true });
@@ -310,34 +309,66 @@ export default function KioskPage() {
 
   async function handleReturnToAdmin() {
     const {
-      data: { user },
-    } = await supabase.auth.getUser();
+      data: { session },
+      error: sessionError,
+    } = await supabase.auth.getSession();
 
-    if (!user) {
-      showMessage("Kein Admin angemeldet.", "danger");
-      window.location.href = "/login";
+    if (sessionError || !session?.access_token) {
+      showMessage(
+        "Die Admin-Anmeldung ist abgelaufen. Bitte melde dich erneut an.",
+        "danger"
+      );
       return;
     }
 
-    const { data, error } = await supabase
-      .from("profiles")
-      .select("admin_pin")
-      .eq("id", user.id)
-      .single();
-
-    if (error || !data) {
-      console.error(error);
-      showMessage("Admin-PIN konnte nicht geladen werden.", "danger");
+    if (!/^\d{4}$/.test(adminPin)) {
+      showMessage(
+        "Bitte gib eine gültige 4-stellige Admin-PIN ein.",
+        "warning"
+      );
       return;
     }
 
-    if (!data.admin_pin) {
-      showMessage("Für diesen Admin wurde noch kein PIN festgelegt.", "warning");
+    const response = await fetch(
+      "/api/kiosk/verify-admin-pin",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({
+          pin: adminPin,
+        }),
+      }
+    );
+
+    let payload: {
+      success?: boolean;
+      error?: {
+        code?: string;
+        message?: string;
+      };
+    };
+
+    try {
+      payload = await response.json();
+    } catch {
+      showMessage(
+        "Die Serverantwort konnte nicht verarbeitet werden.",
+        "danger"
+      );
       return;
     }
 
-    if (adminPin !== data.admin_pin) {
-      showMessage("Falsche PIN.", "danger");
+    if (!response.ok || payload.success !== true) {
+      showMessage(
+        payload.error?.message ||
+          "Admin-PIN konnte nicht geprüft werden.",
+        payload.error?.code === "ADMIN_PIN_NOT_SET"
+          ? "warning"
+          : "danger"
+      );
       return;
     }
 
@@ -385,7 +416,9 @@ export default function KioskPage() {
     );
   }
 
-  function getEmployeeByPinOrHandleFailure() {
+  async function clockEmployeeAction(
+    action: "check_in" | "break_start" | "break_end" | "check_out"
+  ) {
     if (isLocked()) {
       const remainingSeconds = getRemainingLockSeconds();
 
@@ -397,75 +430,103 @@ export default function KioskPage() {
       return null;
     }
 
-    if (pin.length < 4) {
+    if (pin.length !== 4) {
       showMessage("Bitte gib zuerst deine 4-stellige PIN ein.", "warning");
       return null;
     }
 
-    const employee = employees.find((employee) => employee.pin === pin);
+    const {
+      data: { session },
+      error: sessionError,
+    } = await supabase.auth.getSession();
 
-    if (!employee) {
-      handleInvalidPin();
+    if (sessionError || !session?.access_token) {
+      showMessage(
+        "Die Admin-Anmeldung ist abgelaufen. Bitte melde dich erneut an.",
+        "danger"
+      );
+      return null;
+    }
+
+    const response = await fetch("/api/kiosk/clock", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({
+        pin,
+        action,
+      }),
+    });
+
+    let payload: {
+      success?: boolean;
+      entry?: {
+        id?: string | null;
+        action?: string;
+        createdAt?: string;
+      };
+      employee?: {
+        id?: string;
+        name?: string;
+        status?: EmployeeStatus;
+      };
+      error?: {
+        code?: string;
+        message?: string;
+      };
+    };
+
+    try {
+      payload = await response.json();
+    } catch {
+      showMessage(
+        "Die Serverantwort konnte nicht verarbeitet werden.",
+        "danger"
+      );
+      return null;
+    }
+
+    if (!response.ok || payload.success !== true) {
+      if (payload.error?.code === "INVALID_EMPLOYEE_PIN") {
+        handleInvalidPin();
+        return null;
+      }
+
+      if (payload.error?.code === "INVALID_STATUS_TRANSITION") {
+        showMessage(
+          "Dieser Stempelschritt ist für den aktuellen Status nicht zulässig.",
+          "warning"
+        );
+        await loadEmployees();
+        return null;
+      }
+
+      showMessage(
+        payload.error?.message ||
+          "Stempelschritt konnte nicht gespeichert werden.",
+        "danger"
+      );
+
+      await loadEmployees();
       return null;
     }
 
     setFailedAttempts(0);
     setLockedUntil(null);
 
-    return employee;
-  }
-
-  async function updateEmployeeStatus(
-    employee: Employee,
-    newStatus: EmployeeStatus
-  ) {
-    const businessId = await getBusinessId();
-
-    if (!businessId) {
-      showMessage("Keine Business-ID gefunden.", "danger");
-      return false;
-    }
-
-    const { error } = await supabase
-      .from("employees")
-      .update({ status: newStatus })
-      .eq("id", employee.id)
-      .eq("business_id", businessId);
-
-    if (error) {
-      console.error(error);
-      showMessage("Fehler beim Speichern.", "danger");
-      return false;
-    }
-
     await loadEmployees();
-    return true;
-  }
 
-  async function createTimeEntry(employee: Employee, action: string) {
-    const businessId = await getBusinessId();
-
-    if (!businessId) {
-      showMessage("Keine Business-ID gefunden.", "danger");
-      return false;
-    }
-
-    const { error } = await supabase.from("time_entries").insert([
-      {
-        employee_id: employee.id,
-        employee_name: employee.name,
-        action,
-        business_id: businessId,
-      },
-    ]);
-
-    if (error) {
-      console.error(error);
-      showMessage("Stempelschritt konnte nicht gespeichert werden.", "danger");
-      return false;
-    }
-
-    return true;
+    return {
+      entry_id: payload.entry?.id ?? null,
+      next_status:
+        payload.employee?.status ?? "not_checked_in",
+      created_at:
+        payload.entry?.createdAt ?? new Date().toISOString(),
+      employee_id: payload.employee?.id ?? "",
+      employee_name: payload.employee?.name ?? "Mitarbeiter",
+    };
   }
 
   async function handleCheckIn() {
@@ -474,30 +535,13 @@ export default function KioskPage() {
     setIsProcessing(true);
 
     try {
-      const employee = getEmployeeByPinOrHandleFailure();
+      const result = await clockEmployeeAction("check_in");
+      if (!result) return;
 
-      if (!employee) return;
-
-      if (employee.status === "checked_in") {
-        showMessage(`${employee.name} ist bereits eingestempelt.`, "warning");
-        return;
-      }
-
-      if (employee.status === "on_break") {
-        showMessage(`${employee.name} ist aktuell in der Pause.`, "warning");
-        return;
-      }
-
-      const stampTime = new Date();
-
-      const statusUpdated = await updateEmployeeStatus(employee, "checked_in");
-      if (!statusUpdated) return;
-
-      const entryCreated = await createTimeEntry(employee, "check_in");
-      if (!entryCreated) return;
+      const stampTime = new Date(result.created_at);
 
       showMessage(
-        `Viel Spaß bei der Arbeit! Du hast dich um ${formatClockTime(stampTime)} Uhr eingestempelt.`,
+        `Viel Spaß bei der Arbeit, ${result.employee_name}! Du hast dich um ${formatClockTime(stampTime)} Uhr eingestempelt.`,
         "success"
       );
     } finally {
@@ -511,30 +555,13 @@ export default function KioskPage() {
     setIsProcessing(true);
 
     try {
-      const employee = getEmployeeByPinOrHandleFailure();
+      const result = await clockEmployeeAction("break_start");
+      if (!result) return;
 
-      if (!employee) return;
-
-      if (employee.status === "not_checked_in") {
-        showMessage("Du hast vergessen dich einzustempeln.", "warning");
-        return;
-      }
-
-      if (employee.status === "on_break") {
-        showMessage(`${employee.name} ist bereits in der Pause.`, "warning");
-        return;
-      }
-
-      const stampTime = new Date();
-
-      const statusUpdated = await updateEmployeeStatus(employee, "on_break");
-      if (!statusUpdated) return;
-
-      const entryCreated = await createTimeEntry(employee, "break_start");
-      if (!entryCreated) return;
+      const stampTime = new Date(result.created_at);
 
       showMessage(
-        `Gute Pause! Du hast deine Pause um ${formatClockTime(stampTime)} Uhr gestartet.`,
+        `Gute Pause, ${result.employee_name}! Du hast deine Pause um ${formatClockTime(stampTime)} Uhr gestartet.`,
         "success"
       );
     } finally {
@@ -548,25 +575,13 @@ export default function KioskPage() {
     setIsProcessing(true);
 
     try {
-      const employee = getEmployeeByPinOrHandleFailure();
+      const result = await clockEmployeeAction("break_end");
+      if (!result) return;
 
-      if (!employee) return;
-
-      if (employee.status !== "on_break") {
-        showMessage("Du hast keinen Pausenbeginn gestempelt.", "warning");
-        return;
-      }
-
-      const stampTime = new Date();
-
-      const statusUpdated = await updateEmployeeStatus(employee, "checked_in");
-      if (!statusUpdated) return;
-
-      const entryCreated = await createTimeEntry(employee, "break_end");
-      if (!entryCreated) return;
+      const stampTime = new Date(result.created_at);
 
       showMessage(
-        `Willkommen zurück! Du hast deine Pause um ${formatClockTime(stampTime)} Uhr beendet.`,
+        `Willkommen zurück, ${result.employee_name}! Du hast deine Pause um ${formatClockTime(stampTime)} Uhr beendet.`,
         "success"
       );
     } finally {
@@ -580,38 +595,26 @@ export default function KioskPage() {
     setIsProcessing(true);
 
     try {
-      const employee = getEmployeeByPinOrHandleFailure();
+      const result = await clockEmployeeAction("check_out");
+      if (!result) return;
 
-      if (!employee) return;
+      const stampTime = new Date(result.created_at);
 
-      if (employee.status === "not_checked_in") {
-        showMessage("Du hast vergessen dich einzustempeln.", "warning");
-        return;
-      }
-
-      const stampTime = new Date();
-
-      const statusUpdated = await updateEmployeeStatus(
-        employee,
-        "not_checked_in"
-      );
-      if (!statusUpdated) return;
-
-      const entryCreated = await createTimeEntry(employee, "check_out");
-      if (!entryCreated) return;
-
-      const workedMilliseconds = await getWorkedMillisecondsToday(employee.id);
+      const workedMilliseconds =
+        result.employee_id
+          ? await getWorkedMillisecondsToday(result.employee_id)
+          : null;
 
       if (workedMilliseconds === null) {
         showMessage(
-          `Schönen Feierabend! Du hast dich um ${formatClockTime(stampTime)} Uhr ausgestempelt.`,
+          `Schönen Feierabend, ${result.employee_name}! Du hast dich um ${formatClockTime(stampTime)} Uhr ausgestempelt.`,
           "success"
         );
         return;
       }
 
       showMessage(
-        `Schönen Feierabend! Du hast dich um ${formatClockTime(stampTime)} Uhr ausgestempelt und heute insgesamt ${formatWorkedDuration(workedMilliseconds)} Stunden gearbeitet.`,
+        `Schönen Feierabend, ${result.employee_name}! Du hast dich um ${formatClockTime(stampTime)} Uhr ausgestempelt und heute insgesamt ${formatWorkedDuration(workedMilliseconds)} Stunden gearbeitet.`,
         "success"
       );
     } finally {

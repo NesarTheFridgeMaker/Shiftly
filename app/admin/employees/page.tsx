@@ -34,6 +34,43 @@ type EmploymentType =
   | "intern";
 type WageType = "hourly" | "fixed_hourly" | "salary";
 
+type AbsenceCalculationType =
+  | "fixed"
+  | "daily_average_13_weeks"
+  | "weekly_average_13_weeks"
+  | "three_month_average"
+  | "twelve_month_average";
+
+type TimeAccountPeriod = "none" | "weekly" | "monthly";
+
+type PositiveBalanceHandling =
+  | "carry"
+  | "payout"
+  | "payout_with_limit";
+
+type NegativeBalanceHandling = "carry" | "ignore";
+
+type EmployeeTimeAccountSettings = {
+  id: string;
+  employee_id: string;
+
+  absence_calculation_type: AbsenceCalculationType;
+  fixed_absence_hours: number | null;
+  prefer_scheduled_shift_for_absence: boolean;
+
+  time_account_period: TimeAccountPeriod;
+
+  positive_balance_handling: PositiveBalanceHandling;
+  payout_limit_hours: number | null;
+
+  negative_balance_handling: NegativeBalanceHandling;
+
+  opening_balance_hours: number;
+
+  created_at: string;
+  updated_at: string;
+};
+
 type Employee = {
   id: string;
   name: string;
@@ -91,6 +128,7 @@ type EmployeeWithTargetHours = Employee & {
   monthly_target_hours: number;
   notes: EmployeeNote[];
   invite: EmployeeInvite | null;
+  time_account_settings: EmployeeTimeAccountSettings | null;
 };
 
 type CreatedEmployeeInvite = {
@@ -195,6 +233,33 @@ export default function EmployeesPage() {
   const [editVacationDays, setEditVacationDays] = useState("");
   const [editWorkDaysPerWeek, setEditWorkDaysPerWeek] = useState("");
 
+  const [editAbsenceCalculationType, setEditAbsenceCalculationType] =
+  useState<AbsenceCalculationType>("daily_average_13_weeks");
+
+const [editFixedAbsenceHours, setEditFixedAbsenceHours] = useState("");
+
+const [
+  editPreferScheduledShiftForAbsence,
+  setEditPreferScheduledShiftForAbsence,
+] = useState(true);
+
+const [editTimeAccountPeriod, setEditTimeAccountPeriod] =
+  useState<TimeAccountPeriod>("monthly");
+
+const [
+  editPositiveBalanceHandling,
+  setEditPositiveBalanceHandling,
+] = useState<PositiveBalanceHandling>("carry");
+
+const [editPayoutLimitHours, setEditPayoutLimitHours] = useState("");
+
+const [
+  editNegativeBalanceHandling,
+  setEditNegativeBalanceHandling,
+] = useState<NegativeBalanceHandling>("carry");
+
+const [editOpeningBalanceHours, setEditOpeningBalanceHours] = useState("0");
+
   const [unsavedMonthlyHours, setUnsavedMonthlyHours] = useState<
     Record<string, boolean>
   >({});
@@ -287,6 +352,7 @@ export default function EmployeesPage() {
       let targetHours: EmployeeTargetHour[] = [];
       let notes: EmployeeNote[] = [];
       let invites: EmployeeInvite[] = [];
+      let timeAccountSettings: EmployeeTimeAccountSettings[] = [];
 
       if (employeeIds.length > 0) {
         const { data: targetData, error: targetError } = await supabase
@@ -304,6 +370,40 @@ export default function EmployeesPage() {
         } else {
           targetHours = (targetData || []) as EmployeeTargetHour[];
         }
+
+        const {
+  data: timeAccountSettingsData,
+  error: timeAccountSettingsError,
+} = await supabase
+  .from("employee_time_account_settings")
+  .select(`
+    id,
+    employee_id,
+    absence_calculation_type,
+    fixed_absence_hours,
+    prefer_scheduled_shift_for_absence,
+    time_account_period,
+    positive_balance_handling,
+    payout_limit_hours,
+    negative_balance_handling,
+    opening_balance_hours,
+    created_at,
+    updated_at
+  `)
+  .in("employee_id", employeeIds);
+
+if (timeAccountSettingsError) {
+  console.error(timeAccountSettingsError);
+
+  showToast({
+    type: "warning",
+    title: "Arbeitszeitkonto-Einstellungen konnten nicht geladen werden",
+    description: "Die Mitarbeiter werden trotzdem angezeigt.",
+  });
+} else {
+  timeAccountSettings =
+    (timeAccountSettingsData || []) as EmployeeTimeAccountSettings[];
+}
 
         const { data: notesData, error: notesError } = await supabase
           .from("employee_notes")
@@ -357,6 +457,10 @@ export default function EmployeesPage() {
           (targetHour) => targetHour.employee_id === employee.id,
         );
 
+        const timeAccountSetting = timeAccountSettings.find(
+          (setting) => setting.employee_id === employee.id,
+        );
+
         const employeeNotes = notes.filter(
           (note) => note.employee_id === employee.id,
         );
@@ -376,6 +480,7 @@ export default function EmployeesPage() {
           monthly_target_hours: target?.monthly_hours ?? 173,
           notes: employeeNotes,
           invite,
+          time_account_settings: timeAccountSetting ?? null,
         };
       });
 
@@ -1687,52 +1792,103 @@ async function handleOpenWhatsAppInvite() {
     }
   }
 
-  function handleOpenEditPayroll(employee: EmployeeWithTargetHours) {
-    if (!canEditPayroll) {
-      showToast({
-        type: "error",
-        title: "Keine Berechtigung",
-        description: "Du darfst Mitarbeiter- und Lohndaten nicht bearbeiten.",
-      });
-      return;
-    }
-
-    setEditingPayrollEmployee(employee);
-
-    setEditBirthDate(employee.birth_date ?? "");
-    setEditEmploymentStartDate(employee.employment_start_date ?? "");
-    setEditEmploymentEndDate(employee.employment_end_date ?? "");
-    setEditEmploymentScope(employee.employment_scope ?? "full_time");
-    setEditEmploymentType(employee.employment_type ?? "regular");
-    setEditWeeklyHours(String(employee.weekly_target_hours ?? 40));
-    setEditMonthlyHours(String(employee.monthly_target_hours ?? 173));
-    setEditVacationDays(String(employee.vacation_days_per_year ?? 24));
-    setEditWorkDaysPerWeek(String(employee.work_days_per_week ?? 5));
-
-    setEditWageType(
-      employee.wage_type === "fixed_hourly"
-        ? "fixed_hourly"
-        : employee.wage_type === "salary"
-          ? "salary"
-          : "hourly",
-    );
-
-    setEditHourlyRate(
-      employee.hourly_rate !== null && employee.hourly_rate !== undefined
-        ? String(employee.hourly_rate)
-        : "",
-    );
-
-    setEditMonthlySalary(
-      employee.monthly_salary !== null && employee.monthly_salary !== undefined
-        ? String(employee.monthly_salary)
-        : "",
-    );
-
-    setEditDatevPersonnelNumber(employee.datev_personnel_number || "");
-    setEditCostCenter(employee.cost_center || "");
-    setEditEligibleForSurcharges(employee.eligible_for_surcharges ?? true);
+function handleOpenEditPayroll(employee: EmployeeWithTargetHours) {
+  if (!canEditPayroll) {
+    showToast({
+      type: "error",
+      title: "Keine Berechtigung",
+      description: "Du darfst Mitarbeiter- und Lohndaten nicht bearbeiten.",
+    });
+    return;
   }
+
+  setEditingPayrollEmployee(employee);
+
+  setEditBirthDate(employee.birth_date ?? "");
+  setEditEmploymentStartDate(employee.employment_start_date ?? "");
+  setEditEmploymentEndDate(employee.employment_end_date ?? "");
+  setEditEmploymentScope(employee.employment_scope ?? "full_time");
+  setEditEmploymentType(employee.employment_type ?? "regular");
+  setEditWeeklyHours(String(employee.weekly_target_hours ?? 40));
+  setEditMonthlyHours(String(employee.monthly_target_hours ?? 173));
+  setEditVacationDays(String(employee.vacation_days_per_year ?? 24));
+  setEditWorkDaysPerWeek(String(employee.work_days_per_week ?? 5));
+
+  setEditWageType(
+    employee.wage_type === "fixed_hourly"
+      ? "fixed_hourly"
+      : employee.wage_type === "salary"
+        ? "salary"
+        : "hourly",
+  );
+
+  setEditHourlyRate(
+    employee.hourly_rate !== null &&
+      employee.hourly_rate !== undefined
+      ? String(employee.hourly_rate)
+      : "",
+  );
+
+  setEditMonthlySalary(
+    employee.monthly_salary !== null &&
+      employee.monthly_salary !== undefined
+      ? String(employee.monthly_salary)
+      : "",
+  );
+
+  setEditDatevPersonnelNumber(
+    employee.datev_personnel_number || "",
+  );
+
+  setEditCostCenter(employee.cost_center || "");
+
+  setEditEligibleForSurcharges(
+    employee.eligible_for_surcharges ?? true,
+  );
+
+  const timeAccountSettings =
+    employee.time_account_settings;
+
+  setEditAbsenceCalculationType(
+    timeAccountSettings?.absence_calculation_type ??
+      "daily_average_13_weeks",
+  );
+
+  setEditFixedAbsenceHours(
+    timeAccountSettings?.fixed_absence_hours !== null &&
+      timeAccountSettings?.fixed_absence_hours !== undefined
+      ? String(timeAccountSettings.fixed_absence_hours)
+      : "",
+  );
+
+  setEditPreferScheduledShiftForAbsence(
+    timeAccountSettings?.prefer_scheduled_shift_for_absence ??
+      true,
+  );
+
+  setEditTimeAccountPeriod(
+    timeAccountSettings?.time_account_period ?? "monthly",
+  );
+
+  setEditPositiveBalanceHandling(
+    timeAccountSettings?.positive_balance_handling ?? "carry",
+  );
+
+  setEditPayoutLimitHours(
+    timeAccountSettings?.payout_limit_hours !== null &&
+      timeAccountSettings?.payout_limit_hours !== undefined
+      ? String(timeAccountSettings.payout_limit_hours)
+      : "",
+  );
+
+  setEditNegativeBalanceHandling(
+    timeAccountSettings?.negative_balance_handling ?? "carry",
+  );
+
+  setEditOpeningBalanceHours(
+    String(timeAccountSettings?.opening_balance_hours ?? 0),
+  );
+}
 
   function closeEmployeeEditDialog() {
     setEditingPayrollEmployee(null);
@@ -1745,6 +1901,14 @@ async function handleOpenWhatsAppInvite() {
     setEditMonthlyHours("");
     setEditVacationDays("");
     setEditWorkDaysPerWeek("");
+    setEditAbsenceCalculationType("daily_average_13_weeks");
+    setEditFixedAbsenceHours("");
+    setEditPreferScheduledShiftForAbsence(true);
+    setEditTimeAccountPeriod("monthly");
+    setEditPositiveBalanceHandling("carry");
+    setEditPayoutLimitHours("");
+    setEditNegativeBalanceHandling("carry");
+    setEditOpeningBalanceHours("0");
   }
 
   async function handleSaveEmployeePayroll() {
@@ -1975,6 +2139,141 @@ async function handleOpenWhatsAppInvite() {
         return;
       }
     }
+
+    const fixedAbsenceHours =
+  editAbsenceCalculationType === "fixed" &&
+  editFixedAbsenceHours
+    ? Number(editFixedAbsenceHours.replace(",", "."))
+    : null;
+
+const payoutLimitHours =
+  editPositiveBalanceHandling === "payout_with_limit" &&
+  editPayoutLimitHours
+    ? Number(editPayoutLimitHours.replace(",", "."))
+    : null;
+
+const openingBalanceHours =
+  Number(editOpeningBalanceHours.replace(",", "."));
+
+if (
+  fixedAbsenceHours !== null &&
+  (!Number.isFinite(fixedAbsenceHours) || fixedAbsenceHours < 0)
+) {
+  showToast({
+    type: "warning",
+    title: "Ungültige Abwesenheitsstunden",
+    description:
+      "Bitte gib gültige feste Abwesenheitsstunden ein.",
+  });
+  return;
+}
+
+if (
+  payoutLimitHours !== null &&
+  (!Number.isFinite(payoutLimitHours) || payoutLimitHours < 0)
+) {
+  showToast({
+    type: "warning",
+    title: "Ungültiges Auszahlungslimit",
+    description:
+      "Bitte gib ein gültiges Auszahlungslimit in Stunden ein.",
+  });
+  return;
+}
+
+if (!Number.isFinite(openingBalanceHours)) {
+  showToast({
+    type: "warning",
+    title: "Ungültiger Startsaldo",
+    description:
+      "Bitte gib einen gültigen Startsaldo für das Arbeitszeitkonto ein.",
+  });
+  return;
+}
+
+const {
+  data: existingTimeAccountSettings,
+  error: timeAccountLookupError,
+} = await supabase
+  .from("employee_time_account_settings")
+  .select("id")
+  .eq("employee_id", editingPayrollEmployee.id)
+  .maybeSingle();
+
+if (timeAccountLookupError) {
+  console.error(
+    "TIME ACCOUNT SETTINGS LOOKUP ERROR:",
+    timeAccountLookupError,
+  );
+
+  showToast({
+    type: "error",
+    title: "Arbeitszeitkonto konnte nicht geprüft werden",
+    description: timeAccountLookupError.message,
+  });
+  return;
+}
+
+const timeAccountPayload = {
+  absence_calculation_type: editAbsenceCalculationType,
+  fixed_absence_hours: fixedAbsenceHours,
+  prefer_scheduled_shift_for_absence:
+    editPreferScheduledShiftForAbsence,
+  time_account_period: editTimeAccountPeriod,
+  positive_balance_handling:
+    editPositiveBalanceHandling,
+  payout_limit_hours: payoutLimitHours,
+  negative_balance_handling:
+    editNegativeBalanceHandling,
+  opening_balance_hours: openingBalanceHours,
+  updated_at: new Date().toISOString(),
+};
+
+if (existingTimeAccountSettings) {
+  const { error: timeAccountUpdateError } = await supabase
+    .from("employee_time_account_settings")
+    .update(timeAccountPayload)
+    .eq("id", existingTimeAccountSettings.id);
+
+  if (timeAccountUpdateError) {
+    console.error(
+      "TIME ACCOUNT SETTINGS UPDATE ERROR:",
+      timeAccountUpdateError,
+    );
+
+    showToast({
+      type: "error",
+      title:
+        "Arbeitszeitkonto-Einstellungen konnten nicht gespeichert werden",
+      description: timeAccountUpdateError.message,
+    });
+    return;
+  }
+} else {
+  const { error: timeAccountInsertError } = await supabase
+    .from("employee_time_account_settings")
+    .insert([
+      {
+        employee_id: editingPayrollEmployee.id,
+        ...timeAccountPayload,
+      },
+    ]);
+
+  if (timeAccountInsertError) {
+    console.error(
+      "TIME ACCOUNT SETTINGS INSERT ERROR:",
+      timeAccountInsertError,
+    );
+
+    showToast({
+      type: "error",
+      title:
+        "Arbeitszeitkonto-Einstellungen konnten nicht gespeichert werden",
+      description: timeAccountInsertError.message,
+    });
+    return;
+  }
+}
 
     const employeeName = editingPayrollEmployee.name;
 
@@ -2964,6 +3263,178 @@ const inactiveEmployees = employees
                   umgerechnet.
                 </p>
               </div>
+
+              <div className="border-t border-[#E2E8F0] pt-6">
+  <h3 className="text-lg font-semibold text-[#0F172A]">
+    Arbeitszeitkonto & Abwesenheiten
+  </h3>
+
+  <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+    <Select
+      label="Abwesenheitsbewertung"
+      value={editAbsenceCalculationType}
+      onChange={(event) =>
+        setEditAbsenceCalculationType(
+          event.target.value as AbsenceCalculationType,
+        )
+      }
+      options={[
+        {
+          value: "fixed",
+          label: "Feste Stunden pro Abwesenheitstag",
+        },
+        {
+          value: "daily_average_13_weeks",
+          label: "Tagesdurchschnitt aus 13 Wochen",
+        },
+        {
+          value: "weekly_average_13_weeks",
+          label: "Wochendurchschnitt aus 13 Wochen",
+        },
+        {
+          value: "three_month_average",
+          label: "3-Monats-Durchschnitt",
+        },
+        {
+          value: "twelve_month_average",
+          label: "12-Monats-Durchschnitt",
+        },
+      ]}
+    />
+
+    {editAbsenceCalculationType === "fixed" && (
+      <Input
+        label="Feste Abwesenheitsstunden"
+        type="text"
+        inputMode="decimal"
+        placeholder="z. B. 7,60"
+        value={editFixedAbsenceHours}
+        onChange={(event) =>
+          setEditFixedAbsenceHours(event.target.value)
+        }
+      />
+    )}
+
+    <Select
+      label="Dienstplan bei Abwesenheit"
+      value={
+        editPreferScheduledShiftForAbsence ? "yes" : "no"
+      }
+      onChange={(event) =>
+        setEditPreferScheduledShiftForAbsence(
+          event.target.value === "yes",
+        )
+      }
+      options={[
+        {
+          value: "yes",
+          label: "Geplante Schicht bevorzugen",
+        },
+        {
+          value: "no",
+          label: "Nur Bewertungsregel verwenden",
+        },
+      ]}
+    />
+
+    <Select
+      label="Arbeitszeitkonto"
+      value={editTimeAccountPeriod}
+      onChange={(event) =>
+        setEditTimeAccountPeriod(
+          event.target.value as TimeAccountPeriod,
+        )
+      }
+      options={[
+        {
+          value: "none",
+          label: "Kein Arbeitszeitkonto",
+        },
+        {
+          value: "weekly",
+          label: "Wochenkonto",
+        },
+        {
+          value: "monthly",
+          label: "Monatskonto",
+        },
+      ]}
+    />
+
+    <Select
+      label="Plusstunden behandeln"
+      value={editPositiveBalanceHandling}
+      onChange={(event) =>
+        setEditPositiveBalanceHandling(
+          event.target.value as PositiveBalanceHandling,
+        )
+      }
+      options={[
+        {
+          value: "carry",
+          label: "Auf Arbeitszeitkonto übertragen",
+        },
+        {
+          value: "payout",
+          label: "Vollständig auszahlen",
+        },
+        {
+          value: "payout_with_limit",
+          label: "Bis Limit auszahlen, Rest übertragen",
+        },
+      ]}
+    />
+
+    {editPositiveBalanceHandling === "payout_with_limit" && (
+      <Input
+        label="Auszahlungslimit in Stunden"
+        type="text"
+        inputMode="decimal"
+        placeholder="z. B. 10"
+        value={editPayoutLimitHours}
+        onChange={(event) =>
+          setEditPayoutLimitHours(event.target.value)
+        }
+      />
+    )}
+
+    <Select
+      label="Minusstunden behandeln"
+      value={editNegativeBalanceHandling}
+      onChange={(event) =>
+        setEditNegativeBalanceHandling(
+          event.target.value as NegativeBalanceHandling,
+        )
+      }
+      options={[
+        {
+          value: "carry",
+          label: "Auf Arbeitszeitkonto übertragen",
+        },
+        {
+          value: "ignore",
+          label: "Nicht übertragen",
+        },
+      ]}
+    />
+
+                <Input
+                  label="Startsaldo Arbeitszeitkonto"
+                  type="text"
+                  inputMode="decimal"
+                  placeholder="z. B. 17,50 oder -8,25"
+                  value={editOpeningBalanceHours}
+                  onChange={(event) =>
+                    setEditOpeningBalanceHours(event.target.value)
+                  }
+                />
+              </div>
+
+              <p className="mt-3 text-xs leading-5 text-[#64748B]">
+                Der Startsaldo dient z. B. zur Übernahme bestehender Plus- oder
+                Minusstunden beim Wechsel aus einem anderen Zeiterfassungssystem.
+              </p>
+            </div>
 
               <div className="border-t border-[#E2E8F0] pt-6">
                 <h3 className="text-lg font-semibold text-[#0F172A]">

@@ -709,21 +709,20 @@ if (data.datev_sick_wage_type) {
 
 }
 
-
 useEffect(() => {
   async function loadInitialData() {
     setIsLoading(true);
 
     try {
-      await Promise.all([
-        loadTimeEntries(),
-        loadEmployees(),
-        loadBusiness(),
-        loadTargetHours(),
-        loadPayRules(),
-        loadAbsences(),
-      ]);
-    } finally {
+  await Promise.all([
+    loadTimeEntries(),
+    loadEmployees(),
+    loadBusiness(),
+    loadTargetHours(),
+    loadPayRules(),
+    loadAbsences(),
+  ]);
+} finally {
       setIsLoading(false);
     }
   }
