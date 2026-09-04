@@ -3,6 +3,10 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { supabaseAdmin } from "@/lib/supabaseServer";
+import {
+  checkKioskPinRateLimit,
+  recordKioskPinAttempt,
+} from "@/lib/kioskPinRateLimit";
 
 type KioskLookupBody = {
   pin?: unknown;
@@ -14,11 +18,20 @@ type Profile = {
   business_id: string | null;
 };
 
-function jsonError(status: number, code: string, message: string) {
+function jsonError(
+  status: number,
+  code: string,
+  message: string,
+  extra: Record<string, unknown> = {}
+) {
   return NextResponse.json(
     {
       success: false,
-      error: { code, message },
+      error: {
+        code,
+        message,
+        ...extra,
+      },
     },
     { status }
   );
@@ -156,6 +169,32 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  try {
+    const rateLimit = await checkKioskPinRateLimit(
+      profile.business_id,
+      user.id
+    );
+
+    if (rateLimit.isLocked) {
+      return jsonError(
+        429,
+        "PIN_RATE_LIMITED",
+        "Zu viele falsche PIN-Eingaben. Bitte warte kurz und versuche es erneut.",
+        {
+          retryAfterSeconds: rateLimit.retryAfterSeconds,
+        }
+      );
+    }
+  } catch (error) {
+    console.error("KIOSK LOOKUP RATE LIMIT CHECK ERROR:", error);
+
+    return jsonError(
+      503,
+      "RATE_LIMIT_UNAVAILABLE",
+      "Die PIN-Prüfung ist momentan nicht verfügbar."
+    );
+  }
+
   const { data: employeeData, error: employeeError } =
     await supabaseAdmin
       .from("employees")
@@ -176,10 +215,53 @@ export async function POST(request: NextRequest) {
   }
 
   if (!employeeData) {
+    try {
+      const rateLimit = await recordKioskPinAttempt(
+        profile.business_id,
+        user.id,
+        false
+      );
+
+      if (rateLimit.isLocked) {
+        return jsonError(
+          429,
+          "PIN_RATE_LIMITED",
+          "Zu viele falsche PIN-Eingaben. Bitte warte kurz und versuche es erneut.",
+          {
+            retryAfterSeconds: rateLimit.retryAfterSeconds,
+          }
+        );
+      }
+    } catch (error) {
+      console.error("KIOSK LOOKUP RATE LIMIT RECORD ERROR:", error);
+
+      return jsonError(
+        503,
+        "RATE_LIMIT_UNAVAILABLE",
+        "Die PIN-Prüfung ist momentan nicht verfügbar."
+      );
+    }
+
     return jsonError(
       403,
       "INVALID_EMPLOYEE_PIN",
       "Dieser PIN ist keinem aktiven Mitarbeiter zugeordnet."
+    );
+  }
+
+  try {
+    await recordKioskPinAttempt(
+      profile.business_id,
+      user.id,
+      true
+    );
+  } catch (error) {
+    console.error("KIOSK LOOKUP RATE LIMIT RESET ERROR:", error);
+
+    return jsonError(
+      503,
+      "RATE_LIMIT_UNAVAILABLE",
+      "Die PIN-Prüfung ist momentan nicht verfügbar."
     );
   }
 
