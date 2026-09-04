@@ -62,10 +62,61 @@ class WorkingTimeMonth {
   final int totalBreakMinutes;
 }
 
+class TimeAccountOpeningBalance {
+  const TimeAccountOpeningBalance({
+    required this.employeeId,
+    required this.payrollPeriodId,
+    required this.snapshotId,
+    required this.periodYear,
+    required this.periodMonth,
+    required this.openingBalanceMinutes,
+  });
+
+  final String employeeId;
+  final String payrollPeriodId;
+  final String snapshotId;
+  final int periodYear;
+  final int periodMonth;
+  final int openingBalanceMinutes;
+
+  factory TimeAccountOpeningBalance.fromJson(
+    Map<String, dynamic> json,
+  ) {
+    return TimeAccountOpeningBalance(
+      employeeId: json['employee_id'] as String,
+      payrollPeriodId: json['payroll_period_id'] as String,
+      snapshotId: json['snapshot_id'] as String,
+      periodYear: (json['period_year'] as num).toInt(),
+      periodMonth: (json['period_month'] as num).toInt(),
+      openingBalanceMinutes:
+          (json['opening_balance_minutes'] as num).toInt(),
+    );
+  }
+}
+
 class WorkingTimeService {
   WorkingTimeService(this._client);
 
   final SupabaseClient _client;
+
+  Future<TimeAccountOpeningBalance>
+      getCurrentTimeAccountOpeningBalance() async {
+    final data = await _client.rpc(
+      'get_my_current_time_account_opening_balance',
+    );
+
+    if (data is! List || data.isEmpty) {
+      throw Exception(
+        'Für das aktuelle Stundenkonto wurden keine Daten gefunden.',
+      );
+    }
+
+    final row = Map<String, dynamic>.from(
+      data.first as Map,
+    );
+
+    return TimeAccountOpeningBalance.fromJson(row);
+  }
 
   Future<WorkingTimeMonth> getMonth({
     required String employeeId,

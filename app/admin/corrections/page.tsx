@@ -55,6 +55,30 @@ type TimeConflict = {
   resolution_reason: string | null;
 };
 
+type ComplianceWarning = {
+  id: string;
+  business_id: string;
+  employee_id: string;
+  employee_name: string;
+  warning_date: string;
+  warning_type:
+    | "daily_net_over_10h"
+    | "rest_period_under_11h"
+    | "insufficient_break"
+    | "continuous_work_over_6h"
+    | string;
+  status: "open" | "resolved" | "ignored" | string;
+  details: Record<string, unknown> | null;
+  detected_at: string;
+  resolved_at: string | null;
+  resolution_reason: string | null;
+  acknowledged_at: string | null;
+  acknowledged_by: string | null;
+  acknowledgement_note: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 const HISTORY_PAGE_SIZE = 25;
 
 const monthOptions = [
@@ -153,6 +177,48 @@ function formatConflictType(conflictType: string) {
   return conflictType;
 }
 
+function formatComplianceType(warningType: string) {
+  if (warningType === "daily_net_over_10h") {
+    return "Arbeitszeit über 10 Stunden";
+  }
+
+  if (warningType === "rest_period_under_11h") {
+    return "Ruhezeit unter 11 Stunden";
+  }
+
+  if (warningType === "insufficient_break") {
+    return "Pausenzeit unterschritten";
+  }
+
+  if (warningType === "continuous_work_over_6h") {
+    return "Mehr als 6 Stunden ohne ausreichende Pause";
+  }
+
+  return warningType;
+}
+
+function formatComplianceStatus(status: string) {
+  if (status === "acknowledged") return "Geprüft";
+  if (status === "resolved") return "Behoben";
+  if (status === "open") return "Offen";
+  return status;
+}
+
+function formatMinutes(value: unknown) {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return "—";
+  }
+
+  const totalMinutes = Math.max(0, Math.round(value));
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+
+  if (hours === 0) return `${minutes} Min.`;
+  if (minutes === 0) return `${hours} Std.`;
+
+  return `${hours} Std. ${minutes} Min.`;
+}
+
 export default function CorrectionsPage() {
   const { showToast } = useToast();
 
@@ -169,17 +235,26 @@ export default function CorrectionsPage() {
 
   const [openRequests, setOpenRequests] = useState<CorrectionRequest[]>([]);
   const [openConflicts, setOpenConflicts] = useState<TimeConflict[]>([]);
+  const [openComplianceWarnings, setOpenComplianceWarnings] = useState<
+    ComplianceWarning[]
+  >([]);
 
   const [historyRequests, setHistoryRequests] = useState<CorrectionRequest[]>(
     []
   );
   const [historyConflicts, setHistoryConflicts] = useState<TimeConflict[]>([]);
+  const [historyComplianceWarnings, setHistoryComplianceWarnings] = useState<
+    ComplianceWarning[]
+  >([]);
   const [historyLoading, setHistoryLoading] = useState(false);
 
   const [requestHistoryPage, setRequestHistoryPage] = useState(0);
   const [conflictHistoryPage, setConflictHistoryPage] = useState(0);
+  const [complianceHistoryPage, setComplianceHistoryPage] = useState(0);
   const [requestHistoryHasMore, setRequestHistoryHasMore] = useState(false);
   const [conflictHistoryHasMore, setConflictHistoryHasMore] = useState(false);
+  const [complianceHistoryHasMore, setComplianceHistoryHasMore] =
+    useState(false);
 
   const [selectedConflict, setSelectedConflict] = useState<TimeConflict | null>(
     null
@@ -189,7 +264,15 @@ export default function CorrectionsPage() {
   const [resolutionReason, setResolutionReason] = useState("");
   const [isResolvingConflict, setIsResolvingConflict] = useState(false);
 
-  const totalOpen = openRequests.length + openConflicts.length;
+  const [selectedComplianceWarning, setSelectedComplianceWarning] =
+    useState<ComplianceWarning | null>(null);
+  const [acknowledgementNote, setAcknowledgementNote] = useState("");
+  const [isAcknowledgingWarning, setIsAcknowledgingWarning] = useState(false);
+
+  const totalOpen =
+    openRequests.length +
+    openConflicts.length +
+    openComplianceWarnings.length;
 
   const historyYearOptions = useMemo(() => {
     const currentYear = currentDate.getFullYear();
@@ -240,7 +323,12 @@ export default function CorrectionsPage() {
         return;
       }
 
-      const [requestsResult, conflictsResult] = await Promise.all([
+      const [
+        requestsResult,
+        conflictsResult,
+        complianceResult,
+        employeesResult,
+      ] = await Promise.all([
         supabase
           .from("time_correction_requests")
           .select("*")
@@ -254,6 +342,19 @@ export default function CorrectionsPage() {
           .eq("business_id", businessId)
           .eq("status", "open")
           .order("detected_at", { ascending: false }),
+
+        supabase
+          .from("time_compliance_warnings")
+          .select("*")
+          .eq("business_id", businessId)
+          .eq("status", "open")
+          .order("warning_date", { ascending: false })
+          .order("created_at", { ascending: false }),
+
+        supabase
+          .from("employees")
+          .select("id, name")
+          .eq("business_id", businessId),
       ]);
 
       if (requestsResult.error) {
@@ -279,6 +380,57 @@ export default function CorrectionsPage() {
         });
       } else {
         setOpenConflicts((conflictsResult.data || []) as TimeConflict[]);
+      }
+
+      if (complianceResult.error) {
+        console.error(
+          "LOAD OPEN COMPLIANCE WARNINGS ERROR:",
+          complianceResult.error
+        );
+        showToast({
+          type: "error",
+          title: "Arbeitszeit-Warnungen konnten nicht geladen werden",
+          description: complianceResult.error.message,
+        });
+      } else if (employeesResult.error) {
+        console.error(
+          "LOAD COMPLIANCE EMPLOYEE NAMES ERROR:",
+          employeesResult.error
+        );
+        showToast({
+          type: "error",
+          title: "Mitarbeiternamen konnten nicht geladen werden",
+          description: employeesResult.error.message,
+        });
+
+        setOpenComplianceWarnings(
+          ((complianceResult.data || []) as Omit<
+            ComplianceWarning,
+            "employee_name"
+          >[]).map((warning) => ({
+            ...warning,
+            employee_name: "Unbekannter Mitarbeiter",
+          }))
+        );
+      } else {
+        const employeeNames = new Map(
+          ((employeesResult.data || []) as EmployeeOption[]).map((employee) => [
+            employee.id,
+            employee.name,
+          ])
+        );
+
+        setOpenComplianceWarnings(
+          ((complianceResult.data || []) as Omit<
+            ComplianceWarning,
+            "employee_name"
+          >[]).map((warning) => ({
+            ...warning,
+            employee_name:
+              employeeNames.get(warning.employee_id) ||
+              "Unbekannter Mitarbeiter",
+          }))
+        );
       }
     } finally {
       setLoading(false);
@@ -375,13 +527,88 @@ export default function CorrectionsPage() {
     setConflictHistoryPage(page);
   }
 
-  async function loadHistory(pageRequests = 0, pageConflicts = 0) {
+  async function loadComplianceHistory(page = 0) {
+    const businessId = await getBusinessId();
+    if (!businessId) return;
+
+    const { fromDate, toDateExclusive } = getMonthRange(
+      historyYear,
+      historyMonth
+    );
+
+    const from = page * HISTORY_PAGE_SIZE;
+    const to = from + HISTORY_PAGE_SIZE;
+
+    let warningsQuery = supabase
+      .from("time_compliance_warnings")
+      .select("*")
+      .eq("business_id", businessId)
+      .in("status", ["acknowledged", "resolved"])
+      .gte("warning_date", fromDate)
+      .lt("warning_date", toDateExclusive);
+
+    if (historyEmployeeId !== "all") {
+      warningsQuery = warningsQuery.eq("employee_id", historyEmployeeId);
+    }
+
+    const [warningsResult, employeesResult] = await Promise.all([
+      warningsQuery
+        .order("warning_date", { ascending: false })
+        .order("updated_at", { ascending: false })
+        .range(from, to),
+
+      supabase
+        .from("employees")
+        .select("id, name")
+        .eq("business_id", businessId),
+    ]);
+
+    if (warningsResult.error) {
+      console.error(
+        "LOAD COMPLIANCE HISTORY ERROR:",
+        warningsResult.error
+      );
+      showToast({
+        type: "error",
+        title: "Warnungshistorie konnte nicht geladen werden",
+        description: warningsResult.error.message,
+      });
+      return;
+    }
+
+    const employeeNames = new Map(
+      ((employeesResult.data || []) as EmployeeOption[]).map((employee) => [
+        employee.id,
+        employee.name,
+      ])
+    );
+
+    const rows = ((warningsResult.data || []) as Omit<
+      ComplianceWarning,
+      "employee_name"
+    >[]).map((warning) => ({
+      ...warning,
+      employee_name:
+        employeeNames.get(warning.employee_id) || "Unbekannter Mitarbeiter",
+    }));
+
+    setHistoryComplianceWarnings(rows.slice(0, HISTORY_PAGE_SIZE));
+    setComplianceHistoryHasMore(rows.length > HISTORY_PAGE_SIZE);
+    setComplianceHistoryPage(page);
+  }
+
+  async function loadHistory(
+    pageRequests = 0,
+    pageConflicts = 0,
+    pageCompliance = 0
+  ) {
     setHistoryLoading(true);
 
     try {
       await Promise.all([
         loadRequestHistory(pageRequests),
         loadConflictHistory(pageConflicts),
+        loadComplianceHistory(pageCompliance),
       ]);
     } finally {
       setHistoryLoading(false);
@@ -396,7 +623,7 @@ export default function CorrectionsPage() {
   useEffect(() => {
     if (activeView !== "history") return;
 
-    loadHistory(0, 0);
+    loadHistory(0, 0, 0);
   }, [historyYear, historyMonth, historyEmployeeId]);
 
   function openConflictCorrection(conflict: TimeConflict) {
@@ -481,6 +708,61 @@ export default function CorrectionsPage() {
       setResolutionReason("");
     } finally {
       setIsResolvingConflict(false);
+    }
+  }
+
+  function openComplianceAcknowledgement(warning: ComplianceWarning) {
+    setSelectedComplianceWarning(warning);
+    setAcknowledgementNote("");
+  }
+
+  function closeComplianceAcknowledgement() {
+    if (isAcknowledgingWarning) return;
+
+    setSelectedComplianceWarning(null);
+    setAcknowledgementNote("");
+  }
+
+  async function handleAcknowledgeComplianceWarning() {
+    if (!selectedComplianceWarning || isAcknowledgingWarning) return;
+
+    setIsAcknowledgingWarning(true);
+
+    try {
+      const { error } = await supabase.rpc(
+        "acknowledge_compliance_warning",
+        {
+          p_warning_id: selectedComplianceWarning.id,
+          p_note: acknowledgementNote.trim() || null,
+        }
+      );
+
+      if (error) {
+        console.error("ACKNOWLEDGE COMPLIANCE WARNING ERROR:", error);
+
+        showToast({
+          type: "error",
+          title: "Warnung konnte nicht als geprüft markiert werden",
+          description: error.message,
+        });
+
+        return;
+      }
+
+      await loadOpenData();
+
+      showToast({
+        type: "success",
+        title: "Warnung als geprüft markiert",
+        description: `${selectedComplianceWarning.employee_name}: ${formatComplianceType(
+          selectedComplianceWarning.warning_type
+        )}.`,
+      });
+
+      setSelectedComplianceWarning(null);
+      setAcknowledgementNote("");
+    } finally {
+      setIsAcknowledgingWarning(false);
     }
   }
 
@@ -640,45 +922,88 @@ export default function CorrectionsPage() {
         description="Prüfe offene Zeitprobleme und greife bei Bedarf auf die paginierte Historie zu."
       />
 
-      <div className="flex flex-wrap gap-2">
-        <button
-          type="button"
-          onClick={() => setActiveView("open")}
-          className={[
-            "rounded-full px-4 py-2 text-sm font-medium transition-all duration-200",
-            activeView === "open"
-              ? "bg-[#2563EB] text-white shadow-[0_8px_18px_rgba(37,99,235,0.18)]"
-              : "bg-[#F8FAFC] text-[#64748B] hover:bg-[#EFF6FF] hover:text-[#2563EB]",
-          ].join(" ")}
-        >
-          Offen {totalOpen > 0 ? `(${totalOpen})` : ""}
-        </button>
+      <div className="rounded-3xl border border-[#DCE5F2] bg-white p-2 shadow-sm">
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2" role="tablist" aria-label="Korrekturansicht">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeView === "open"}
+            onClick={() => setActiveView("open")}
+            className={[
+              "rounded-2xl border px-5 py-4 text-left transition-all duration-200",
+              activeView === "open"
+                ? "border-[#2563EB] bg-[#2563EB] text-white shadow-[0_10px_24px_rgba(37,99,235,0.20)]"
+                : "border-transparent bg-[#F8FAFC] text-[#0F172A] hover:border-[#BFDBFE] hover:bg-[#EFF6FF]",
+            ].join(" ")}
+          >
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-base font-semibold">Offene Vorgänge</span>
+              <span className={[
+                "rounded-full px-2.5 py-1 text-xs font-semibold",
+                activeView === "open"
+                  ? "bg-white/20 text-white"
+                  : totalOpen > 0
+                    ? "bg-[#FEF3C7] text-[#B45309]"
+                    : "bg-[#E2E8F0] text-[#64748B]",
+              ].join(" ")}>
+                {totalOpen}
+              </span>
+            </div>
+            <p className={["mt-1 text-sm", activeView === "open" ? "text-white/80" : "text-[#64748B]"].join(" ")}>
+              Konflikte, Warnungen und Anträge, die noch geprüft werden müssen.
+            </p>
+          </button>
 
-        <button
-          type="button"
-          onClick={() => {
-            setActiveView("history");
-            loadHistory(0, 0);
-          }}
-          className={[
-            "rounded-full px-4 py-2 text-sm font-medium transition-all duration-200",
-            activeView === "history"
-              ? "bg-[#2563EB] text-white shadow-[0_8px_18px_rgba(37,99,235,0.18)]"
-              : "bg-[#F8FAFC] text-[#64748B] hover:bg-[#EFF6FF] hover:text-[#2563EB]",
-          ].join(" ")}
-        >
-          Historie
-        </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeView === "history"}
+            onClick={() => {
+              setActiveView("history");
+              loadHistory(0, 0, 0);
+            }}
+            className={[
+              "rounded-2xl border px-5 py-4 text-left transition-all duration-200",
+              activeView === "history"
+                ? "border-[#2563EB] bg-[#2563EB] text-white shadow-[0_10px_24px_rgba(37,99,235,0.20)]"
+                : "border-transparent bg-[#F8FAFC] text-[#0F172A] hover:border-[#BFDBFE] hover:bg-[#EFF6FF]",
+            ].join(" ")}
+          >
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-base font-semibold">Erledigt & Historie</span>
+              <span className={[
+                "rounded-full px-2.5 py-1 text-xs font-semibold",
+                activeView === "history"
+                  ? "bg-white/20 text-white"
+                  : "bg-[#DBEAFE] text-[#1D4ED8]",
+              ].join(" ")}>
+                Archiv
+              </span>
+            </div>
+            <p className={["mt-1 text-sm", activeView === "history" ? "text-white/80" : "text-[#64748B]"].join(" ")}>
+              Geprüfte Warnungen sowie erledigte Korrekturen und Anträge.
+            </p>
+          </button>
+        </div>
       </div>
 
       {activeView === "open" && (
         <>
-          <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-4">
             <StatCard
               title="Systemkonflikte"
               value={openConflicts.length}
               badge="Prüfen"
               badgeVariant={openConflicts.length > 0 ? "warning" : "muted"}
+            />
+
+            <StatCard
+              title="Arbeitszeit-Warnungen"
+              value={openComplianceWarnings.length}
+              badge="Prüfen"
+              badgeVariant={
+                openComplianceWarnings.length > 0 ? "warning" : "muted"
+              }
             />
 
             <StatCard
@@ -781,6 +1106,218 @@ export default function CorrectionsPage() {
                     </div>
                   </div>
                 ))}
+              </div>
+            )}
+          </Section>
+
+          <Section
+            title="Arbeitszeit-Warnungen"
+            description="Arbeitszeitrechtlich auffällige, technisch vollständige Zeitdaten. Diese Hinweise sind keine Stempelfehler."
+            action={
+              <Badge
+                variant={
+                  openComplianceWarnings.length > 0 ? "warning" : "muted"
+                }
+                dot
+              >
+                {openComplianceWarnings.length} offen
+              </Badge>
+            }
+          >
+            {openComplianceWarnings.length === 0 ? (
+              <EmptyState
+                title="Keine offenen Arbeitszeit-Warnungen"
+                description="Aktuell wurden keine offenen Überschreitungen der täglichen Arbeitszeit oder zu kurzen Ruhezeiten erkannt."
+                compact
+              />
+            ) : (
+              <div className="space-y-4">
+                {openComplianceWarnings.map((warning) => {
+                  const details = warning.details || {};
+                  const isDailyLimit =
+                    warning.warning_type === "daily_net_over_10h";
+                  const isRestPeriod =
+                    warning.warning_type === "rest_period_under_11h";
+                  const isInsufficientBreak =
+                    warning.warning_type === "insufficient_break";
+                  const isContinuousWork =
+                    warning.warning_type === "continuous_work_over_6h";
+
+                  return (
+                    <div
+                      key={warning.id}
+                      className="rounded-3xl border border-[#FDE68A] bg-white p-5 shadow-sm"
+                    >
+                      <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
+                        <div>
+                          <div className="flex flex-wrap items-center gap-3">
+                            <h2 className="text-xl font-semibold text-[#0F172A]">
+                              {warning.employee_name}
+                            </h2>
+
+                            <Badge variant="warning" dot>
+                              Prüfung erforderlich
+                            </Badge>
+                          </div>
+
+                          <p className="mt-1 text-sm font-medium text-[#B45309]">
+                            {formatComplianceType(warning.warning_type)}
+                          </p>
+                        </div>
+
+                        <div className="flex flex-col items-start gap-3 xl:items-end">
+                          <p className="text-sm text-[#64748B]">
+                            Erkannt am {formatDate(warning.created_at)}
+                          </p>
+
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            size="sm"
+                            onClick={() =>
+                              openComplianceAcknowledgement(warning)
+                            }
+                          >
+                            Als geprüft markieren
+                          </Button>
+                        </div>
+                      </div>
+
+                      <div className="mt-5 grid grid-cols-1 gap-3 md:grid-cols-3">
+                        <div className="rounded-2xl bg-[#F8FAFC] p-4">
+                          <p className="text-xs font-medium text-[#64748B]">
+                            Arbeitstag
+                          </p>
+                          <p className="mt-1 text-sm font-semibold text-[#0F172A]">
+                            {formatDate(
+                              `${warning.warning_date}T12:00:00`
+                            )}
+                          </p>
+                        </div>
+
+                        {isDailyLimit && (
+                          <>
+                            <div className="rounded-2xl bg-[#F8FAFC] p-4">
+                              <p className="text-xs font-medium text-[#64748B]">
+                                Nettoarbeitszeit
+                              </p>
+                              <p className="mt-1 text-sm font-semibold text-[#0F172A]">
+                                {formatMinutes(details.net_minutes)}
+                              </p>
+                            </div>
+
+                            <div className="rounded-2xl bg-[#F8FAFC] p-4">
+                              <p className="text-xs font-medium text-[#64748B]">
+                                Über 10 Stunden
+                              </p>
+                              <p className="mt-1 text-sm font-semibold text-[#B45309]">
+                                {formatMinutes(details.excess_minutes)}
+                              </p>
+                            </div>
+                          </>
+                        )}
+
+                        {isRestPeriod && (
+                          <>
+                            <div className="rounded-2xl bg-[#F8FAFC] p-4">
+                              <p className="text-xs font-medium text-[#64748B]">
+                                Tatsächliche Ruhezeit
+                              </p>
+                              <p className="mt-1 text-sm font-semibold text-[#0F172A]">
+                                {formatMinutes(details.rest_minutes)}
+                              </p>
+                            </div>
+
+                            <div className="rounded-2xl bg-[#F8FAFC] p-4">
+                              <p className="text-xs font-medium text-[#64748B]">
+                                Fehlende Ruhezeit
+                              </p>
+                              <p className="mt-1 text-sm font-semibold text-[#B45309]">
+                                {formatMinutes(details.missing_minutes)}
+                              </p>
+                            </div>
+                          </>
+                        )}
+
+                        {isInsufficientBreak && (
+                          <>
+                            <div className="rounded-2xl bg-[#F8FAFC] p-4">
+                              <p className="text-xs font-medium text-[#64748B]">
+                                Erfasste Pause
+                              </p>
+                              <p className="mt-1 text-sm font-semibold text-[#0F172A]">
+                                {formatMinutes(details.break_minutes)}
+                              </p>
+                            </div>
+
+                            <div className="rounded-2xl bg-[#F8FAFC] p-4">
+                              <p className="text-xs font-medium text-[#64748B]">
+                                Fehlende Pausenzeit
+                              </p>
+                              <p className="mt-1 text-sm font-semibold text-[#B45309]">
+                                {formatMinutes(details.missing_break_minutes)}
+                              </p>
+                            </div>
+                          </>
+                        )}
+
+                        {isContinuousWork && (
+                          <>
+                            <div className="rounded-2xl bg-[#F8FAFC] p-4">
+                              <p className="text-xs font-medium text-[#64748B]">
+                                Längste Arbeitsphase
+                              </p>
+                              <p className="mt-1 text-sm font-semibold text-[#0F172A]">
+                                {formatMinutes(details.max_continuous_minutes)}
+                              </p>
+                            </div>
+
+                            <div className="rounded-2xl bg-[#F8FAFC] p-4">
+                              <p className="text-xs font-medium text-[#64748B]">
+                                Über 6 Stunden
+                              </p>
+                              <p className="mt-1 text-sm font-semibold text-[#B45309]">
+                                {formatMinutes(details.excess_minutes)}
+                              </p>
+                            </div>
+                          </>
+                        )}
+
+                        {!isDailyLimit &&
+                          !isRestPeriod &&
+                          !isInsufficientBreak &&
+                          !isContinuousWork && (
+                          <div className="rounded-2xl bg-[#F8FAFC] p-4 md:col-span-2">
+                            <p className="text-xs font-medium text-[#64748B]">
+                              Hinweis
+                            </p>
+                            <p className="mt-1 text-sm leading-6 text-[#0F172A]">
+                              Für diesen Warnungstyp ist noch keine spezielle
+                              Detaildarstellung hinterlegt.
+                            </p>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="mt-4 rounded-2xl bg-[#FFFBEB] p-4">
+                        <p className="text-xs font-medium text-[#92400E]">
+                          Einordnung
+                        </p>
+                        <p className="mt-1 text-sm leading-6 text-[#78350F]">
+                          {isDailyLimit
+                            ? "Die erfasste Nettoarbeitszeit liegt über 10 Stunden. Prüfe den Arbeitstag und die zugrunde liegenden Zeitdaten."
+                            : isRestPeriod
+                              ? "Zwischen zwei abgeschlossenen Arbeitseinsätzen wurden weniger als 11 Stunden Ruhezeit ermittelt."
+                              : isInsufficientBreak
+                                ? "Die erfasste Gesamtpausenzeit liegt unter der für diesen Arbeitstag erforderlichen Pausenzeit."
+                                : isContinuousWork
+                                  ? "Es wurde eine ununterbrochene Arbeitsphase von mehr als 6 Stunden ohne qualifizierende Pause erkannt."
+                                  : "Die Arbeitszeitdaten wurden als compliance-relevant markiert und sollten geprüft werden."}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </Section>
@@ -893,6 +1430,12 @@ export default function CorrectionsPage() {
 
       {activeView === "history" && (
         <>
+          <div className="rounded-3xl border border-[#BFDBFE] bg-[#EFF6FF] px-6 py-5">
+            <h2 className="text-xl font-semibold text-[#0F172A]">Erledigt & Historie</h2>
+            <p className="mt-1 text-sm leading-6 text-[#475569]">
+              Hier findest du geprüfte Arbeitszeit-Warnungen, erledigte Systemkorrekturen und bearbeitete Mitarbeiteranträge.
+            </p>
+          </div>
           <Section
             title="Historienfilter"
             description="Die Historie wird serverseitig nach Monat gefiltert und anschließend paginiert."
@@ -909,6 +1452,7 @@ export default function CorrectionsPage() {
                     setHistoryMonth(Number(event.target.value));
                     setRequestHistoryPage(0);
                     setConflictHistoryPage(0);
+                    setComplianceHistoryPage(0);
                   }}
                   className="w-full rounded-2xl border border-[#CBD5E1] bg-white px-4 py-3 text-sm text-[#0F172A] outline-none transition focus:border-[#2563EB] focus:ring-4 focus:ring-[#2563EB]/10"
                 >
@@ -931,6 +1475,7 @@ export default function CorrectionsPage() {
                     setHistoryYear(Number(event.target.value));
                     setRequestHistoryPage(0);
                     setConflictHistoryPage(0);
+                    setComplianceHistoryPage(0);
                   }}
                   className="w-full rounded-2xl border border-[#CBD5E1] bg-white px-4 py-3 text-sm text-[#0F172A] outline-none transition focus:border-[#2563EB] focus:ring-4 focus:ring-[#2563EB]/10"
                 >
@@ -953,6 +1498,7 @@ export default function CorrectionsPage() {
                     setHistoryEmployeeId(event.target.value);
                     setRequestHistoryPage(0);
                     setConflictHistoryPage(0);
+                    setComplianceHistoryPage(0);
                   }}
                   className="w-full rounded-2xl border border-[#CBD5E1] bg-white px-4 py-3 text-sm text-[#0F172A] outline-none transition focus:border-[#2563EB] focus:ring-4 focus:ring-[#2563EB]/10"
                 >
@@ -1140,6 +1686,260 @@ export default function CorrectionsPage() {
           </Section>
 
           <Section
+            title="Arbeitszeit-Warnungen"
+            description={`Geprüfte und automatisch behobene Warnungen, maximal ${HISTORY_PAGE_SIZE} pro Seite.`}
+            action={
+              <Badge variant="muted">
+                Seite {complianceHistoryPage + 1}
+              </Badge>
+            }
+          >
+            {historyLoading ? (
+              <TableSkeleton rows={5} columns={5} />
+            ) : historyComplianceWarnings.length === 0 ? (
+              <EmptyState
+                title="Keine Arbeitszeit-Warnungen auf dieser Seite"
+                description="Für den gewählten Monat wurden keine geprüften oder automatisch behobenen Warnungen gefunden."
+                compact
+              />
+            ) : (
+              <>
+                <div className="space-y-3">
+                  {historyComplianceWarnings.map((warning) => {
+                    const details = warning.details || {};
+                    const isAcknowledged =
+                      warning.status === "acknowledged";
+                    const isResolved = warning.status === "resolved";
+                    const isDailyLimit =
+                      warning.warning_type === "daily_net_over_10h";
+                    const isRestPeriod =
+                      warning.warning_type === "rest_period_under_11h";
+                    const isInsufficientBreak =
+                      warning.warning_type === "insufficient_break";
+                    const isContinuousWork =
+                      warning.warning_type === "continuous_work_over_6h";
+
+                    return (
+                      <details
+                        key={warning.id}
+                        className="rounded-2xl border border-[#E2E8F0] bg-white"
+                      >
+                        <summary className="flex cursor-pointer list-none flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
+                          <div>
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="font-semibold text-[#0F172A]">
+                                {warning.employee_name}
+                              </span>
+
+                              <Badge
+                                variant={
+                                  isResolved ? "success" : "muted"
+                                }
+                                dot
+                              >
+                                {formatComplianceStatus(warning.status)}
+                              </Badge>
+                            </div>
+
+                            <p className="mt-1 text-sm text-[#64748B]">
+                              {formatDate(
+                                `${warning.warning_date}T12:00:00`
+                              )}{" "}
+                              · {formatComplianceType(warning.warning_type)}
+                            </p>
+                          </div>
+
+                          <span className="text-sm font-medium text-[#2563EB]">
+                            Details öffnen
+                          </span>
+                        </summary>
+
+                        <div className="border-t border-[#E2E8F0] p-4">
+                          <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+                            <div className="rounded-2xl bg-[#F8FAFC] p-4">
+                              <p className="text-xs font-medium text-[#64748B]">
+                                Arbeitstag
+                              </p>
+                              <p className="mt-1 text-sm font-semibold text-[#0F172A]">
+                                {formatDate(
+                                  `${warning.warning_date}T12:00:00`
+                                )}
+                              </p>
+                            </div>
+
+                            {isDailyLimit && (
+                              <>
+                                <div className="rounded-2xl bg-[#F8FAFC] p-4">
+                                  <p className="text-xs font-medium text-[#64748B]">
+                                    Nettoarbeitszeit
+                                  </p>
+                                  <p className="mt-1 text-sm font-semibold text-[#0F172A]">
+                                    {formatMinutes(details.net_minutes)}
+                                  </p>
+                                </div>
+
+                                <div className="rounded-2xl bg-[#F8FAFC] p-4">
+                                  <p className="text-xs font-medium text-[#64748B]">
+                                    Über 10 Stunden
+                                  </p>
+                                  <p className="mt-1 text-sm font-semibold text-[#B45309]">
+                                    {formatMinutes(details.excess_minutes)}
+                                  </p>
+                                </div>
+                              </>
+                            )}
+
+                            {isRestPeriod && (
+                              <>
+                                <div className="rounded-2xl bg-[#F8FAFC] p-4">
+                                  <p className="text-xs font-medium text-[#64748B]">
+                                    Tatsächliche Ruhezeit
+                                  </p>
+                                  <p className="mt-1 text-sm font-semibold text-[#0F172A]">
+                                    {formatMinutes(details.rest_minutes)}
+                                  </p>
+                                </div>
+
+                                <div className="rounded-2xl bg-[#F8FAFC] p-4">
+                                  <p className="text-xs font-medium text-[#64748B]">
+                                    Fehlende Ruhezeit
+                                  </p>
+                                  <p className="mt-1 text-sm font-semibold text-[#B45309]">
+                                    {formatMinutes(details.missing_minutes)}
+                                  </p>
+                                </div>
+                              </>
+                            )}
+
+                            {isInsufficientBreak && (
+                              <>
+                                <div className="rounded-2xl bg-[#F8FAFC] p-4">
+                                  <p className="text-xs font-medium text-[#64748B]">
+                                    Erfasste Pause
+                                  </p>
+                                  <p className="mt-1 text-sm font-semibold text-[#0F172A]">
+                                    {formatMinutes(details.break_minutes)}
+                                  </p>
+                                </div>
+
+                                <div className="rounded-2xl bg-[#F8FAFC] p-4">
+                                  <p className="text-xs font-medium text-[#64748B]">
+                                    Fehlende Pausenzeit
+                                  </p>
+                                  <p className="mt-1 text-sm font-semibold text-[#B45309]">
+                                    {formatMinutes(details.missing_break_minutes)}
+                                  </p>
+                                </div>
+                              </>
+                            )}
+
+                            {isContinuousWork && (
+                              <>
+                                <div className="rounded-2xl bg-[#F8FAFC] p-4">
+                                  <p className="text-xs font-medium text-[#64748B]">
+                                    Längste Arbeitsphase
+                                  </p>
+                                  <p className="mt-1 text-sm font-semibold text-[#0F172A]">
+                                    {formatMinutes(details.max_continuous_minutes)}
+                                  </p>
+                                </div>
+
+                                <div className="rounded-2xl bg-[#F8FAFC] p-4">
+                                  <p className="text-xs font-medium text-[#64748B]">
+                                    Über 6 Stunden
+                                  </p>
+                                  <p className="mt-1 text-sm font-semibold text-[#B45309]">
+                                    {formatMinutes(details.excess_minutes)}
+                                  </p>
+                                </div>
+                              </>
+                            )}
+
+                            <div className="rounded-2xl bg-[#F8FAFC] p-4">
+                              <p className="text-xs font-medium text-[#64748B]">
+                                Statuszeitpunkt
+                              </p>
+                              <p className="mt-1 text-sm font-semibold text-[#0F172A]">
+                                {formatLocalDateTime(
+                                  isAcknowledged
+                                    ? warning.acknowledged_at
+                                    : warning.resolved_at
+                                )}
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="mt-3 rounded-2xl bg-[#F8FAFC] p-4">
+                            <p className="text-xs font-medium text-[#64748B]">
+                              {isAcknowledged
+                                ? "Bemerkung zur Prüfung"
+                                : "Auflösungsgrund"}
+                            </p>
+
+                            <p className="mt-1 text-sm leading-6 text-[#0F172A]">
+                              {isAcknowledged
+                                ? warning.acknowledgement_note ||
+                                  "Keine Bemerkung hinterlegt."
+                                : warning.resolution_reason ||
+                                  "Die Warnung wurde nach einer Änderung der zugrunde liegenden Zeitdaten automatisch behoben."}
+                            </p>
+                          </div>
+                        </div>
+                      </details>
+                    );
+                  })}
+                </div>
+
+                <div className="mt-6 flex items-center justify-between border-t border-[#E2E8F0] pt-5">
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    disabled={
+                      complianceHistoryPage === 0 || historyLoading
+                    }
+                    onClick={async () => {
+                      setHistoryLoading(true);
+                      try {
+                        await loadComplianceHistory(
+                          Math.max(0, complianceHistoryPage - 1)
+                        );
+                      } finally {
+                        setHistoryLoading(false);
+                      }
+                    }}
+                  >
+                    Zurück
+                  </Button>
+
+                  <span className="text-sm text-[#64748B]">
+                    Seite {complianceHistoryPage + 1}
+                  </span>
+
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    disabled={
+                      !complianceHistoryHasMore || historyLoading
+                    }
+                    onClick={async () => {
+                      setHistoryLoading(true);
+                      try {
+                        await loadComplianceHistory(
+                          complianceHistoryPage + 1
+                        );
+                      } finally {
+                        setHistoryLoading(false);
+                      }
+                    }}
+                  >
+                    Weiter
+                  </Button>
+                </div>
+              </>
+            )}
+          </Section>
+
+          <Section
             title="Mitarbeiteranträge"
             description={`Genehmigte und abgelehnte Anträge, maximal ${HISTORY_PAGE_SIZE} pro Seite.`}
             action={
@@ -1247,6 +2047,101 @@ export default function CorrectionsPage() {
             )}
           </Section>
         </>
+      )}
+
+      {selectedComplianceWarning && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#0F172A]/40 p-4 backdrop-blur-sm">
+          <div
+            className="w-full max-w-xl rounded-3xl border border-[#E2E8F0] bg-white p-6 shadow-[0_24px_80px_rgba(15,23,42,0.22)]"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="compliance-acknowledgement-title"
+          >
+            <div className="flex flex-col gap-2">
+              <div className="flex flex-wrap items-center gap-3">
+                <h2
+                  id="compliance-acknowledgement-title"
+                  className="text-xl font-semibold text-[#0F172A]"
+                >
+                  Arbeitszeit-Warnung prüfen
+                </h2>
+
+                <Badge variant="warning" dot>
+                  {selectedComplianceWarning.employee_name}
+                </Badge>
+              </div>
+
+              <p className="text-sm leading-6 text-[#64748B]">
+                {formatComplianceType(
+                  selectedComplianceWarning.warning_type
+                )}{" "}
+                am{" "}
+                <span className="font-medium text-[#0F172A]">
+                  {formatDate(
+                    `${selectedComplianceWarning.warning_date}T12:00:00`
+                  )}
+                </span>
+              </p>
+
+              <p className="text-sm leading-6 text-[#64748B]">
+                Markiere die Warnung nur dann als geprüft, wenn die
+                zugrunde liegenden Zeitdaten korrekt sind und unverändert
+                bestehen bleiben sollen. Eine spätere Zeitkorrektur kann
+                die Warnung weiterhin automatisch auflösen.
+              </p>
+            </div>
+
+            <div className="mt-5 rounded-2xl bg-[#FFFBEB] p-4">
+              <p className="text-xs font-medium text-[#92400E]">
+                Hinweis
+              </p>
+              <p className="mt-1 text-sm leading-6 text-[#78350F]">
+                Mit dieser Aktion wird die Warnung nicht als behoben
+                markiert. Sie wird als geprüft dokumentiert und bleibt
+                historisch nachvollziehbar.
+              </p>
+            </div>
+
+            <div className="mt-5">
+              <label className="mb-2 block text-sm font-medium text-[#334155]">
+                Bemerkung{" "}
+                <span className="font-normal text-[#94A3B8]">
+                  (optional)
+                </span>
+              </label>
+
+              <textarea
+                value={acknowledgementNote}
+                onChange={(event) =>
+                  setAcknowledgementNote(event.target.value)
+                }
+                placeholder="z. B. Arbeitszeit geprüft; tatsächlicher Sondereinsatz."
+                rows={4}
+                className="w-full resize-none rounded-2xl border border-[#CBD5E1] bg-white px-4 py-3 text-sm text-[#0F172A] outline-none transition focus:border-[#2563EB] focus:ring-4 focus:ring-[#2563EB]/10"
+              />
+            </div>
+
+            <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+              <Button
+                type="button"
+                variant="secondary"
+                disabled={isAcknowledgingWarning}
+                onClick={closeComplianceAcknowledgement}
+              >
+                Abbrechen
+              </Button>
+
+              <Button
+                type="button"
+                variant="primary"
+                loading={isAcknowledgingWarning}
+                onClick={handleAcknowledgeComplianceWarning}
+              >
+                Prüfung bestätigen
+              </Button>
+            </div>
+          </div>
+        </div>
       )}
 
       {selectedConflict && (

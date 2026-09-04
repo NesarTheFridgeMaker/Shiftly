@@ -176,12 +176,6 @@ export default function SettingsPage() {
   const [payRuleDatevType, setPayRuleDatevType] = useState("");
 
   const [federalState, setFederalState] = useState("BW");
-  const [datevRegularHoursWageType, setDatevRegularHoursWageType] =
-    useState("100");
-  const [datevSalaryWageType, setDatevSalaryWageType] = useState("101");
-  const [datevOvertimeWageType, setDatevOvertimeWageType] = useState("130");
-  const [datevVacationWageType, setDatevVacationWageType] = useState("140");
-  const [datevSickWageType, setDatevSickWageType] = useState("141");
 
   const [confirmMessage, setConfirmMessage] = useState("");
   const [confirmAction, setConfirmAction] = useState<(() => void) | null>(null);
@@ -712,9 +706,7 @@ if (
 
     const { data, error } = await supabase
       .from("businesses")
-      .select(
-        "federal_state, datev_regular_hours_wage_type, datev_salary_wage_type, datev_overtime_wage_type, datev_vacation_wage_type, datev_sick_wage_type",
-      )
+      .select("federal_state")
       .eq("id", businessId)
       .single();
 
@@ -729,24 +721,9 @@ if (
     }
 
     if (data?.federal_state) setFederalState(data.federal_state);
-    if (data?.datev_regular_hours_wage_type) {
-      setDatevRegularHoursWageType(data.datev_regular_hours_wage_type);
-    }
-    if (data?.datev_salary_wage_type) {
-      setDatevSalaryWageType(data.datev_salary_wage_type);
-    }
-    if (data?.datev_overtime_wage_type) {
-      setDatevOvertimeWageType(data.datev_overtime_wage_type);
-    }
-    if (data?.datev_vacation_wage_type) {
-      setDatevVacationWageType(data.datev_vacation_wage_type);
-    }
-    if (data?.datev_sick_wage_type) {
-      setDatevSickWageType(data.datev_sick_wage_type);
-    }
   }
 
-  async function saveFederalState() {
+  async function saveBusinessSettings() {
     const businessId = await getBusinessId();
 
     if (!businessId) {
@@ -765,12 +742,6 @@ if (
         .from("businesses")
         .update({
           federal_state: federalState,
-          datev_regular_hours_wage_type:
-            datevRegularHoursWageType.trim() || null,
-          datev_salary_wage_type: datevSalaryWageType.trim() || null,
-          datev_overtime_wage_type: datevOvertimeWageType.trim() || null,
-          datev_vacation_wage_type: datevVacationWageType.trim() || null,
-          datev_sick_wage_type: datevSickWageType.trim() || null,
         })
         .eq("id", businessId);
 
@@ -787,7 +758,7 @@ if (
       showToast({
         type: "success",
         title: "Einstellungen gespeichert",
-        description: "Bundesland und DATEV-Lohnarten wurden aktualisiert.",
+        description: "Das Bundesland wurde aktualisiert.",
       });
     } finally {
       setIsSaving(false);
@@ -1128,8 +1099,8 @@ if (
       </div>
 
       <Section
-        title="Unternehmensdaten & DATEV"
-        description="Diese Daten steuern Feiertage, Exporte und Standard-Lohnarten."
+        title="Unternehmensdaten"
+        description="Diese Daten steuern unter anderem die Feiertagslogik des Betriebs."
         action={<Badge variant="primary">Basis</Badge>}
       >
         <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
@@ -1139,52 +1110,18 @@ if (
             onChange={(event) => setFederalState(event.target.value)}
             options={federalStateOptions}
           />
-
-          <Input
-            label="Reguläre Arbeitsstunden"
-            value={datevRegularHoursWageType}
-            onChange={(event) =>
-              setDatevRegularHoursWageType(event.target.value)
-            }
-            placeholder="z. B. 100"
-          />
-
-          <Input
-            label="Monatsgehalt"
-            value={datevSalaryWageType}
-            onChange={(event) => setDatevSalaryWageType(event.target.value)}
-            placeholder="z. B. 101"
-          />
-
-          <Input
-            label="Überstunden"
-            value={datevOvertimeWageType}
-            onChange={(event) => setDatevOvertimeWageType(event.target.value)}
-            placeholder="z. B. 130"
-          />
-
-          <Input
-            label="Urlaubstage"
-            value={datevVacationWageType}
-            onChange={(event) => setDatevVacationWageType(event.target.value)}
-            placeholder="z. B. 140"
-          />
-
-          <Input
-            label="Krankheitstage"
-            value={datevSickWageType}
-            onChange={(event) => setDatevSickWageType(event.target.value)}
-            placeholder="z. B. 141"
-          />
         </div>
 
         <div className="mt-6 flex flex-col gap-3 border-t border-[#E2E8F0] pt-5 md:flex-row md:items-center md:justify-between">
           <p className="text-sm leading-6 text-[#64748B]">
-            Tipp: Diese Lohnarten werden später für Excel- und DATEV-Exporte
-            verwendet.
+            DATEV-Einstellungen werden zentral unter Abrechnung verwaltet.
           </p>
 
-          <Button type="button" onClick={saveFederalState} loading={isSaving}>
+          <Button
+            type="button"
+            onClick={saveBusinessSettings}
+            loading={isSaving}
+          >
             Einstellungen speichern
           </Button>
         </div>

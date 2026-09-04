@@ -4,10 +4,12 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/services/employee_service.dart';
 import '../../../core/services/shift_service.dart';
+import '../../../core/services/working_time_service.dart';
 import '../../../shared/widgets/dipera_button.dart';
 import '../../../shared/widgets/dipera_card.dart';
 import '../../auth/providers/auth_providers.dart';
 import '../../documents/pages/documents_page.dart';
+import '../providers/time_account_providers.dart';
 
 class DashboardPage extends ConsumerWidget {
   const DashboardPage({super.key});
@@ -66,11 +68,13 @@ class DashboardPage extends ConsumerWidget {
     ref.invalidate(currentEmployeeProvider);
     ref.invalidate(todayShiftsProvider);
     ref.invalidate(nextShiftProvider);
+    ref.invalidate(currentTimeAccountOpeningBalanceProvider);
 
     await Future.wait([
       ref.read(currentEmployeeProvider.future),
       ref.read(todayShiftsProvider.future),
       ref.read(nextShiftProvider.future),
+      ref.read(currentTimeAccountOpeningBalanceProvider.future),
     ]);
   }
 
@@ -80,6 +84,8 @@ class DashboardPage extends ConsumerWidget {
     final employeeAsync = ref.watch(currentEmployeeProvider);
     final todayShiftsAsync = ref.watch(todayShiftsProvider);
     final nextShiftAsync = ref.watch(nextShiftProvider);
+    final timeAccountAsync =
+        ref.watch(currentTimeAccountOpeningBalanceProvider);
 
     return Scaffold(
       backgroundColor: const Color(0xFFF6F8FB),
@@ -262,11 +268,17 @@ class DashboardPage extends ConsumerWidget {
 
                     const SizedBox(height: 14),
 
-                    const Row(
+                    Row(
                       children: [
-                        Expanded(child: _BalanceCard()),
-                        SizedBox(width: 14),
-                        Expanded(child: _VacationCard()),
+                        Expanded(
+                          child: _BalanceCard(
+                            balanceAsync: timeAccountAsync,
+                          ),
+                        ),
+                        const SizedBox(width: 14),
+                        const Expanded(
+                          child: _VacationCard(),
+                        ),
                       ],
                     ),
 
@@ -628,11 +640,36 @@ class _NextShiftCard extends StatelessWidget {
 }
 
 class _BalanceCard extends StatelessWidget {
-  const _BalanceCard();
+  const _BalanceCard({
+    required this.balanceAsync,
+  });
+
+  final AsyncValue<TimeAccountOpeningBalance> balanceAsync;
+
+  String _formatMinutes(int totalMinutes) {
+    final sign = totalMinutes > 0
+        ? '+'
+        : totalMinutes < 0
+            ? '−'
+            : '';
+
+    final absoluteMinutes = totalMinutes.abs();
+    final hours = absoluteMinutes ~/ 60;
+    final minutes = absoluteMinutes % 60;
+
+    return '$sign$hours:${minutes.toString().padLeft(2, '0')} h';
+  }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+
+    final value = balanceAsync.when(
+      loading: () => '–:–– h',
+      error: (error, stackTrace) => 'Nicht verfügbar',
+      data: (balance) =>
+          _formatMinutes(balance.openingBalanceMinutes),
+    );
 
     return DiperaCard(
       padding: const EdgeInsets.all(18),
@@ -646,7 +683,7 @@ class _BalanceCard extends StatelessWidget {
           ),
           const SizedBox(height: 18),
           Text(
-            '+4:15 h',
+            value,
             style: theme.textTheme.titleLarge?.copyWith(
               color: const Color(0xFF101828),
               fontWeight: FontWeight.w800,

@@ -17,6 +17,7 @@ import {
   LogOut,
   ArrowUpRight,
   FileText,
+  Calculator,
   CreditCard,
   ChevronLeft,
   ChevronRight,
@@ -436,6 +437,11 @@ export default function AdminLayout({
       label: "Arbeitszeiten",
       href: "/admin/times",
       icon: Clock3,
+    },
+    {
+      label: "Abrechnung",
+      href: "/admin/payroll",
+      icon: Calculator,
     },
     {
       label: "Schichtplanung",

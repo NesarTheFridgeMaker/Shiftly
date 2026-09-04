@@ -49,6 +49,10 @@ type PositiveBalanceHandling =
   | "payout_with_limit";
 
 type NegativeBalanceHandling = "carry" | "ignore";
+type WorkdayPattern = "fixed" | "schedule_based";
+type ThreeMonthAverageBasis =
+  | "possible_workdays"
+  | "social_security_days";
 
 type EmployeeTimeAccountSettings = {
   id: string;
@@ -57,6 +61,10 @@ type EmployeeTimeAccountSettings = {
   absence_calculation_type: AbsenceCalculationType;
   fixed_absence_hours: number | null;
   prefer_scheduled_shift_for_absence: boolean;
+  absence_start_minutes: number | null;
+  cap_dynamic_absence_minutes: boolean;
+  dynamic_absence_cap_minutes: number | null;
+  three_month_average_basis: ThreeMonthAverageBasis | null;
 
   time_account_period: TimeAccountPeriod;
 
@@ -81,9 +89,12 @@ type Employee = {
   hours: string;
   vacation_days_per_year: number;
   work_days_per_week: number;
+  workday_pattern?: WorkdayPattern | null;
   wage_type?: WageType;
   hourly_rate?: number | null;
+  hourly_allowance_rate?: number | null;
   monthly_salary?: number | null;
+  overtime_hourly_rate?: number | null;
   datev_personnel_number?: string | null;
   cost_center?: string | null;
   eligible_for_surcharges?: boolean;
@@ -95,6 +106,11 @@ type Employee = {
 
   location_tracking_mode: LocationTrackingMode;
   location_tracking_note: string | null;
+};
+
+type EmployeeRegularWorkday = {
+  employee_id: string;
+  iso_weekday: number;
 };
 
 type EmployeeTargetHour = {
@@ -129,6 +145,7 @@ type EmployeeWithTargetHours = Employee & {
   notes: EmployeeNote[];
   invite: EmployeeInvite | null;
   time_account_settings: EmployeeTimeAccountSettings | null;
+  regular_workdays: number[];
 };
 
 type CreatedEmployeeInvite = {
@@ -140,6 +157,38 @@ type CreatedEmployeeInvite = {
 };
 
 
+
+const WEEKDAY_OPTIONS = [
+  { value: 1, label: "Mo" },
+  { value: 2, label: "Di" },
+  { value: 3, label: "Mi" },
+  { value: 4, label: "Do" },
+  { value: 5, label: "Fr" },
+  { value: 6, label: "Sa" },
+  { value: 7, label: "So" },
+] as const;
+
+const DYNAMIC_ABSENCE_TYPES: AbsenceCalculationType[] = [
+  "daily_average_13_weeks",
+  "weekly_average_13_weeks",
+  "three_month_average",
+  "twelve_month_average",
+];
+
+function isDynamicAbsenceType(type: AbsenceCalculationType) {
+  return DYNAMIC_ABSENCE_TYPES.includes(type);
+}
+
+function numberArraysEqual(first: number[], second: number[]) {
+  if (first.length !== second.length) return false;
+
+  const normalizedFirst = [...first].sort((a, b) => a - b);
+  const normalizedSecond = [...second].sort((a, b) => a - b);
+
+  return normalizedFirst.every(
+    (value, index) => value === normalizedSecond[index],
+  );
+}
 
 function formatNoteDate(dateString: string) {
   return new Date(dateString).toLocaleString("de-DE", {
@@ -194,6 +243,35 @@ export default function EmployeesPage() {
   const [weeklyHours, setWeeklyHours] = useState("40");
   const [vacationDays, setVacationDays] = useState("");
   const [workDaysPerWeek, setWorkDaysPerWeek] = useState("5");
+  const [newWorkdayPattern, setNewWorkdayPattern] =
+    useState<WorkdayPattern>("schedule_based");
+  const [newRegularWorkdays, setNewRegularWorkdays] = useState<number[]>([]);
+
+  const [newEmployeeEligibleForSurcharges, setNewEmployeeEligibleForSurcharges] =
+    useState(true);
+  const [newEmployeeOvertimeHourlyRate, setNewEmployeeOvertimeHourlyRate] =
+    useState("");
+
+  const [newAbsenceCalculationType, setNewAbsenceCalculationType] =
+    useState<AbsenceCalculationType>("daily_average_13_weeks");
+  const [newFixedAbsenceHours, setNewFixedAbsenceHours] = useState("");
+  const [newPreferScheduledShiftForAbsence, setNewPreferScheduledShiftForAbsence] =
+    useState(true);
+  const [newAbsenceStartMinutes, setNewAbsenceStartMinutes] = useState("0");
+  const [newCapDynamicAbsenceMinutes, setNewCapDynamicAbsenceMinutes] =
+    useState(false);
+  const [newDynamicAbsenceCapMinutes, setNewDynamicAbsenceCapMinutes] =
+    useState("");
+  const [newThreeMonthAverageBasis, setNewThreeMonthAverageBasis] =
+    useState<ThreeMonthAverageBasis>("possible_workdays");
+  const [newTimeAccountPeriod, setNewTimeAccountPeriod] =
+    useState<TimeAccountPeriod>("monthly");
+  const [newPositiveBalanceHandling, setNewPositiveBalanceHandling] =
+    useState<PositiveBalanceHandling>("carry");
+  const [newPayoutLimitHours, setNewPayoutLimitHours] = useState("");
+  const [newNegativeBalanceHandling, setNewNegativeBalanceHandling] =
+    useState<NegativeBalanceHandling>("carry");
+  const [newOpeningBalanceHours, setNewOpeningBalanceHours] = useState("0");
 
   const [popupMessage, setPopupMessage] = useState("");
   const [showPopup, setShowPopup] = useState(false);
@@ -206,6 +284,8 @@ export default function EmployeesPage() {
   const [newEmployeeWageType, setNewEmployeeWageType] = useState<WageType>("hourly");
 
   const [newEmployeeHourlyRate, setNewEmployeeHourlyRate] = useState("");
+  const [newEmployeeHourlyAllowanceRate, setNewEmployeeHourlyAllowanceRate] =
+    useState("");
   const [newEmployeeMonthlySalary, setNewEmployeeMonthlySalary] = useState("");
   const [newEmployeeDatevPersonnelNumber, setNewEmployeeDatevPersonnelNumber] =
     useState("");
@@ -217,6 +297,7 @@ export default function EmployeesPage() {
   const [editWageType, setEditWageType] = useState<WageType>("hourly");
 
   const [editHourlyRate, setEditHourlyRate] = useState("");
+  const [editHourlyAllowanceRate, setEditHourlyAllowanceRate] = useState("");
   const [editMonthlySalary, setEditMonthlySalary] = useState("");
   const [editDatevPersonnelNumber, setEditDatevPersonnelNumber] = useState("");
   const [editCostCenter, setEditCostCenter] = useState("");
@@ -232,11 +313,22 @@ export default function EmployeesPage() {
   const [editMonthlyHours, setEditMonthlyHours] = useState("");
   const [editVacationDays, setEditVacationDays] = useState("");
   const [editWorkDaysPerWeek, setEditWorkDaysPerWeek] = useState("");
+  const [editWorkdayPattern, setEditWorkdayPattern] =
+    useState<WorkdayPattern>("schedule_based");
+  const [editRegularWorkdays, setEditRegularWorkdays] = useState<number[]>([]);
+  const [editOvertimeHourlyRate, setEditOvertimeHourlyRate] = useState("");
 
   const [editAbsenceCalculationType, setEditAbsenceCalculationType] =
   useState<AbsenceCalculationType>("daily_average_13_weeks");
 
 const [editFixedAbsenceHours, setEditFixedAbsenceHours] = useState("");
+const [editAbsenceStartMinutes, setEditAbsenceStartMinutes] = useState("");
+const [editCapDynamicAbsenceMinutes, setEditCapDynamicAbsenceMinutes] =
+  useState(false);
+const [editDynamicAbsenceCapMinutes, setEditDynamicAbsenceCapMinutes] =
+  useState("");
+const [editThreeMonthAverageBasis, setEditThreeMonthAverageBasis] =
+  useState<ThreeMonthAverageBasis>("possible_workdays");
 
 const [
   editPreferScheduledShiftForAbsence,
@@ -280,6 +372,28 @@ const [editOpeningBalanceHours, setEditOpeningBalanceHours] = useState("0");
 
   const [isSavingLocationTracking, setIsSavingLocationTracking] =
     useState(false);
+  const [isSavingPayroll, setIsSavingPayroll] = useState(false);
+  const [showEmploymentImpactPopup, setShowEmploymentImpactPopup] =
+    useState(false);
+  const [employmentImpactCount, setEmploymentImpactCount] = useState(0);
+
+  async function refreshOpenPayrollSnapshotsForTargetChange(
+    employeeId: string,
+  ) {
+    const { data, error } = await supabase.rpc(
+      "refresh_open_payroll_snapshots_for_employee_target_change",
+      {
+        p_employee_id: employeeId,
+      },
+    );
+
+    if (error) {
+      console.error("PAYROLL TARGET REFRESH ERROR:", error);
+      throw error;
+    }
+
+    return Number(data ?? 0);
+  }
 
   async function loadEmployees() {
     setIsLoading(true);
@@ -332,7 +446,7 @@ const [editOpeningBalanceHours, setEditOpeningBalanceHours] = useState("0");
       const { data: employeeData, error: employeeError } = await supabase
         .from("employees")
         .select(
-          "id, name, role, pin, status, account_status, hours, vacation_days_per_year, work_days_per_week, wage_type, hourly_rate, monthly_salary, datev_personnel_number, cost_center, eligible_for_surcharges, birth_date, employment_start_date, employment_end_date, employment_scope, employment_type, location_tracking_mode, location_tracking_note",
+          "id, name, role, pin, status, account_status, hours, vacation_days_per_year, work_days_per_week, workday_pattern, wage_type, hourly_rate, hourly_allowance_rate, monthly_salary, overtime_hourly_rate, datev_personnel_number, cost_center, eligible_for_surcharges, birth_date, employment_start_date, employment_end_date, employment_scope, employment_type, location_tracking_mode, location_tracking_note",
         )
         .eq("business_id", businessId)
         .order("created_at", { ascending: false });
@@ -353,6 +467,7 @@ const [editOpeningBalanceHours, setEditOpeningBalanceHours] = useState("0");
       let notes: EmployeeNote[] = [];
       let invites: EmployeeInvite[] = [];
       let timeAccountSettings: EmployeeTimeAccountSettings[] = [];
+      let regularWorkdays: EmployeeRegularWorkday[] = [];
 
       if (employeeIds.length > 0) {
         const { data: targetData, error: targetError } = await supabase
@@ -382,6 +497,10 @@ const [editOpeningBalanceHours, setEditOpeningBalanceHours] = useState("0");
     absence_calculation_type,
     fixed_absence_hours,
     prefer_scheduled_shift_for_absence,
+    absence_start_minutes,
+    cap_dynamic_absence_minutes,
+    dynamic_absence_cap_minutes,
+    three_month_average_basis,
     time_account_period,
     positive_balance_handling,
     payout_limit_hours,
@@ -404,6 +523,24 @@ if (timeAccountSettingsError) {
   timeAccountSettings =
     (timeAccountSettingsData || []) as EmployeeTimeAccountSettings[];
 }
+
+        const { data: regularWorkdayData, error: regularWorkdayError } =
+          await supabase
+            .from("employee_regular_workdays")
+            .select("employee_id, iso_weekday")
+            .in("employee_id", employeeIds);
+
+        if (regularWorkdayError) {
+          console.error(regularWorkdayError);
+          showToast({
+            type: "warning",
+            title: "Regelmäßige Arbeitstage konnten nicht geladen werden",
+            description: "Die Mitarbeiter werden trotzdem angezeigt.",
+          });
+        } else {
+          regularWorkdays =
+            (regularWorkdayData || []) as EmployeeRegularWorkday[];
+        }
 
         const { data: notesData, error: notesError } = await supabase
           .from("employee_notes")
@@ -481,6 +618,10 @@ if (timeAccountSettingsError) {
           notes: employeeNotes,
           invite,
           time_account_settings: timeAccountSetting ?? null,
+          regular_workdays: regularWorkdays
+            .filter((item) => item.employee_id === employee.id)
+            .map((item) => item.iso_weekday)
+            .sort((a, b) => a - b),
         };
       });
 
@@ -625,35 +766,43 @@ if (
       const parsedMonthlyHours = Number(monthlyHours.replace(",", "."));
 
       if (
-  !Number.isFinite(parsedWeeklyHours) ||
-  parsedWeeklyHours <= 0
-) {
-  showToast({
-    type: "warning",
-    title: "Ungültige Wochen-Sollstunden",
-    description:
-      "Bitte gib gültige Wochen-Sollstunden ein.",
-  });
+        newTimeAccountPeriod === "weekly" &&
+        (!Number.isFinite(parsedWeeklyHours) || parsedWeeklyHours <= 0)
+      ) {
+        showToast({
+          type: "warning",
+          title: "Ungültige Wochen-Sollstunden",
+          description: "Bitte gib gültige Wochen-Sollstunden ein.",
+        });
+        return;
+      }
 
-  return;
-}
-
-if (
-  !Number.isFinite(parsedMonthlyHours) ||
-  parsedMonthlyHours <= 0
-) {
-  showToast({
-    type: "warning",
-    title: "Ungültige Monats-Sollstunden",
-    description:
-      "Bitte gib gültige Monats-Sollstunden ein.",
-  });
-
-  return;
-}
+      if (
+        newTimeAccountPeriod === "monthly" &&
+        (!Number.isFinite(parsedMonthlyHours) || parsedMonthlyHours <= 0)
+      ) {
+        showToast({
+          type: "warning",
+          title: "Ungültige Monats-Sollstunden",
+          description: "Bitte gib gültige Monats-Sollstunden ein.",
+        });
+        return;
+      }
 
       const parsedVacationDays = vacationDays ? Number(vacationDays) : 24;
-      const parsedWorkDays = Number(workDaysPerWeek);
+      const parsedWorkDays =
+        newWorkdayPattern === "fixed"
+          ? newRegularWorkdays.length
+          : Number(workDaysPerWeek);
+
+      if (newWorkdayPattern === "fixed" && newRegularWorkdays.length === 0) {
+        showToast({
+          type: "warning",
+          title: "Regelmäßige Arbeitstage fehlen",
+          description: "Bitte wähle mindestens einen regelmäßigen Arbeitstag aus.",
+        });
+        return;
+      }
 
       if (
         !Number.isInteger(parsedWorkDays) ||
@@ -769,33 +918,167 @@ if (
         ? Number(newEmployeeHourlyRate.replace(",", "."))
         : null;
 
+      const parsedHourlyAllowanceRate = newEmployeeHourlyAllowanceRate
+        ? Number(newEmployeeHourlyAllowanceRate.replace(",", "."))
+        : 0;
+
       const parsedMonthlySalary = newEmployeeMonthlySalary
         ? Number(newEmployeeMonthlySalary.replace(",", "."))
         : null;
 
+      const parsedOvertimeHourlyRate = newEmployeeOvertimeHourlyRate
+        ? Number(newEmployeeOvertimeHourlyRate.replace(",", "."))
+        : null;
+
+      const needsHourlyRate =
+        newEmployeeWageType === "hourly" ||
+        newEmployeeWageType === "fixed_hourly" ||
+        (newEmployeeWageType === "salary" &&
+          newEmployeeEligibleForSurcharges);
+
       if (
-        (newEmployeeWageType === "hourly" ||
-          newEmployeeWageType === "fixed_hourly") &&
-        parsedHourlyRate !== null &&
-        (!Number.isFinite(parsedHourlyRate) || parsedHourlyRate < 0)
+        needsHourlyRate &&
+        (parsedHourlyRate === null ||
+          !Number.isFinite(parsedHourlyRate) ||
+          parsedHourlyRate <= 0)
       ) {
         showToast({
           type: "warning",
-          title: "Ungültiger Stundenlohn",
-          description: "Bitte gib einen gültigen Stundenlohn ein.",
+          title:
+            newEmployeeWageType === "salary"
+              ? "Grundstundenlohn für Zuschläge fehlt"
+              : "Ungültiger Stundenlohn",
+          description:
+            newEmployeeWageType === "salary"
+              ? "Bitte gib einen positiven Grundstundenlohn für die Zuschlagsberechnung ein."
+              : "Bitte gib einen positiven Stundenlohn ein.",
+        });
+        return;
+      }
+
+      if (
+        !Number.isFinite(parsedHourlyAllowanceRate) ||
+        parsedHourlyAllowanceRate < 0
+      ) {
+        showToast({
+          type: "warning",
+          title: "Ungültige Stundenzulage",
+          description:
+            "Bitte gib eine gültige Stundenzulage von mindestens 0,00 € pro Stunde ein.",
         });
         return;
       }
 
       if (
         newEmployeeWageType === "salary" &&
-        parsedMonthlySalary !== null &&
-        (!Number.isFinite(parsedMonthlySalary) || parsedMonthlySalary < 0)
+        (parsedMonthlySalary === null ||
+          !Number.isFinite(parsedMonthlySalary) ||
+          parsedMonthlySalary <= 0)
       ) {
         showToast({
           type: "warning",
           title: "Ungültiges Monatsgehalt",
-          description: "Bitte gib ein gültiges Monatsgehalt ein.",
+          description: "Bitte gib ein positives Monatsgehalt ein.",
+        });
+        return;
+      }
+
+      const salaryNeedsOvertimeRate =
+        newEmployeeWageType === "salary" &&
+        newTimeAccountPeriod !== "none" &&
+        (newPositiveBalanceHandling === "payout" ||
+          newPositiveBalanceHandling === "payout_with_limit");
+
+      if (
+        salaryNeedsOvertimeRate &&
+        (parsedOvertimeHourlyRate === null ||
+          !Number.isFinite(parsedOvertimeHourlyRate) ||
+          parsedOvertimeHourlyRate <= 0)
+      ) {
+        showToast({
+          type: "warning",
+          title: "Überstunden-Auszahlungssatz fehlt",
+          description:
+            "Bitte gib für den Gehaltsempfänger einen positiven Stundenwert für Überstundenauszahlungen ein.",
+        });
+        return;
+      }
+
+      const newFixedHours =
+        newAbsenceCalculationType === "fixed" && newFixedAbsenceHours
+          ? Number(newFixedAbsenceHours.replace(",", "."))
+          : null;
+      const newAbsenceFallbackMinutes = Number(
+        newAbsenceStartMinutes.replace(",", "."),
+      );
+      const newDynamicCapMinutes =
+        newCapDynamicAbsenceMinutes && newDynamicAbsenceCapMinutes
+          ? Number(newDynamicAbsenceCapMinutes.replace(",", "."))
+          : null;
+      const newPayoutLimit =
+        newTimeAccountPeriod !== "none" &&
+        newPositiveBalanceHandling === "payout_with_limit" &&
+        newPayoutLimitHours
+          ? Number(newPayoutLimitHours.replace(",", "."))
+          : null;
+      const newOpeningBalance = Number(newOpeningBalanceHours.replace(",", "."));
+
+      if (
+        newFixedHours !== null &&
+        (!Number.isFinite(newFixedHours) || newFixedHours < 0)
+      ) {
+        showToast({
+          type: "warning",
+          title: "Ungültige Abwesenheitsstunden",
+          description: "Bitte gib gültige feste Abwesenheitsstunden ein.",
+        });
+        return;
+      }
+
+      if (
+        isDynamicAbsenceType(newAbsenceCalculationType) &&
+        (!Number.isFinite(newAbsenceFallbackMinutes) ||
+          newAbsenceFallbackMinutes < 0)
+      ) {
+        showToast({
+          type: "warning",
+          title: "Ungültiger Abwesenheits-Startwert",
+          description: "Bitte gib einen gültigen Fallbackwert in Minuten ein.",
+        });
+        return;
+      }
+
+      if (
+        newCapDynamicAbsenceMinutes &&
+        (newDynamicCapMinutes === null ||
+          !Number.isFinite(newDynamicCapMinutes) ||
+          newDynamicCapMinutes < 0)
+      ) {
+        showToast({
+          type: "warning",
+          title: "Ungültiger Abwesenheits-Cap",
+          description: "Bitte gib einen gültigen Maximalwert in Minuten ein.",
+        });
+        return;
+      }
+
+      if (
+        newPayoutLimit !== null &&
+        (!Number.isFinite(newPayoutLimit) || newPayoutLimit < 0)
+      ) {
+        showToast({
+          type: "warning",
+          title: "Ungültiges Auszahlungslimit",
+          description: "Bitte gib ein gültiges Auszahlungslimit ein.",
+        });
+        return;
+      }
+
+      if (!Number.isFinite(newOpeningBalance)) {
+        showToast({
+          type: "warning",
+          title: "Ungültiger Startsaldo",
+          description: "Bitte gib einen gültigen Startsaldo ein.",
         });
         return;
       }
@@ -818,14 +1101,23 @@ if (
             business_id: businessId,
             vacation_days_per_year: parsedVacationDays,
             work_days_per_week: parsedWorkDays,
+            workday_pattern: newWorkdayPattern,
             wage_type: newEmployeeWageType,
             hourly_rate:
               newEmployeeWageType === "hourly" ||
-              newEmployeeWageType === "fixed_hourly"
+              newEmployeeWageType === "fixed_hourly" ||
+              (newEmployeeWageType === "salary" &&
+                newEmployeeEligibleForSurcharges)
                 ? parsedHourlyRate
                 : null,
+            hourly_allowance_rate: parsedHourlyAllowanceRate,
             monthly_salary:
               newEmployeeWageType === "salary" ? parsedMonthlySalary : null,
+            overtime_hourly_rate:
+              newEmployeeWageType === "salary"
+                ? parsedOvertimeHourlyRate
+                : null,
+            eligible_for_surcharges: newEmployeeEligibleForSurcharges,
             datev_personnel_number:
               newEmployeeDatevPersonnelNumber.trim() || null,
             cost_center: newEmployeeCostCenter.trim() || null,
@@ -847,6 +1139,27 @@ if (
         return;
       }
 
+      if (newWorkdayPattern === "fixed" && newRegularWorkdays.length > 0) {
+        const { error: regularWorkdayInsertError } = await supabase
+          .from("employee_regular_workdays")
+          .insert(
+            newRegularWorkdays.map((isoWeekday) => ({
+              employee_id: insertedEmployee.id,
+              iso_weekday: isoWeekday,
+            })),
+          );
+
+        if (regularWorkdayInsertError) {
+          console.error(regularWorkdayInsertError);
+          showToast({
+            type: "error",
+            title: "Regelmäßige Arbeitstage konnten nicht gespeichert werden",
+            description: regularWorkdayInsertError.message,
+          });
+          return;
+        }
+      }
+
       const { error: targetHoursError } = await supabase
         .from("employee_target_hours")
         .insert([
@@ -866,6 +1179,76 @@ if (
             "Der Mitarbeiter wurde angelegt, aber die Sollstunden fehlen.",
         });
         return;
+      }
+
+      const { error: timeAccountInsertError } = await supabase
+        .from("employee_time_account_settings")
+        .insert([
+          {
+            employee_id: insertedEmployee.id,
+            absence_calculation_type: newAbsenceCalculationType,
+            fixed_absence_hours: newFixedHours,
+            prefer_scheduled_shift_for_absence:
+              newPreferScheduledShiftForAbsence,
+            absence_start_minutes: isDynamicAbsenceType(
+              newAbsenceCalculationType,
+            )
+              ? Math.round(newAbsenceFallbackMinutes)
+              : null,
+            cap_dynamic_absence_minutes:
+              isDynamicAbsenceType(newAbsenceCalculationType) &&
+              newCapDynamicAbsenceMinutes,
+            dynamic_absence_cap_minutes:
+              isDynamicAbsenceType(newAbsenceCalculationType) &&
+              newCapDynamicAbsenceMinutes
+                ? Math.round(newDynamicCapMinutes ?? 0)
+                : null,
+            three_month_average_basis:
+              newAbsenceCalculationType === "three_month_average"
+                ? newThreeMonthAverageBasis
+                : null,
+            time_account_period: newTimeAccountPeriod,
+            positive_balance_handling:
+              newTimeAccountPeriod === "none"
+                ? "carry"
+                : newPositiveBalanceHandling,
+            payout_limit_hours:
+              newTimeAccountPeriod === "none" ? null : newPayoutLimit,
+            negative_balance_handling:
+              newTimeAccountPeriod === "none"
+                ? "carry"
+                : newNegativeBalanceHandling,
+            opening_balance_hours:
+              newTimeAccountPeriod === "none" ? 0 : newOpeningBalance,
+          },
+        ]);
+
+      if (timeAccountInsertError) {
+        console.error(timeAccountInsertError);
+        showToast({
+          type: "error",
+          title: "Arbeitszeitkonto-Einstellungen konnten nicht gespeichert werden",
+          description: timeAccountInsertError.message,
+        });
+        return;
+      }
+
+      try {
+        await refreshOpenPayrollSnapshotsForTargetChange(
+          insertedEmployee.id,
+        );
+      } catch (payrollRefreshError) {
+        console.error(
+          "NEW EMPLOYEE PAYROLL TARGET REFRESH ERROR:",
+          payrollRefreshError,
+        );
+
+        showToast({
+          type: "warning",
+          title: "Payroll-Snapshots konnten nicht synchronisiert werden",
+          description:
+            "Der Mitarbeiter wurde angelegt, aber offene Abrechnungsperioden konnten nicht automatisch aktualisiert werden.",
+        });
       }
 
       const inviteCode = generateInviteCode();
@@ -921,9 +1304,26 @@ if (
       setWeeklyHours("40");
       setVacationDays("");
       setWorkDaysPerWeek("5");
+      setNewWorkdayPattern("schedule_based");
+      setNewRegularWorkdays([]);
       setNewEmployeeWageType("hourly");
       setNewEmployeeHourlyRate("");
+      setNewEmployeeHourlyAllowanceRate("");
       setNewEmployeeMonthlySalary("");
+      setNewEmployeeOvertimeHourlyRate("");
+      setNewEmployeeEligibleForSurcharges(true);
+      setNewAbsenceCalculationType("daily_average_13_weeks");
+      setNewFixedAbsenceHours("");
+      setNewPreferScheduledShiftForAbsence(true);
+      setNewAbsenceStartMinutes("0");
+      setNewCapDynamicAbsenceMinutes(false);
+      setNewDynamicAbsenceCapMinutes("");
+      setNewThreeMonthAverageBasis("possible_workdays");
+      setNewTimeAccountPeriod("monthly");
+      setNewPositiveBalanceHandling("carry");
+      setNewPayoutLimitHours("");
+      setNewNegativeBalanceHandling("carry");
+      setNewOpeningBalanceHours("0");
       setNewEmployeeDatevPersonnelNumber("");
       setNewEmployeeCostCenter("");
       setShowForm(false);
@@ -1521,6 +1921,22 @@ async function handleOpenWhatsAppInvite() {
       }
     }
 
+    try {
+      await refreshOpenPayrollSnapshotsForTargetChange(employeeId);
+    } catch (payrollRefreshError) {
+      console.error(
+        "MONTHLY HOURS PAYROLL TARGET REFRESH ERROR:",
+        payrollRefreshError,
+      );
+
+      showToast({
+        type: "warning",
+        title: "Offene Abrechnungen konnten nicht aktualisiert werden",
+        description:
+          "Die Sollstunden wurden gespeichert, aber offene Payroll-Snapshots konnten nicht automatisch neu berechnet werden.",
+      });
+    }
+
     await loadEmployees();
 
     setUnsavedMonthlyHours((current) => ({
@@ -1813,6 +2229,8 @@ function handleOpenEditPayroll(employee: EmployeeWithTargetHours) {
   setEditMonthlyHours(String(employee.monthly_target_hours ?? 173));
   setEditVacationDays(String(employee.vacation_days_per_year ?? 24));
   setEditWorkDaysPerWeek(String(employee.work_days_per_week ?? 5));
+  setEditWorkdayPattern(employee.workday_pattern ?? "schedule_based");
+  setEditRegularWorkdays(employee.regular_workdays ?? []);
 
   setEditWageType(
     employee.wage_type === "fixed_hourly"
@@ -1829,10 +2247,24 @@ function handleOpenEditPayroll(employee: EmployeeWithTargetHours) {
       : "",
   );
 
+  setEditHourlyAllowanceRate(
+    employee.hourly_allowance_rate !== null &&
+      employee.hourly_allowance_rate !== undefined
+      ? String(employee.hourly_allowance_rate)
+      : "",
+  );
+
   setEditMonthlySalary(
     employee.monthly_salary !== null &&
       employee.monthly_salary !== undefined
       ? String(employee.monthly_salary)
+      : "",
+  );
+
+  setEditOvertimeHourlyRate(
+    employee.overtime_hourly_rate !== null &&
+      employee.overtime_hourly_rate !== undefined
+      ? String(employee.overtime_hourly_rate)
       : "",
   );
 
@@ -1864,6 +2296,29 @@ function handleOpenEditPayroll(employee: EmployeeWithTargetHours) {
   setEditPreferScheduledShiftForAbsence(
     timeAccountSettings?.prefer_scheduled_shift_for_absence ??
       true,
+  );
+
+  setEditAbsenceStartMinutes(
+    timeAccountSettings?.absence_start_minutes !== null &&
+      timeAccountSettings?.absence_start_minutes !== undefined
+      ? String(timeAccountSettings.absence_start_minutes)
+      : "0",
+  );
+
+  setEditCapDynamicAbsenceMinutes(
+    timeAccountSettings?.cap_dynamic_absence_minutes ?? false,
+  );
+
+  setEditDynamicAbsenceCapMinutes(
+    timeAccountSettings?.dynamic_absence_cap_minutes !== null &&
+      timeAccountSettings?.dynamic_absence_cap_minutes !== undefined
+      ? String(timeAccountSettings.dynamic_absence_cap_minutes)
+      : "",
+  );
+
+  setEditThreeMonthAverageBasis(
+    timeAccountSettings?.three_month_average_basis ??
+      "possible_workdays",
   );
 
   setEditTimeAccountPeriod(
@@ -1901,8 +2356,16 @@ function handleOpenEditPayroll(employee: EmployeeWithTargetHours) {
     setEditMonthlyHours("");
     setEditVacationDays("");
     setEditWorkDaysPerWeek("");
+    setEditWorkdayPattern("schedule_based");
+    setEditRegularWorkdays([]);
+    setEditHourlyAllowanceRate("");
+    setEditOvertimeHourlyRate("");
     setEditAbsenceCalculationType("daily_average_13_weeks");
     setEditFixedAbsenceHours("");
+    setEditAbsenceStartMinutes("");
+    setEditCapDynamicAbsenceMinutes(false);
+    setEditDynamicAbsenceCapMinutes("");
+    setEditThreeMonthAverageBasis("possible_workdays");
     setEditPreferScheduledShiftForAbsence(true);
     setEditTimeAccountPeriod("monthly");
     setEditPositiveBalanceHandling("carry");
@@ -1911,8 +2374,14 @@ function handleOpenEditPayroll(employee: EmployeeWithTargetHours) {
     setEditOpeningBalanceHours("0");
   }
 
-  async function handleSaveEmployeePayroll() {
-    if (!editingPayrollEmployee) return;
+  async function handleSaveEmployeePayroll(
+    confirmClosedPeriodImpact = false,
+  ) {
+    if (!editingPayrollEmployee || isSavingPayroll) return;
+
+    setIsSavingPayroll(true);
+
+    try {
 
     if (!canEditPayroll) {
       showToast({
@@ -1957,9 +2426,24 @@ function handleOpenEditPayroll(employee: EmployeeWithTargetHours) {
     const weeklyTargetHours = Number(editWeeklyHours.replace(",", "."));
     const monthlyTargetHours = Number(editMonthlyHours.replace(",", "."));
     const vacationDaysPerYear = Number(editVacationDays.replace(",", "."));
-    const workDays = Number(editWorkDaysPerWeek);
+    const workDays =
+      editWorkdayPattern === "fixed"
+        ? editRegularWorkdays.length
+        : Number(editWorkDaysPerWeek);
 
-    if (!Number.isFinite(weeklyTargetHours) || weeklyTargetHours <= 0) {
+    if (editWorkdayPattern === "fixed" && editRegularWorkdays.length === 0) {
+      showToast({
+        type: "warning",
+        title: "Regelmäßige Arbeitstage fehlen",
+        description: "Bitte wähle mindestens einen regelmäßigen Arbeitstag aus.",
+      });
+      return;
+    }
+
+    if (
+      editTimeAccountPeriod === "weekly" &&
+      (!Number.isFinite(weeklyTargetHours) || weeklyTargetHours <= 0)
+    ) {
       showToast({
         type: "warning",
         title: "Ungültige Wochen-Sollstunden",
@@ -1968,7 +2452,10 @@ function handleOpenEditPayroll(employee: EmployeeWithTargetHours) {
       return;
     }
 
-    if (!Number.isFinite(monthlyTargetHours) || monthlyTargetHours <= 0) {
+    if (
+      editTimeAccountPeriod === "monthly" &&
+      (!Number.isFinite(monthlyTargetHours) || monthlyTargetHours <= 0)
+    ) {
       showToast({
         type: "warning",
         title: "Ungültige Monats-Sollstunden",
@@ -1999,25 +2486,57 @@ function handleOpenEditPayroll(employee: EmployeeWithTargetHours) {
       return;
     }
 
-    const hourlyRate =
-      (editWageType === "hourly" || editWageType === "fixed_hourly") &&
-      editHourlyRate
-        ? Number(editHourlyRate.replace(",", "."))
-        : null;
+    const hourlyRate = editHourlyRate
+      ? Number(editHourlyRate.replace(",", "."))
+      : null;
+
+    const hourlyAllowanceRate = editHourlyAllowanceRate
+      ? Number(editHourlyAllowanceRate.replace(",", "."))
+      : 0;
 
     const monthlySalary =
       editWageType === "salary" && editMonthlySalary
         ? Number(editMonthlySalary.replace(",", "."))
         : null;
 
+    const overtimeHourlyRate = editOvertimeHourlyRate
+      ? Number(editOvertimeHourlyRate.replace(",", "."))
+      : null;
+
+    const needsHourlyRate =
+      editWageType === "hourly" ||
+      editWageType === "fixed_hourly" ||
+      (editWageType === "salary" && editEligibleForSurcharges);
+
     if (
-      (editWageType === "hourly" || editWageType === "fixed_hourly") &&
-      (hourlyRate === null || !Number.isFinite(hourlyRate) || hourlyRate < 0)
+      needsHourlyRate &&
+      (hourlyRate === null ||
+        !Number.isFinite(hourlyRate) ||
+        hourlyRate <= 0)
     ) {
       showToast({
         type: "warning",
-        title: "Ungültiger Stundenlohn",
-        description: "Bitte gib einen gültigen Stundenlohn ein.",
+        title:
+          editWageType === "salary"
+            ? "Grundstundenlohn für Zuschläge fehlt"
+            : "Ungültiger Stundenlohn",
+        description:
+          editWageType === "salary"
+            ? "Bitte gib einen positiven Grundstundenlohn für die Zuschlagsberechnung ein."
+            : "Bitte gib einen positiven Stundenlohn ein.",
+      });
+      return;
+    }
+
+    if (
+      !Number.isFinite(hourlyAllowanceRate) ||
+      hourlyAllowanceRate < 0
+    ) {
+      showToast({
+        type: "warning",
+        title: "Ungültige Stundenzulage",
+        description:
+          "Bitte gib eine gültige Stundenzulage von mindestens 0,00 € pro Stunde ein.",
       });
       return;
     }
@@ -2026,12 +2545,117 @@ function handleOpenEditPayroll(employee: EmployeeWithTargetHours) {
       editWageType === "salary" &&
       (monthlySalary === null ||
         !Number.isFinite(monthlySalary) ||
-        monthlySalary < 0)
+        monthlySalary <= 0)
     ) {
       showToast({
         type: "warning",
         title: "Ungültiges Monatsgehalt",
-        description: "Bitte gib ein gültiges Monatsgehalt ein.",
+        description: "Bitte gib ein positives Monatsgehalt ein.",
+      });
+      return;
+    }
+
+    const salaryNeedsOvertimeRate =
+      editWageType === "salary" &&
+      editTimeAccountPeriod !== "none" &&
+      (editPositiveBalanceHandling === "payout" ||
+        editPositiveBalanceHandling === "payout_with_limit");
+
+    if (
+      salaryNeedsOvertimeRate &&
+      (overtimeHourlyRate === null ||
+        !Number.isFinite(overtimeHourlyRate) ||
+        overtimeHourlyRate <= 0)
+    ) {
+      showToast({
+        type: "warning",
+        title: "Überstunden-Auszahlungssatz fehlt",
+        description:
+          "Bitte gib für den Gehaltsempfänger einen positiven Stundenwert für Überstundenauszahlungen ein.",
+      });
+      return;
+    }
+
+    const fixedAbsenceHours =
+      editAbsenceCalculationType === "fixed" && editFixedAbsenceHours
+        ? Number(editFixedAbsenceHours.replace(",", "."))
+        : null;
+
+    const absenceStartMinutes = Number(
+      (editAbsenceStartMinutes || "0").replace(",", "."),
+    );
+
+    const dynamicAbsenceCapMinutes =
+      editCapDynamicAbsenceMinutes && editDynamicAbsenceCapMinutes
+        ? Number(editDynamicAbsenceCapMinutes.replace(",", "."))
+        : null;
+
+    const payoutLimitHours =
+      editTimeAccountPeriod !== "none" &&
+      editPositiveBalanceHandling === "payout_with_limit" &&
+      editPayoutLimitHours
+        ? Number(editPayoutLimitHours.replace(",", "."))
+        : null;
+
+    const openingBalanceHours = Number(
+      (editOpeningBalanceHours || "0").replace(",", "."),
+    );
+
+    if (
+      fixedAbsenceHours !== null &&
+      (!Number.isFinite(fixedAbsenceHours) || fixedAbsenceHours < 0)
+    ) {
+      showToast({
+        type: "warning",
+        title: "Ungültige Abwesenheitsstunden",
+        description: "Bitte gib gültige feste Abwesenheitsstunden ein.",
+      });
+      return;
+    }
+
+    if (
+      isDynamicAbsenceType(editAbsenceCalculationType) &&
+      (!Number.isFinite(absenceStartMinutes) || absenceStartMinutes < 0)
+    ) {
+      showToast({
+        type: "warning",
+        title: "Ungültiger Abwesenheits-Startwert",
+        description: "Bitte gib einen gültigen Fallbackwert in Minuten ein.",
+      });
+      return;
+    }
+
+    if (
+      editCapDynamicAbsenceMinutes &&
+      (dynamicAbsenceCapMinutes === null ||
+        !Number.isFinite(dynamicAbsenceCapMinutes) ||
+        dynamicAbsenceCapMinutes < 0)
+    ) {
+      showToast({
+        type: "warning",
+        title: "Ungültiger Abwesenheits-Cap",
+        description: "Bitte gib einen gültigen Maximalwert in Minuten ein.",
+      });
+      return;
+    }
+
+    if (
+      payoutLimitHours !== null &&
+      (!Number.isFinite(payoutLimitHours) || payoutLimitHours < 0)
+    ) {
+      showToast({
+        type: "warning",
+        title: "Ungültiges Auszahlungslimit",
+        description: "Bitte gib ein gültiges Auszahlungslimit in Stunden ein.",
+      });
+      return;
+    }
+
+    if (!Number.isFinite(openingBalanceHours)) {
+      showToast({
+        type: "warning",
+        title: "Ungültiger Startsaldo",
+        description: "Bitte gib einen gültigen Startsaldo für das Arbeitszeitkonto ein.",
       });
       return;
     }
@@ -2047,22 +2671,118 @@ function handleOpenEditPayroll(employee: EmployeeWithTargetHours) {
       return;
     }
 
+    const employmentDatesChanged =
+      editEmploymentStartDate !==
+        (editingPayrollEmployee.employment_start_date ?? "") ||
+      (editEmploymentEndDate || "") !==
+        (editingPayrollEmployee.employment_end_date ?? "");
+
+    const originalTimeAccountPeriod =
+      editingPayrollEmployee.time_account_settings?.time_account_period ??
+      "monthly";
+
+    const targetBasisChanged =
+      employmentDatesChanged ||
+      editWorkdayPattern !==
+        (editingPayrollEmployee.workday_pattern ?? "schedule_based") ||
+      workDays !== editingPayrollEmployee.work_days_per_week ||
+      !numberArraysEqual(
+        editRegularWorkdays,
+        editingPayrollEmployee.regular_workdays ?? [],
+      ) ||
+      weeklyTargetHours !== editingPayrollEmployee.weekly_target_hours ||
+      monthlyTargetHours !== editingPayrollEmployee.monthly_target_hours ||
+      editTimeAccountPeriod !== originalTimeAccountPeriod;
+
+    if (employmentDatesChanged && !confirmClosedPeriodImpact) {
+      const { data: impactRows, error: impactError } = await supabase.rpc(
+        "check_employment_date_change_impact",
+        {
+          p_employee_id: editingPayrollEmployee.id,
+          p_new_start_date: editEmploymentStartDate,
+          p_new_end_date: editEmploymentEndDate || null,
+        },
+      );
+
+      if (impactError) {
+        console.error("EMPLOYMENT DATE IMPACT ERROR:", impactError);
+        showToast({
+          type: "error",
+          title: "Auswirkungen konnten nicht geprüft werden",
+          description: impactError.message,
+        });
+        return;
+      }
+
+      const impactCount = impactRows?.length ?? 0;
+
+      if (impactCount > 0) {
+        setEmploymentImpactCount(impactCount);
+        setShowEmploymentImpactPopup(true);
+        return;
+      }
+    }
+
+    /*
+     * Regelmäßige Wochentage zuerst synchronisieren.
+     * Bei schedule_based werden alte fixe Zuordnungen entfernt.
+     */
+    const { error: regularWorkdayDeleteError } = await supabase
+      .from("employee_regular_workdays")
+      .delete()
+      .eq("employee_id", editingPayrollEmployee.id);
+
+    if (regularWorkdayDeleteError) {
+      console.error("REGULAR WORKDAY DELETE ERROR:", regularWorkdayDeleteError);
+      showToast({
+        type: "error",
+        title: "Regelmäßige Arbeitstage konnten nicht aktualisiert werden",
+        description: regularWorkdayDeleteError.message,
+      });
+      return;
+    }
+
+    if (editWorkdayPattern === "fixed") {
+      const { error: regularWorkdayInsertError } = await supabase
+        .from("employee_regular_workdays")
+        .insert(
+          editRegularWorkdays.map((isoWeekday) => ({
+            employee_id: editingPayrollEmployee.id,
+            iso_weekday: isoWeekday,
+          })),
+        );
+
+      if (regularWorkdayInsertError) {
+        console.error("REGULAR WORKDAY INSERT ERROR:", regularWorkdayInsertError);
+        showToast({
+          type: "error",
+          title: "Regelmäßige Arbeitstage konnten nicht gespeichert werden",
+          description: regularWorkdayInsertError.message,
+        });
+        return;
+      }
+    }
+
     const { error: employeeUpdateError } = await supabase
       .from("employees")
       .update({
         birth_date: editBirthDate,
-        employment_start_date: editEmploymentStartDate,
-        employment_end_date: editEmploymentEndDate || null,
         employment_scope: editEmploymentScope,
         employment_type: editEmploymentType,
         vacation_days_per_year: vacationDaysPerYear,
         work_days_per_week: workDays,
+        workday_pattern: editWorkdayPattern,
         wage_type: editWageType,
         hourly_rate:
-          editWageType === "hourly" || editWageType === "fixed_hourly"
+          editWageType === "hourly" ||
+          editWageType === "fixed_hourly" ||
+          (editWageType === "salary" && editEligibleForSurcharges)
             ? hourlyRate
             : null,
+        hourly_allowance_rate: hourlyAllowanceRate,
         monthly_salary: editWageType === "salary" ? monthlySalary : null,
+        overtime_hourly_rate:
+          editWageType === "salary" ? overtimeHourlyRate : null,
         datev_personnel_number: editDatevPersonnelNumber.trim() || null,
         cost_center: editCostCenter.trim() || null,
         eligible_for_surcharges: editEligibleForSurcharges,
@@ -2079,6 +2799,28 @@ function handleOpenEditPayroll(employee: EmployeeWithTargetHours) {
         description: employeeUpdateError.message,
       });
       return;
+    }
+
+    if (employmentDatesChanged) {
+      const { error: employmentDateUpdateError } = await supabase.rpc(
+        "update_employee_employment_dates",
+        {
+          p_employee_id: editingPayrollEmployee.id,
+          p_new_start_date: editEmploymentStartDate,
+          p_new_end_date: editEmploymentEndDate || null,
+          p_confirm_closed_period_impact: confirmClosedPeriodImpact,
+        },
+      );
+
+      if (employmentDateUpdateError) {
+        console.error("EMPLOYMENT DATE UPDATE ERROR:", employmentDateUpdateError);
+        showToast({
+          type: "error",
+          title: "Eintritts-/Austrittsdatum konnte nicht gespeichert werden",
+          description: employmentDateUpdateError.message,
+        });
+        return;
+      }
     }
 
     const { data: existingTarget, error: targetLookupError } = await supabase
@@ -2140,57 +2882,6 @@ function handleOpenEditPayroll(employee: EmployeeWithTargetHours) {
       }
     }
 
-    const fixedAbsenceHours =
-  editAbsenceCalculationType === "fixed" &&
-  editFixedAbsenceHours
-    ? Number(editFixedAbsenceHours.replace(",", "."))
-    : null;
-
-const payoutLimitHours =
-  editPositiveBalanceHandling === "payout_with_limit" &&
-  editPayoutLimitHours
-    ? Number(editPayoutLimitHours.replace(",", "."))
-    : null;
-
-const openingBalanceHours =
-  Number(editOpeningBalanceHours.replace(",", "."));
-
-if (
-  fixedAbsenceHours !== null &&
-  (!Number.isFinite(fixedAbsenceHours) || fixedAbsenceHours < 0)
-) {
-  showToast({
-    type: "warning",
-    title: "Ungültige Abwesenheitsstunden",
-    description:
-      "Bitte gib gültige feste Abwesenheitsstunden ein.",
-  });
-  return;
-}
-
-if (
-  payoutLimitHours !== null &&
-  (!Number.isFinite(payoutLimitHours) || payoutLimitHours < 0)
-) {
-  showToast({
-    type: "warning",
-    title: "Ungültiges Auszahlungslimit",
-    description:
-      "Bitte gib ein gültiges Auszahlungslimit in Stunden ein.",
-  });
-  return;
-}
-
-if (!Number.isFinite(openingBalanceHours)) {
-  showToast({
-    type: "warning",
-    title: "Ungültiger Startsaldo",
-    description:
-      "Bitte gib einen gültigen Startsaldo für das Arbeitszeitkonto ein.",
-  });
-  return;
-}
-
 const {
   data: existingTimeAccountSettings,
   error: timeAccountLookupError,
@@ -2219,13 +2910,34 @@ const timeAccountPayload = {
   fixed_absence_hours: fixedAbsenceHours,
   prefer_scheduled_shift_for_absence:
     editPreferScheduledShiftForAbsence,
+  absence_start_minutes: isDynamicAbsenceType(editAbsenceCalculationType)
+    ? Math.round(absenceStartMinutes)
+    : null,
+  cap_dynamic_absence_minutes:
+    isDynamicAbsenceType(editAbsenceCalculationType) &&
+    editCapDynamicAbsenceMinutes,
+  dynamic_absence_cap_minutes:
+    isDynamicAbsenceType(editAbsenceCalculationType) &&
+    editCapDynamicAbsenceMinutes
+      ? Math.round(dynamicAbsenceCapMinutes ?? 0)
+      : null,
+  three_month_average_basis:
+    editAbsenceCalculationType === "three_month_average"
+      ? editThreeMonthAverageBasis
+      : null,
   time_account_period: editTimeAccountPeriod,
   positive_balance_handling:
-    editPositiveBalanceHandling,
-  payout_limit_hours: payoutLimitHours,
+    editTimeAccountPeriod === "none"
+      ? "carry"
+      : editPositiveBalanceHandling,
+  payout_limit_hours:
+    editTimeAccountPeriod === "none" ? null : payoutLimitHours,
   negative_balance_handling:
-    editNegativeBalanceHandling,
-  opening_balance_hours: openingBalanceHours,
+    editTimeAccountPeriod === "none"
+      ? "carry"
+      : editNegativeBalanceHandling,
+  opening_balance_hours:
+    editTimeAccountPeriod === "none" ? 0 : openingBalanceHours,
   updated_at: new Date().toISOString(),
 };
 
@@ -2275,6 +2987,26 @@ if (existingTimeAccountSettings) {
   }
 }
 
+    if (targetBasisChanged) {
+      try {
+        await refreshOpenPayrollSnapshotsForTargetChange(
+          editingPayrollEmployee.id,
+        );
+      } catch (payrollRefreshError) {
+        console.error(
+          "EMPLOYEE PAYROLL TARGET REFRESH ERROR:",
+          payrollRefreshError,
+        );
+
+        showToast({
+          type: "warning",
+          title: "Offene Abrechnungen konnten nicht aktualisiert werden",
+          description:
+            "Die Mitarbeiterdaten wurden gespeichert, aber offene Payroll-Snapshots konnten nicht automatisch neu berechnet werden.",
+        });
+      }
+    }
+
     const employeeName = editingPayrollEmployee.name;
 
     closeEmployeeEditDialog();
@@ -2285,6 +3017,9 @@ if (existingTimeAccountSettings) {
       title: "Mitarbeiterdaten gespeichert",
       description: `Die Stamm- und Lohndaten von ${employeeName} wurden aktualisiert.`,
     });
+    } finally {
+      setIsSavingPayroll(false);
+    }
   }
 
   const activeEmployees = employees
@@ -2503,27 +3238,109 @@ const inactiveEmployees = employees
                 maxLength={4}
               />
 
-              <Input
-                label="Wochen-Sollstunden"
-                type="number"
-                min="0"
-                step="0.25"
-                placeholder="z. B. 38"
-                value={weeklyHours}
-                onChange={(event) => setWeeklyHours(event.target.value)}
+              <Select
+                label="Arbeitsmuster"
+                value={newWorkdayPattern}
+                onChange={(event) =>
+                  setNewWorkdayPattern(event.target.value as WorkdayPattern)
+                }
                 disabled={isSaving}
+                options={[
+                  { value: "schedule_based", label: "Wechselnde Tage nach Dienstplan" },
+                  { value: "fixed", label: "Feste regelmäßige Wochentage" },
+                ]}
               />
 
-              <Input
-                label="Monats-Sollstunden"
-                type="number"
-                min="0"
-                step="0.01"
-                placeholder="z. B. 165.30"
-                value={monthlyHours}
-                onChange={(event) => setMonthlyHours(event.target.value)}
+              {newWorkdayPattern === "schedule_based" && (
+                <Input
+                  label="Arbeitstage/Woche"
+                  type="number"
+                  min="1"
+                  max="7"
+                  placeholder="z. B. 5"
+                  value={workDaysPerWeek}
+                  onChange={(event) => setWorkDaysPerWeek(event.target.value)}
+                  disabled={isSaving}
+                />
+              )}
+
+              {newWorkdayPattern === "fixed" && (
+                <div className="md:col-span-2 xl:col-span-2">
+                  <p className="mb-2 text-sm font-medium text-[#334155]">
+                    Regelmäßige Arbeitstage
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {WEEKDAY_OPTIONS.map((day) => {
+                      const active = newRegularWorkdays.includes(day.value);
+                      return (
+                        <button
+                          key={day.value}
+                          type="button"
+                          disabled={isSaving}
+                          onClick={() =>
+                            setNewRegularWorkdays((current) =>
+                              active
+                                ? current.filter((value) => value !== day.value)
+                                : [...current, day.value].sort((a, b) => a - b),
+                            )
+                          }
+                          className={[
+                            "rounded-xl border px-3 py-2 text-sm font-semibold transition",
+                            active
+                              ? "border-[#005CA8] bg-[#E8F2FB] text-[#005CA8]"
+                              : "border-[#CBD5E1] bg-white text-[#475569] hover:border-[#94A3B8]",
+                          ].join(" ")}
+                        >
+                          {day.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <p className="mt-2 text-xs text-[#64748B]">
+                    {newRegularWorkdays.length} Arbeitstag(e) pro Woche
+                  </p>
+                </div>
+              )}
+
+              <Select
+                label="Arbeitszeitkonto"
+                value={newTimeAccountPeriod}
+                onChange={(event) =>
+                  setNewTimeAccountPeriod(event.target.value as TimeAccountPeriod)
+                }
                 disabled={isSaving}
+                options={[
+                  { value: "none", label: "Kein Arbeitszeitkonto" },
+                  { value: "weekly", label: "Wochenkonto" },
+                  { value: "monthly", label: "Monatskonto" },
+                ]}
               />
+
+              {newTimeAccountPeriod === "weekly" && (
+                <Input
+                  label="Wochen-Sollstunden"
+                  type="number"
+                  min="0"
+                  step="0.25"
+                  placeholder="z. B. 38"
+                  value={weeklyHours}
+                  onChange={(event) => setWeeklyHours(event.target.value)}
+                  disabled={isSaving}
+                />
+              )}
+
+              {newTimeAccountPeriod === "monthly" && (
+                <Input
+                  label="Monats-Sollstunden"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  placeholder="z. B. 165,30"
+                  value={monthlyHours}
+                  onChange={(event) => setMonthlyHours(event.target.value)}
+                  disabled={isSaving}
+                />
+              )}
 
               <Select
                 label="Lohnart"
@@ -2551,11 +3368,17 @@ const inactiveEmployees = employees
               />
 
               {(newEmployeeWageType === "hourly" ||
-                newEmployeeWageType === "fixed_hourly") && (
+                newEmployeeWageType === "fixed_hourly" ||
+                (newEmployeeWageType === "salary" &&
+                  newEmployeeEligibleForSurcharges)) && (
                 <Input
-                  label="Stundenlohn"
+                  label={
+                    newEmployeeWageType === "salary"
+                      ? "Grundstundenlohn für Zuschläge"
+                      : "Stundenlohn"
+                  }
                   type="text"
-                  placeholder="Stundenlohn in €"
+                  placeholder="z. B. 15,50"
                   value={newEmployeeHourlyRate}
                   onChange={(event) =>
                     setNewEmployeeHourlyRate(event.target.value)
@@ -2565,11 +3388,23 @@ const inactiveEmployees = employees
                 />
               )}
 
+              <Input
+                label="Stundenzulage / Stunde"
+                type="text"
+                placeholder="z. B. 2,50"
+                value={newEmployeeHourlyAllowanceRate}
+                onChange={(event) =>
+                  setNewEmployeeHourlyAllowanceRate(event.target.value)
+                }
+                disabled={isSaving}
+                inputMode="decimal"
+              />
+
               {newEmployeeWageType === "salary" && (
                 <Input
                   label="Monatsgehalt"
                   type="text"
-                  placeholder="Monatsgehalt in €"
+                  placeholder="z. B. 2800,00"
                   value={newEmployeeMonthlySalary}
                   onChange={(event) =>
                     setNewEmployeeMonthlySalary(event.target.value)
@@ -2578,6 +3413,36 @@ const inactiveEmployees = employees
                   inputMode="decimal"
                 />
               )}
+
+              <Select
+                label="Zuschläge"
+                value={newEmployeeEligibleForSurcharges ? "yes" : "no"}
+                onChange={(event) =>
+                  setNewEmployeeEligibleForSurcharges(event.target.value === "yes")
+                }
+                disabled={isSaving}
+                options={[
+                  { value: "yes", label: "Zuschlagsberechtigt" },
+                  { value: "no", label: "Keine Zuschläge" },
+                ]}
+              />
+
+              {newEmployeeWageType === "salary" &&
+                newTimeAccountPeriod !== "none" &&
+                (newPositiveBalanceHandling === "payout" ||
+                  newPositiveBalanceHandling === "payout_with_limit") && (
+                  <Input
+                    label="Überstunden-Auszahlungssatz / Stunde"
+                    type="text"
+                    inputMode="decimal"
+                    placeholder="z. B. 18,00"
+                    value={newEmployeeOvertimeHourlyRate}
+                    onChange={(event) =>
+                      setNewEmployeeOvertimeHourlyRate(event.target.value)
+                    }
+                    disabled={isSaving}
+                  />
+                )}
 
               <Input
                 label="DATEV-Personalnummer"
@@ -2611,16 +3476,160 @@ const inactiveEmployees = employees
                 disabled={isSaving}
               />
 
-              <Input
-                label="Arbeitstage/Woche"
-                type="number"
-                min="1"
-                max="7"
-                placeholder="z. B. 5"
-                value={workDaysPerWeek}
-                onChange={(event) => setWorkDaysPerWeek(event.target.value)}
+              <Select
+                label="Abwesenheitsbewertung"
+                value={newAbsenceCalculationType}
+                onChange={(event) =>
+                  setNewAbsenceCalculationType(
+                    event.target.value as AbsenceCalculationType,
+                  )
+                }
                 disabled={isSaving}
+                options={[
+                  { value: "fixed", label: "Feste Stunden pro Abwesenheitstag" },
+                  { value: "daily_average_13_weeks", label: "Tagesdurchschnitt aus 13 Wochen" },
+                  { value: "weekly_average_13_weeks", label: "Wochendurchschnitt aus 13 Wochen" },
+                  { value: "three_month_average", label: "3-Monats-Durchschnitt" },
+                  { value: "twelve_month_average", label: "12-Monats-Durchschnitt" },
+                ]}
               />
+
+              {newAbsenceCalculationType === "fixed" && (
+                <Input
+                  label="Feste Abwesenheitsstunden"
+                  type="text"
+                  inputMode="decimal"
+                  placeholder="z. B. 7,6"
+                  value={newFixedAbsenceHours}
+                  onChange={(event) => setNewFixedAbsenceHours(event.target.value)}
+                  disabled={isSaving}
+                />
+              )}
+
+              {isDynamicAbsenceType(newAbsenceCalculationType) && (
+                <Input
+                  label="Fallback bei fehlender Historie (Minuten)"
+                  type="number"
+                  min="0"
+                  value={newAbsenceStartMinutes}
+                  onChange={(event) => setNewAbsenceStartMinutes(event.target.value)}
+                  disabled={isSaving}
+                />
+              )}
+
+              {newAbsenceCalculationType === "three_month_average" && (
+                <Select
+                  label="3-Monats-Berechnungsbasis"
+                  value={newThreeMonthAverageBasis}
+                  onChange={(event) =>
+                    setNewThreeMonthAverageBasis(
+                      event.target.value as ThreeMonthAverageBasis,
+                    )
+                  }
+                  disabled={isSaving}
+                  options={[
+                    { value: "possible_workdays", label: "Mögliche Arbeitstage (E2N)" },
+                    { value: "social_security_days", label: "Sozialversicherungstage" },
+                  ]}
+                />
+              )}
+
+              {isDynamicAbsenceType(newAbsenceCalculationType) && (
+                <Select
+                  label="Dynamischen Abwesenheitswert begrenzen"
+                  value={newCapDynamicAbsenceMinutes ? "yes" : "no"}
+                  onChange={(event) =>
+                    setNewCapDynamicAbsenceMinutes(event.target.value === "yes")
+                  }
+                  disabled={isSaving}
+                  options={[
+                    { value: "no", label: "Keine Begrenzung" },
+                    { value: "yes", label: "Maximalwert verwenden" },
+                  ]}
+                />
+              )}
+
+              {isDynamicAbsenceType(newAbsenceCalculationType) &&
+                newCapDynamicAbsenceMinutes && (
+                  <Input
+                    label="Maximalwert Abwesenheit (Minuten)"
+                    type="number"
+                    min="0"
+                    value={newDynamicAbsenceCapMinutes}
+                    onChange={(event) =>
+                      setNewDynamicAbsenceCapMinutes(event.target.value)
+                    }
+                    disabled={isSaving}
+                  />
+                )}
+
+              <Select
+                label="Dienstplan bei Abwesenheit"
+                value={newPreferScheduledShiftForAbsence ? "yes" : "no"}
+                onChange={(event) =>
+                  setNewPreferScheduledShiftForAbsence(event.target.value === "yes")
+                }
+                disabled={isSaving}
+                options={[
+                  { value: "yes", label: "Geplante Schicht bevorzugen" },
+                  { value: "no", label: "Nur Bewertungsregel verwenden" },
+                ]}
+              />
+
+              {newTimeAccountPeriod !== "none" && (
+                <>
+                  <Select
+                    label="Plusstunden behandeln"
+                    value={newPositiveBalanceHandling}
+                    onChange={(event) =>
+                      setNewPositiveBalanceHandling(
+                        event.target.value as PositiveBalanceHandling,
+                      )
+                    }
+                    disabled={isSaving}
+                    options={[
+                      { value: "carry", label: "Übertragen" },
+                      { value: "payout", label: "Vollständig auszahlen" },
+                      { value: "payout_with_limit", label: "Bis Limit auszahlen" },
+                    ]}
+                  />
+
+                  {newPositiveBalanceHandling === "payout_with_limit" && (
+                    <Input
+                      label="Auszahlungslimit in Stunden"
+                      type="text"
+                      inputMode="decimal"
+                      value={newPayoutLimitHours}
+                      onChange={(event) => setNewPayoutLimitHours(event.target.value)}
+                      disabled={isSaving}
+                    />
+                  )}
+
+                  <Select
+                    label="Minusstunden behandeln"
+                    value={newNegativeBalanceHandling}
+                    onChange={(event) =>
+                      setNewNegativeBalanceHandling(
+                        event.target.value as NegativeBalanceHandling,
+                      )
+                    }
+                    disabled={isSaving}
+                    options={[
+                      { value: "carry", label: "Übertragen" },
+                      { value: "ignore", label: "Nicht übertragen" },
+                    ]}
+                  />
+
+                  <Input
+                    label="Startsaldo Arbeitszeitkonto"
+                    type="text"
+                    inputMode="decimal"
+                    value={newOpeningBalanceHours}
+                    onChange={(event) => setNewOpeningBalanceHours(event.target.value)}
+                    disabled={isSaving}
+                  />
+                </>
+              )}
             </div>
 
             <div className="mt-6 flex flex-col gap-3 md:flex-row">
@@ -3030,6 +4039,19 @@ const inactiveEmployees = employees
         cancelText="Abbrechen"
       />
 
+      <DiperaPopup
+        open={showEmploymentImpactPopup}
+        title="Geschlossene Abrechnungen betroffen"
+        message={`Die Änderung von Eintritts- oder Austrittsdatum betrifft ${employmentImpactCount} bereits geschlossene Abrechnungsperiode(n). Die historischen Abrechnungen werden nicht automatisch verändert. Möchtest du die Stammdaten trotzdem ändern?`}
+        confirmText="Trotzdem ändern"
+        cancelText="Abbrechen"
+        onClose={() => setShowEmploymentImpactPopup(false)}
+        onConfirm={() => {
+          setShowEmploymentImpactPopup(false);
+          void handleSaveEmployeePayroll(true);
+        }}
+      />
+
       {editingLocationEmployee && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#111827]/40 p-4 backdrop-blur-sm">
           <div className="w-full max-w-xl overflow-hidden rounded-3xl border border-[#E2E8F0] bg-white shadow-[0_24px_80px_rgba(15,23,42,0.18)]">
@@ -3204,16 +4226,69 @@ const inactiveEmployees = employees
                     ]}
                   />
 
-                  <Input
-                    label="Arbeitstage/Woche"
-                    type="number"
-                    min="1"
-                    max="7"
-                    value={editWorkDaysPerWeek}
+                  <Select
+                    label="Arbeitsmuster"
+                    value={editWorkdayPattern}
                     onChange={(event) =>
-                      setEditWorkDaysPerWeek(event.target.value)
+                      setEditWorkdayPattern(
+                        event.target.value as WorkdayPattern,
+                      )
                     }
+                    options={[
+                      { value: "schedule_based", label: "Wechselnde Tage nach Dienstplan" },
+                      { value: "fixed", label: "Feste regelmäßige Wochentage" },
+                    ]}
                   />
+
+                  {editWorkdayPattern === "schedule_based" && (
+                    <Input
+                      label="Arbeitstage/Woche"
+                      type="number"
+                      min="1"
+                      max="7"
+                      value={editWorkDaysPerWeek}
+                      onChange={(event) =>
+                        setEditWorkDaysPerWeek(event.target.value)
+                      }
+                    />
+                  )}
+
+                  {editWorkdayPattern === "fixed" && (
+                    <div className="md:col-span-2 xl:col-span-2">
+                      <p className="mb-2 text-sm font-medium text-[#334155]">
+                        Regelmäßige Arbeitstage
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        {WEEKDAY_OPTIONS.map((day) => {
+                          const active = editRegularWorkdays.includes(day.value);
+                          return (
+                            <button
+                              key={day.value}
+                              type="button"
+                              onClick={() =>
+                                setEditRegularWorkdays((current) =>
+                                  active
+                                    ? current.filter((value) => value !== day.value)
+                                    : [...current, day.value].sort((a, b) => a - b),
+                                )
+                              }
+                              className={[
+                                "rounded-xl border px-3 py-2 text-sm font-semibold transition",
+                                active
+                                  ? "border-[#005CA8] bg-[#E8F2FB] text-[#005CA8]"
+                                  : "border-[#CBD5E1] bg-white text-[#475569] hover:border-[#94A3B8]",
+                              ].join(" ")}
+                            >
+                              {day.label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      <p className="mt-2 text-xs text-[#64748B]">
+                        {editRegularWorkdays.length} Arbeitstag(e) pro Woche
+                      </p>
+                    </div>
+                  )}
 
                   <Input
                     label="Urlaubstage/Jahr"
@@ -3234,27 +4309,37 @@ const inactiveEmployees = employees
                 </h3>
 
                 <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
-                  <Input
-                    label="Wochen-Sollstunden"
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={editWeeklyHours}
-                    onChange={(event) =>
-                      setEditWeeklyHours(event.target.value)
-                    }
-                  />
+                  {editTimeAccountPeriod === "weekly" && (
+                    <Input
+                      label="Wochen-Sollstunden"
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={editWeeklyHours}
+                      onChange={(event) =>
+                        setEditWeeklyHours(event.target.value)
+                      }
+                    />
+                  )}
 
-                  <Input
-                    label="Monats-Sollstunden"
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={editMonthlyHours}
-                    onChange={(event) =>
-                      setEditMonthlyHours(event.target.value)
-                    }
-                  />
+                  {editTimeAccountPeriod === "monthly" && (
+                    <Input
+                      label="Monats-Sollstunden"
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={editMonthlyHours}
+                      onChange={(event) =>
+                        setEditMonthlyHours(event.target.value)
+                      }
+                    />
+                  )}
+
+                  {editTimeAccountPeriod === "none" && (
+                    <p className="text-sm text-[#64748B]">
+                      Für Mitarbeiter ohne Arbeitszeitkonto ist keine Zeitkonto-Sollperiode aktiv.
+                    </p>
+                  )}
                 </div>
 
                 <p className="mt-3 text-xs leading-5 text-[#64748B]">
@@ -3315,6 +4400,61 @@ const inactiveEmployees = employees
       />
     )}
 
+    {isDynamicAbsenceType(editAbsenceCalculationType) && (
+      <Input
+        label="Fallback bei fehlender Historie (Minuten)"
+        type="number"
+        min="0"
+        value={editAbsenceStartMinutes}
+        onChange={(event) =>
+          setEditAbsenceStartMinutes(event.target.value)
+        }
+      />
+    )}
+
+    {editAbsenceCalculationType === "three_month_average" && (
+      <Select
+        label="3-Monats-Berechnungsbasis"
+        value={editThreeMonthAverageBasis}
+        onChange={(event) =>
+          setEditThreeMonthAverageBasis(
+            event.target.value as ThreeMonthAverageBasis,
+          )
+        }
+        options={[
+          { value: "possible_workdays", label: "Mögliche Arbeitstage (E2N)" },
+          { value: "social_security_days", label: "Sozialversicherungstage" },
+        ]}
+      />
+    )}
+
+    {isDynamicAbsenceType(editAbsenceCalculationType) && (
+      <Select
+        label="Dynamischen Abwesenheitswert begrenzen"
+        value={editCapDynamicAbsenceMinutes ? "yes" : "no"}
+        onChange={(event) =>
+          setEditCapDynamicAbsenceMinutes(event.target.value === "yes")
+        }
+        options={[
+          { value: "no", label: "Keine Begrenzung" },
+          { value: "yes", label: "Maximalwert verwenden" },
+        ]}
+      />
+    )}
+
+    {isDynamicAbsenceType(editAbsenceCalculationType) &&
+      editCapDynamicAbsenceMinutes && (
+        <Input
+          label="Maximalwert Abwesenheit (Minuten)"
+          type="number"
+          min="0"
+          value={editDynamicAbsenceCapMinutes}
+          onChange={(event) =>
+            setEditDynamicAbsenceCapMinutes(event.target.value)
+          }
+        />
+      )}
+
     <Select
       label="Dienstplan bei Abwesenheit"
       value={
@@ -3361,73 +4501,62 @@ const inactiveEmployees = employees
       ]}
     />
 
-    <Select
-      label="Plusstunden behandeln"
-      value={editPositiveBalanceHandling}
-      onChange={(event) =>
-        setEditPositiveBalanceHandling(
-          event.target.value as PositiveBalanceHandling,
-        )
-      }
-      options={[
-        {
-          value: "carry",
-          label: "Auf Arbeitszeitkonto übertragen",
-        },
-        {
-          value: "payout",
-          label: "Vollständig auszahlen",
-        },
-        {
-          value: "payout_with_limit",
-          label: "Bis Limit auszahlen, Rest übertragen",
-        },
-      ]}
-    />
+    {editTimeAccountPeriod !== "none" && (
+      <>
+        <Select
+          label="Plusstunden behandeln"
+          value={editPositiveBalanceHandling}
+          onChange={(event) =>
+            setEditPositiveBalanceHandling(
+              event.target.value as PositiveBalanceHandling,
+            )
+          }
+          options={[
+            { value: "carry", label: "Auf Arbeitszeitkonto übertragen" },
+            { value: "payout", label: "Vollständig auszahlen" },
+            { value: "payout_with_limit", label: "Bis Limit auszahlen, Rest übertragen" },
+          ]}
+        />
 
-    {editPositiveBalanceHandling === "payout_with_limit" && (
-      <Input
-        label="Auszahlungslimit in Stunden"
-        type="text"
-        inputMode="decimal"
-        placeholder="z. B. 10"
-        value={editPayoutLimitHours}
-        onChange={(event) =>
-          setEditPayoutLimitHours(event.target.value)
-        }
-      />
+        {editPositiveBalanceHandling === "payout_with_limit" && (
+          <Input
+            label="Auszahlungslimit in Stunden"
+            type="text"
+            inputMode="decimal"
+            placeholder="z. B. 10"
+            value={editPayoutLimitHours}
+            onChange={(event) =>
+              setEditPayoutLimitHours(event.target.value)
+            }
+          />
+        )}
+
+        <Select
+          label="Minusstunden behandeln"
+          value={editNegativeBalanceHandling}
+          onChange={(event) =>
+            setEditNegativeBalanceHandling(
+              event.target.value as NegativeBalanceHandling,
+            )
+          }
+          options={[
+            { value: "carry", label: "Auf Arbeitszeitkonto übertragen" },
+            { value: "ignore", label: "Nicht übertragen" },
+          ]}
+        />
+
+        <Input
+          label="Startsaldo Arbeitszeitkonto"
+          type="text"
+          inputMode="decimal"
+          placeholder="z. B. 17,50 oder -8,25"
+          value={editOpeningBalanceHours}
+          onChange={(event) =>
+            setEditOpeningBalanceHours(event.target.value)
+          }
+        />
+      </>
     )}
-
-    <Select
-      label="Minusstunden behandeln"
-      value={editNegativeBalanceHandling}
-      onChange={(event) =>
-        setEditNegativeBalanceHandling(
-          event.target.value as NegativeBalanceHandling,
-        )
-      }
-      options={[
-        {
-          value: "carry",
-          label: "Auf Arbeitszeitkonto übertragen",
-        },
-        {
-          value: "ignore",
-          label: "Nicht übertragen",
-        },
-      ]}
-    />
-
-                <Input
-                  label="Startsaldo Arbeitszeitkonto"
-                  type="text"
-                  inputMode="decimal"
-                  placeholder="z. B. 17,50 oder -8,25"
-                  value={editOpeningBalanceHours}
-                  onChange={(event) =>
-                    setEditOpeningBalanceHours(event.target.value)
-                  }
-                />
               </div>
 
               <p className="mt-3 text-xs leading-5 text-[#64748B]">
@@ -3465,9 +4594,14 @@ const inactiveEmployees = employees
                   />
 
                   {(editWageType === "hourly" ||
-                    editWageType === "fixed_hourly") && (
+                    editWageType === "fixed_hourly" ||
+                    (editWageType === "salary" && editEligibleForSurcharges)) && (
                     <Input
-                      label="Stundenlohn"
+                      label={
+                        editWageType === "salary"
+                          ? "Grundstundenlohn für Zuschläge"
+                          : "Stundenlohn"
+                      }
                       type="text"
                       inputMode="decimal"
                       placeholder="z. B. 15,50"
@@ -3477,6 +4611,17 @@ const inactiveEmployees = employees
                       }
                     />
                   )}
+
+                  <Input
+                    label="Stundenzulage / Stunde"
+                    type="text"
+                    inputMode="decimal"
+                    placeholder="z. B. 2,50"
+                    value={editHourlyAllowanceRate}
+                    onChange={(event) =>
+                      setEditHourlyAllowanceRate(event.target.value)
+                    }
+                  />
 
                   {editWageType === "salary" && (
                     <Input
@@ -3524,6 +4669,22 @@ const inactiveEmployees = employees
                       { value: "no", label: "Keine Zuschläge" },
                     ]}
                   />
+
+                  {editWageType === "salary" &&
+                    editTimeAccountPeriod !== "none" &&
+                    (editPositiveBalanceHandling === "payout" ||
+                      editPositiveBalanceHandling === "payout_with_limit") && (
+                      <Input
+                        label="Überstunden-Auszahlungssatz / Stunde"
+                        type="text"
+                        inputMode="decimal"
+                        placeholder="z. B. 18,00"
+                        value={editOvertimeHourlyRate}
+                        onChange={(event) =>
+                          setEditOvertimeHourlyRate(event.target.value)
+                        }
+                      />
+                    )}
                 </div>
               </div>
             </div>
@@ -3540,7 +4701,8 @@ const inactiveEmployees = employees
               <Button
                 variant="primary"
                 type="button"
-                onClick={handleSaveEmployeePayroll}
+                loading={isSavingPayroll}
+                onClick={() => void handleSaveEmployeePayroll(false)}
               >
                 Änderungen speichern
               </Button>
