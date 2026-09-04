@@ -14,8 +14,10 @@ Future<void> main() async {
   try {
     debugPrint('START 1: Flutter initialisiert');
 
-    debugPrint(
-  'KEY PREFIX: ${AppEnvironment.supabasePublishableKey.substring(0, 15)}',
+    final supabaseKey = AppEnvironment.supabasePublishableKey;
+
+debugPrint(
+  'KEY PREFIX: ${supabaseKey.length >= 15 ? supabaseKey.substring(0, 15) : supabaseKey}',
 );
 debugPrint(
   'KEY LENGTH: ${AppEnvironment.supabasePublishableKey.length}',
