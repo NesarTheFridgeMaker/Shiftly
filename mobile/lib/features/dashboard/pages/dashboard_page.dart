@@ -10,6 +10,8 @@ import '../../../shared/widgets/dipera_card.dart';
 import '../../auth/providers/auth_providers.dart';
 import '../../documents/pages/documents_page.dart';
 import '../providers/time_account_providers.dart';
+import '../providers/vacation_balance_providers.dart';
+import '../../../core/services/absence_service.dart';
 
 class DashboardPage extends ConsumerWidget {
   const DashboardPage({super.key});
@@ -69,12 +71,14 @@ class DashboardPage extends ConsumerWidget {
     ref.invalidate(todayShiftsProvider);
     ref.invalidate(nextShiftProvider);
     ref.invalidate(currentTimeAccountOpeningBalanceProvider);
+    ref.invalidate(currentVacationBalanceProvider);
 
     await Future.wait([
       ref.read(currentEmployeeProvider.future),
       ref.read(todayShiftsProvider.future),
       ref.read(nextShiftProvider.future),
       ref.read(currentTimeAccountOpeningBalanceProvider.future),
+      ref.read(currentVacationBalanceProvider.future),
     ]);
   }
 
@@ -86,6 +90,8 @@ class DashboardPage extends ConsumerWidget {
     final nextShiftAsync = ref.watch(nextShiftProvider);
     final timeAccountAsync =
         ref.watch(currentTimeAccountOpeningBalanceProvider);
+    final vacationBalanceAsync =
+        ref.watch(currentVacationBalanceProvider);
 
     return Scaffold(
       backgroundColor: const Color(0xFFF6F8FB),
@@ -276,8 +282,10 @@ class DashboardPage extends ConsumerWidget {
                           ),
                         ),
                         const SizedBox(width: 14),
-                        const Expanded(
-                          child: _VacationCard(),
+                        Expanded(
+                          child: _VacationCard(
+                            balanceAsync: vacationBalanceAsync,
+                          ),
                         ),
                       ],
                     ),
@@ -703,11 +711,24 @@ class _BalanceCard extends StatelessWidget {
 }
 
 class _VacationCard extends StatelessWidget {
-  const _VacationCard();
+  const _VacationCard({
+    required this.balanceAsync,
+  });
+
+  final AsyncValue<VacationBalance> balanceAsync;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+
+    final value = balanceAsync.when(
+      loading: () => '– Tage',
+      error: (error, stackTrace) => 'Nicht verfügbar',
+      data: (balance) {
+        final days = balance.availableVacationDays;
+        return '$days ${days == 1 ? 'Tag' : 'Tage'}';
+      },
+    );
 
     return DiperaCard(
       padding: const EdgeInsets.all(18),
@@ -721,7 +742,7 @@ class _VacationCard extends StatelessWidget {
           ),
           const SizedBox(height: 18),
           Text(
-            '21 Tage',
+            value,
             style: theme.textTheme.titleLarge?.copyWith(
               color: const Color(0xFF101828),
               fontWeight: FontWeight.w800,

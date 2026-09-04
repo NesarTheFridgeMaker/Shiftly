@@ -4,33 +4,72 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/services/absence_service.dart';
 import '../../../shared/widgets/dipera_card.dart';
 import '../../auth/providers/auth_providers.dart';
+import '../../dashboard/providers/vacation_balance_providers.dart';
+import 'vacation_request_page.dart';
 
-class AbsencesPage extends ConsumerWidget {
+class AbsencesPage extends ConsumerStatefulWidget {
   const AbsencesPage({super.key});
 
-  Future<void> _refresh(WidgetRef ref) async {
-    ref.invalidate(employeeAbsencesProvider);
+  @override
+  ConsumerState<AbsencesPage> createState() =>
+      _AbsencesPageState();
+}
 
-    await ref.read(employeeAbsencesProvider.future);
+class _AbsencesPageState extends ConsumerState<AbsencesPage> {
+  bool _showAllHistory = false;
+
+  Future<void> _refresh() async {
+    ref.invalidate(employeeAbsencesProvider);
+    ref.invalidate(currentVacationBalanceProvider);
+
+    await Future.wait([
+      ref.read(employeeAbsencesProvider.future),
+      ref.read(currentVacationBalanceProvider.future),
+    ]);
+  }
+
+  Future<void> _openVacationRequest() async {
+    final created = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => const VacationRequestPage(),
+      ),
+    );
+
+    if (created == true && mounted) {
+      await _refresh();
+    }
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final absencesAsync = ref.watch(employeeAbsencesProvider);
+    final vacationBalanceAsync =
+        ref.watch(currentVacationBalanceProvider);
 
     return Scaffold(
       backgroundColor: const Color(0xFFF6F8FB),
       body: SafeArea(
         child: RefreshIndicator(
-          onRefresh: () => _refresh(ref),
+          onRefresh: _refresh,
           child: absencesAsync.when(
             loading: () => const _LoadingView(),
             error: (error, stackTrace) => _ErrorView(
               onRetry: () {
                 ref.invalidate(employeeAbsencesProvider);
+                ref.invalidate(currentVacationBalanceProvider);
               },
             ),
-            data: (absences) => _AbsencesContent(absences: absences),
+            data: (absences) => _AbsencesContent(
+              absences: absences,
+              vacationBalanceAsync: vacationBalanceAsync,
+              showAllHistory: _showAllHistory,
+              onToggleHistory: () {
+                setState(() {
+                  _showAllHistory = !_showAllHistory;
+                });
+              },
+              onRequestVacation: _openVacationRequest,
+            ),
           ),
         ),
       ),
@@ -39,25 +78,55 @@ class AbsencesPage extends ConsumerWidget {
 }
 
 class _AbsencesContent extends StatelessWidget {
-  const _AbsencesContent({required this.absences});
+  const _AbsencesContent({
+    required this.absences,
+    required this.vacationBalanceAsync,
+    required this.showAllHistory,
+    required this.onToggleHistory,
+    required this.onRequestVacation,
+  });
 
   final List<EmployeeAbsence> absences;
+  final AsyncValue<VacationBalance> vacationBalanceAsync;
+  final bool showAllHistory;
+  final VoidCallback onToggleHistory;
+  final VoidCallback onRequestVacation;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    final pendingCount = absences
-        .where((absence) => absence.status == AbsenceStatus.pending)
-        .length;
+    final today = DateTime.now();
+    final todayDate = DateTime(
+      today.year,
+      today.month,
+      today.day,
+    );
 
-    final approvedCount = absences
-        .where((absence) => absence.status == AbsenceStatus.approved)
-        .length;
+    final current = absences.where((absence) {
+      if (absence.status == AbsenceStatus.pending) {
+        return true;
+      }
 
-    final rejectedCount = absences
-        .where((absence) => absence.status == AbsenceStatus.rejected)
-        .length;
+      if (absence.status == AbsenceStatus.approved) {
+        final endDate = DateTime(
+          absence.endDate.year,
+          absence.endDate.month,
+          absence.endDate.day,
+        );
+
+        return !endDate.isBefore(todayDate);
+      }
+
+      return false;
+    }).toList();
+
+    final history = absences
+        .where((absence) => !current.contains(absence))
+        .toList();
+
+    final visibleHistory =
+        showAllHistory ? history : history.take(5).toList();
 
     return ListView(
       physics: const AlwaysScrollableScrollPhysics(),
@@ -88,136 +157,262 @@ class _AbsencesContent extends StatelessWidget {
             ),
           ],
         ),
-
         const SizedBox(height: 8),
-
         Text(
-          'Deine Urlaubs-, Krankheits- und weiteren Abwesenheitseinträge.',
+          'Urlaubskonto, aktuelle Anträge und deine bisherigen Abwesenheiten.',
           style: theme.textTheme.bodyLarge?.copyWith(
             color: const Color(0xFF667085),
           ),
         ),
-
         const SizedBox(height: 24),
-
-        Row(
-          children: [
-            Expanded(
-              child: _StatusStatisticCard(
-                label: 'Ausstehend',
-                value: pendingCount,
-                icon: Icons.schedule_rounded,
-                foregroundColor: const Color(0xFFB54708),
-                backgroundColor: const Color(0xFFFFFAEB),
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: _StatusStatisticCard(
-                label: 'Genehmigt',
-                value: approvedCount,
-                icon: Icons.check_circle_outline_rounded,
-                foregroundColor: const Color(0xFF027A48),
-                backgroundColor: const Color(0xFFECFDF3),
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: _StatusStatisticCard(
-                label: 'Abgelehnt',
-                value: rejectedCount,
-                icon: Icons.cancel_outlined,
-                foregroundColor: const Color(0xFFB42318),
-                backgroundColor: const Color(0xFFFEF3F2),
-              ),
-            ),
-          ],
+        _VacationBalanceCard(
+          balanceAsync: vacationBalanceAsync,
+          onRequestVacation: onRequestVacation,
         ),
-
-        const SizedBox(height: 24),
-
+        const SizedBox(height: 28),
         Text(
-          'Meine Einträge',
+          'Aktuell',
           style: theme.textTheme.titleMedium?.copyWith(
             color: const Color(0xFF344054),
             fontWeight: FontWeight.w800,
           ),
         ),
-
         const SizedBox(height: 12),
-
-        if (absences.isEmpty)
-          const _NoAbsencesView()
+        if (current.isEmpty)
+          const _CompactEmptyCard(
+            text:
+                'Aktuell gibt es keine offenen oder bevorstehenden Abwesenheiten.',
+          )
         else
-          ...absences.asMap().entries.map((entry) {
+          ...current.asMap().entries.map((entry) {
             final index = entry.key;
             final absence = entry.value;
 
             return Padding(
               padding: EdgeInsets.only(
-                bottom: index < absences.length - 1 ? 12 : 0,
+                bottom: index < current.length - 1 ? 12 : 0,
               ),
               child: _AbsenceCard(absence: absence),
             );
           }),
+        const SizedBox(height: 28),
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                'Verlauf',
+                style: theme.textTheme.titleMedium?.copyWith(
+                  color: const Color(0xFF344054),
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+            if (history.length > 5)
+              TextButton(
+                onPressed: onToggleHistory,
+                child: Text(
+                  showAllHistory
+                      ? 'Weniger anzeigen'
+                      : 'Alle anzeigen',
+                ),
+              ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        if (history.isEmpty)
+          const _CompactEmptyCard(
+            text: 'Noch keine vergangenen Abwesenheiten vorhanden.',
+          )
+        else
+          ...visibleHistory.asMap().entries.map((entry) {
+            final index = entry.key;
+            final absence = entry.value;
 
-        const SizedBox(height: 20),
-
-        const _NoticeCard(),
+            return Padding(
+              padding: EdgeInsets.only(
+                bottom: index < visibleHistory.length - 1 ? 12 : 0,
+              ),
+              child: _AbsenceCard(absence: absence),
+            );
+          }),
       ],
     );
   }
 }
 
-class _StatusStatisticCard extends StatelessWidget {
-  const _StatusStatisticCard({
-    required this.label,
-    required this.value,
-    required this.icon,
-    required this.foregroundColor,
-    required this.backgroundColor,
+class _VacationBalanceCard extends StatelessWidget {
+  const _VacationBalanceCard({
+    required this.balanceAsync,
+    required this.onRequestVacation,
   });
 
-  final String label;
-  final int value;
-  final IconData icon;
-  final Color foregroundColor;
-  final Color backgroundColor;
+  final AsyncValue<VacationBalance> balanceAsync;
+  final VoidCallback onRequestVacation;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
     return DiperaCard(
-      padding: const EdgeInsets.all(14),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      padding: const EdgeInsets.all(20),
+      child: balanceAsync.when(
+        loading: () => const SizedBox(
+          height: 150,
+          child: Center(
+            child: CircularProgressIndicator(),
+          ),
+        ),
+        error: (error, stackTrace) => Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Urlaubskonto nicht verfügbar',
+              style: theme.textTheme.titleMedium?.copyWith(
+                color: const Color(0xFF101828),
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Ziehe die Seite nach unten, um es erneut zu laden.',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: const Color(0xFF667085),
+              ),
+            ),
+          ],
+        ),
+        data: (balance) => Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 52,
+                  height: 52,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFFFAEB),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: const Icon(
+                    Icons.beach_access_rounded,
+                    color: Color(0xFFB54708),
+                    size: 26,
+                  ),
+                ),
+                const SizedBox(width: 15),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '${balance.availableVacationDays} Tage verfügbar',
+                        style: theme.textTheme.titleLarge?.copyWith(
+                          color: const Color(0xFF101828),
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Urlaubsjahr ${balance.vacationYear}',
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: const Color(0xFF667085),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 18),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                _BalanceChip(
+                  label:
+                      '${balance.annualEntitlementDays} Tage Anspruch',
+                ),
+                _BalanceChip(
+                  label:
+                      '${balance.approvedVacationDays} genehmigt',
+                ),
+                _BalanceChip(
+                  label:
+                      '${balance.pendingVacationDays} offen',
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                onPressed: onRequestVacation,
+                icon: const Icon(
+                  Icons.add_circle_outline_rounded,
+                ),
+                label: const Text('Urlaub beantragen'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _BalanceChip extends StatelessWidget {
+  const _BalanceChip({
+    required this.label,
+  });
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: 11,
+        vertical: 7,
+      ),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF2F4F7),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        label,
+        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+          color: const Color(0xFF475467),
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
+  }
+}
+
+class _CompactEmptyCard extends StatelessWidget {
+  const _CompactEmptyCard({
+    required this.text,
+  });
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return DiperaCard(
+      padding: const EdgeInsets.all(18),
+      child: Row(
         children: [
-          Container(
-            width: 38,
-            height: 38,
-            decoration: BoxDecoration(
-              color: backgroundColor,
-              borderRadius: BorderRadius.circular(13),
-            ),
-            child: Icon(icon, size: 20, color: foregroundColor),
+          const Icon(
+            Icons.event_available_rounded,
+            color: Color(0xFF98A2B3),
           ),
-          const SizedBox(height: 12),
-          Text(
-            '$value',
-            style: theme.textTheme.titleLarge?.copyWith(
-              color: const Color(0xFF101828),
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-          const SizedBox(height: 3),
-          Text(
-            label,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: const Color(0xFF667085),
-              fontWeight: FontWeight.w600,
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              text,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: const Color(0xFF667085),
+              ),
             ),
           ),
         ],
@@ -251,86 +446,65 @@ class _AbsenceCard extends StatelessWidget {
     final style = _absenceStyle(absence);
 
     return DiperaCard(
-      padding: const EdgeInsets.all(18),
-      child: Column(
+      padding: const EdgeInsets.all(16),
+      child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                width: 50,
-                height: 50,
-                decoration: BoxDecoration(
-                  color: style.backgroundColor,
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Icon(style.icon, color: style.foregroundColor, size: 25),
-              ),
-              const SizedBox(width: 15),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+          Container(
+            width: 46,
+            height: 46,
+            decoration: BoxDecoration(
+              color: style.backgroundColor,
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Icon(
+              style.icon,
+              color: style.foregroundColor,
+              size: 23,
+            ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
                   children: [
-                    Text(
-                      absence.typeLabel,
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        color: const Color(0xFF101828),
-                        fontWeight: FontWeight.w800,
+                    Expanded(
+                      child: Text(
+                        absence.typeLabel,
+                        style: theme.textTheme.titleSmall?.copyWith(
+                          color: const Color(0xFF101828),
+                          fontWeight: FontWeight.w800,
+                        ),
                       ),
                     ),
-                    const SizedBox(height: 6),
-                    Text(
-                      dateRange,
-                      style: theme.textTheme.bodyLarge?.copyWith(
-                        color: const Color(0xFF344054),
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
+                    const SizedBox(width: 8),
+                    _StatusBadge(absence: absence),
                   ],
                 ),
-              ),
-              const SizedBox(width: 10),
-              _StatusBadge(absence: absence),
-            ],
-          ),
-
-          if (absence.note != null && absence.note!.trim().isNotEmpty) ...[
-            const SizedBox(height: 15),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(13),
-              decoration: BoxDecoration(
-                color: const Color(0xFFF8FAFC),
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: Text(
-                absence.note!.trim(),
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: const Color(0xFF667085),
-                  height: 1.45,
+                const SizedBox(height: 5),
+                Text(
+                  dateRange,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: const Color(0xFF344054),
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
-              ),
+                if (absence.note != null &&
+                    absence.note!.trim().isNotEmpty) ...[
+                  const SizedBox(height: 7),
+                  Text(
+                    absence.note!.trim(),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: const Color(0xFF667085),
+                    ),
+                  ),
+                ],
+              ],
             ),
-          ],
-
-          const SizedBox(height: 15),
-
-          Row(
-            children: [
-              const Icon(
-                Icons.history_rounded,
-                size: 17,
-                color: Color(0xFF98A2B3),
-              ),
-              const SizedBox(width: 7),
-              Text(
-                'Erstellt am ${_formatDate(absence.createdAt)}',
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: const Color(0xFF667085),
-                ),
-              ),
-            ],
           ),
         ],
       ),
@@ -352,22 +526,29 @@ class _StatusBadge extends StatelessWidget {
       case AbsenceStatus.pending:
         foregroundColor = const Color(0xFFB54708);
         backgroundColor = const Color(0xFFFFFAEB);
+        break;
 
       case AbsenceStatus.approved:
         foregroundColor = const Color(0xFF027A48);
         backgroundColor = const Color(0xFFECFDF3);
+        break;
 
       case AbsenceStatus.rejected:
         foregroundColor = const Color(0xFFB42318);
         backgroundColor = const Color(0xFFFEF3F2);
+        break;
 
       case AbsenceStatus.unknown:
         foregroundColor = const Color(0xFF475467);
         backgroundColor = const Color(0xFFF2F4F7);
+        break;
     }
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      padding: const EdgeInsets.symmetric(
+        horizontal: 9,
+        vertical: 5,
+      ),
       decoration: BoxDecoration(
         color: backgroundColor,
         borderRadius: BorderRadius.circular(999),
@@ -378,90 +559,6 @@ class _StatusBadge extends StatelessWidget {
           color: foregroundColor,
           fontWeight: FontWeight.w700,
         ),
-      ),
-    );
-  }
-}
-
-class _NoAbsencesView extends StatelessWidget {
-  const _NoAbsencesView();
-
-  @override
-  Widget build(BuildContext context) {
-    return DiperaCard(
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        children: [
-          Container(
-            width: 58,
-            height: 58,
-            decoration: BoxDecoration(
-              color: const Color(0xFFFFFAEB),
-              borderRadius: BorderRadius.circular(19),
-            ),
-            child: const Icon(
-              Icons.event_available_rounded,
-              color: Color(0xFFB54708),
-              size: 28,
-            ),
-          ),
-          const SizedBox(height: 16),
-          Text(
-            'Keine Abwesenheiten',
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-              color: const Color(0xFF101828),
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-          const SizedBox(height: 7),
-          Text(
-            'Derzeit sind für dich keine Abwesenheitseinträge vorhanden.',
-            textAlign: TextAlign.center,
-            style: Theme.of(
-              context,
-            ).textTheme.bodyMedium?.copyWith(color: const Color(0xFF667085)),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _NoticeCard extends StatelessWidget {
-  const _NoticeCard();
-
-  @override
-  Widget build(BuildContext context) {
-    return DiperaCard(
-      padding: const EdgeInsets.all(18),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 42,
-            height: 42,
-            decoration: BoxDecoration(
-              color: const Color(0xFFEFF6FF),
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: const Icon(
-              Icons.info_outline_rounded,
-              color: Color(0xFF2563EB),
-            ),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Text(
-              'Neue Anträge können derzeit noch nicht über die App '
-              'gestellt werden. Diese Funktion wird später zusammen '
-              'mit der vollständigen Urlaubslogik ergänzt.',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: const Color(0xFF667085),
-                height: 1.45,
-              ),
-            ),
-          ),
-        ],
       ),
     );
   }
@@ -491,7 +588,9 @@ class _LoadingView extends StatelessWidget {
 }
 
 class _ErrorView extends StatelessWidget {
-  const _ErrorView({required this.onRetry});
+  const _ErrorView({
+    required this.onRetry,
+  });
 
   final VoidCallback onRetry;
 

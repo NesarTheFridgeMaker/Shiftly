@@ -44,6 +44,7 @@ type Absence = {
   start_date: string;
   end_date: string;
   request_status: string;
+  note?: string | null;
   absence_type_id?: string | null;
 };
 
@@ -110,6 +111,14 @@ function formatDate(dateString: string) {
   });
 }
 
+function getLocalDateKey(date = new Date()) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+}
+
 function calculateVacationDays(
   start: string,
   end: string,
@@ -153,6 +162,220 @@ function getApprovedVacationDaysForEmployee(
     }, 0);
 }
 
+
+type AbsenceListProps = {
+  items: Absence[];
+  formatType: (code: string) => string;
+  onDelete: (id: string) => void;
+  emptyTitle: string;
+  emptyDescription: string;
+};
+
+function AbsenceList({
+  items,
+  formatType,
+  onDelete,
+  emptyTitle,
+  emptyDescription,
+}: AbsenceListProps) {
+  if (items.length === 0) {
+    return (
+      <EmptyState
+        compact
+        title={emptyTitle}
+        description={emptyDescription}
+      />
+    );
+  }
+
+  return (
+    <>
+      <div className="grid grid-cols-1 gap-4 xl:hidden">
+        {items.map((absence) => (
+          <div
+            key={absence.id}
+            className="rounded-3xl border border-[#E2E8F0] bg-[#F8FAFC] p-4 transition hover:-translate-y-0.5 hover:border-[#CBD5E1] hover:shadow-[0_16px_40px_rgba(15,23,42,0.08)]"
+          >
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-base font-semibold text-[#0F172A]">
+                  {absence.employee_name}
+                </p>
+
+                <p className="mt-1 text-sm text-[#64748B]">
+                  {formatDate(absence.start_date)} bis{" "}
+                  {formatDate(absence.end_date)}
+                </p>
+              </div>
+
+              <Badge
+                variant={getTypeBadgeVariant(absence.type)}
+                dot
+              >
+                {formatType(absence.type)}
+              </Badge>
+            </div>
+
+            {absence.note?.trim() && (
+              <div className="mt-4 rounded-2xl border border-[#E2E8F0] bg-white p-3">
+                <p className="text-xs font-semibold uppercase tracking-wide text-[#94A3B8]">
+                  Kommentar
+                </p>
+                <p className="mt-1 whitespace-pre-wrap text-sm text-[#475569]">
+                  {absence.note.trim()}
+                </p>
+              </div>
+            )}
+
+            <div className="mt-4 grid grid-cols-2 gap-3">
+              <div className="rounded-2xl bg-white p-3">
+                <p className="text-xs text-[#64748B]">
+                  Status
+                </p>
+
+                <div className="mt-2">
+                  <Badge
+                    variant={getStatusBadgeVariant(
+                      absence.request_status
+                    )}
+                    dot
+                  >
+                    {formatRequestStatus(
+                      absence.request_status
+                    )}
+                  </Badge>
+                </div>
+              </div>
+
+              <div className="rounded-2xl bg-white p-3">
+                <p className="text-xs text-[#64748B]">
+                  Zeitraum
+                </p>
+
+                <p className="mt-2 text-sm font-semibold text-[#0F172A]">
+                  {formatDate(absence.start_date)} –{" "}
+                  {formatDate(absence.end_date)}
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-4">
+              <Button
+                type="button"
+                variant="danger"
+                fullWidth
+                onClick={() => onDelete(absence.id)}
+              >
+                Löschen
+              </Button>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="hidden xl:block">
+        <Table>
+          <TableHead>
+            <tr>
+              <TableHeaderCell>
+                Mitarbeiter
+              </TableHeaderCell>
+
+              <TableHeaderCell>
+                Art
+              </TableHeaderCell>
+
+              <TableHeaderCell>
+                Von
+              </TableHeaderCell>
+
+              <TableHeaderCell>
+                Bis
+              </TableHeaderCell>
+
+              <TableHeaderCell>
+                Kommentar
+              </TableHeaderCell>
+
+              <TableHeaderCell>
+                Status
+              </TableHeaderCell>
+
+              <TableHeaderCell>
+                Aktionen
+              </TableHeaderCell>
+            </tr>
+          </TableHead>
+
+          <TableBody>
+            {items.map((absence) => (
+              <TableRow key={absence.id}>
+                <TableCell>
+                  <span className="font-semibold">
+                    {absence.employee_name}
+                  </span>
+                </TableCell>
+
+                <TableCell>
+                  <Badge
+                    variant={getTypeBadgeVariant(absence.type)}
+                    dot
+                  >
+                    {formatType(absence.type)}
+                  </Badge>
+                </TableCell>
+
+                <TableCell>
+                  {formatDate(absence.start_date)}
+                </TableCell>
+
+                <TableCell>
+                  {formatDate(absence.end_date)}
+                </TableCell>
+
+                <TableCell>
+                  <div
+                    className="max-w-[320px] whitespace-pre-wrap text-sm text-[#475569]"
+                    title={absence.note?.trim() || undefined}
+                  >
+                    {absence.note?.trim() || "—"}
+                  </div>
+                </TableCell>
+
+                <TableCell>
+                  <Badge
+                    variant={getStatusBadgeVariant(
+                      absence.request_status
+                    )}
+                    dot
+                  >
+                    {formatRequestStatus(
+                      absence.request_status
+                    )}
+                  </Badge>
+                </TableCell>
+
+                <TableCell>
+                  <div className="flex justify-end">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="danger"
+                      onClick={() => onDelete(absence.id)}
+                    >
+                      Löschen
+                    </Button>
+                  </div>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
+    </>
+  );
+}
+
 export default function AbsencesPage() {
   const { showToast } = useToast();
 
@@ -168,6 +391,7 @@ export default function AbsencesPage() {
   const [endDate, setEndDate] = useState("");
 
   const [isSaving, setIsSaving] = useState(false);
+  const [showAllHistory, setShowAllHistory] = useState(false);
 
   const [absenceToDelete, setAbsenceToDelete] =
     useState<string | null>(null);
@@ -212,7 +436,7 @@ export default function AbsencesPage() {
       .from("absences")
       .select("*")
       .eq("business_id", businessId)
-      .order("start_date", { ascending: true });
+      .order("start_date", { ascending: false });
 
     if (error) {
       console.error(error);
@@ -773,10 +997,26 @@ export default function AbsencesPage() {
       absence.type === "sick"
   );
 
-  const otherAbsences = absences.filter(
+  const todayKey = getLocalDateKey();
+
+  const currentAbsences = absences.filter(
     (absence) =>
-      absence.request_status !== "pending"
+      absence.request_status === "approved" &&
+      absence.end_date >= todayKey
   );
+
+  const historyAbsences = absences.filter(
+    (absence) =>
+      absence.request_status !== "pending" &&
+      !currentAbsences.some(
+        (currentAbsence) =>
+          currentAbsence.id === absence.id
+      )
+  );
+
+  const visibleHistoryAbsences = showAllHistory
+    ? historyAbsences
+    : historyAbsences.slice(0, 8);
 
   const employeeOptions = useMemo(
     () => [
@@ -830,17 +1070,27 @@ export default function AbsencesPage() {
         >
           <TableSkeleton
             rows={3}
-            columns={5}
+            columns={6}
           />
         </Section>
 
         <Section
-          title="Abwesenheitsübersicht"
-          description="Alle genehmigten und abgelehnten Abwesenheiten."
+          title="Aktuelle Abwesenheiten"
+          description="Genehmigte Abwesenheiten, die aktuell laufen oder noch bevorstehen."
+        >
+          <TableSkeleton
+            rows={4}
+            columns={7}
+          />
+        </Section>
+
+        <Section
+          title="Verlauf"
+          description="Vergangene und abgelehnte Abwesenheiten."
         >
           <TableSkeleton
             rows={6}
-            columns={6}
+            columns={7}
           />
         </Section>
       </div>
@@ -1048,6 +1298,17 @@ export default function AbsencesPage() {
                       </Badge>
                     </div>
 
+                    {absence.note?.trim() && (
+                      <div className="mt-4 rounded-2xl border border-[#E2E8F0] bg-white p-3">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-[#94A3B8]">
+                          Kommentar des Mitarbeiters
+                        </p>
+                        <p className="mt-1 whitespace-pre-wrap text-sm text-[#475569]">
+                          {absence.note.trim()}
+                        </p>
+                      </div>
+                    )}
+
                     <div className="mt-4 flex flex-col gap-2 sm:flex-row">
                       <Button
                         type="button"
@@ -1103,6 +1364,10 @@ export default function AbsencesPage() {
                     </TableHeaderCell>
 
                     <TableHeaderCell>
+                      Kommentar
+                    </TableHeaderCell>
+
+                    <TableHeaderCell>
                       Aktionen
                     </TableHeaderCell>
                   </tr>
@@ -1145,6 +1410,15 @@ export default function AbsencesPage() {
                           {formatDate(
                             absence.end_date
                           )}
+                        </TableCell>
+
+                        <TableCell>
+                          <div
+                            className="max-w-[320px] whitespace-pre-wrap text-sm text-[#475569]"
+                            title={absence.note?.trim() || undefined}
+                          >
+                            {absence.note?.trim() || "—"}
+                          </div>
                         </TableCell>
 
                         <TableCell>
@@ -1195,216 +1469,45 @@ export default function AbsencesPage() {
       </Section>
 
       <Section
-        title="Abwesenheitsübersicht"
-        description="Alle genehmigten und abgelehnten Abwesenheiten."
+        title="Aktuelle Abwesenheiten"
+        description="Genehmigte Abwesenheiten, die aktuell laufen oder noch bevorstehen."
       >
-        {otherAbsences.length > 0 ? (
-          <>
-            <div className="grid grid-cols-1 gap-4 xl:hidden">
-              {otherAbsences.map(
-                (absence) => (
-                  <div
-                    key={absence.id}
-                    className="rounded-3xl border border-[#E2E8F0] bg-[#F8FAFC] p-4 transition hover:-translate-y-0.5 hover:border-[#CBD5E1] hover:shadow-[0_16px_40px_rgba(15,23,42,0.08)]"
-                  >
-                    <div className="flex items-start justify-between gap-4">
-                      <div>
-                        <p className="text-base font-semibold text-[#0F172A]">
-                          {
-                            absence.employee_name
-                          }
-                        </p>
+        <AbsenceList
+          items={currentAbsences}
+          formatType={formatType}
+          onDelete={setAbsenceToDelete}
+          emptyTitle="Keine aktuellen Abwesenheiten"
+          emptyDescription="Aktuell laufende oder bevorstehende genehmigte Abwesenheiten erscheinen hier."
+        />
+      </Section>
 
-                        <p className="mt-1 text-sm text-[#64748B]">
-                          {formatDate(
-                            absence.start_date
-                          )}{" "}
-                          bis{" "}
-                          {formatDate(
-                            absence.end_date
-                          )}
-                        </p>
-                      </div>
+      <Section
+        title="Verlauf"
+        description="Vergangene und abgelehnte Abwesenheiten. Standardmäßig werden die neuesten acht Einträge angezeigt."
+      >
+        <AbsenceList
+          items={visibleHistoryAbsences}
+          formatType={formatType}
+          onDelete={setAbsenceToDelete}
+          emptyTitle="Noch kein Verlauf"
+          emptyDescription="Vergangene oder abgelehnte Abwesenheiten erscheinen später hier."
+        />
 
-                      <Badge
-                        variant={getTypeBadgeVariant(
-                          absence.type
-                        )}
-                        dot
-                      >
-                        {formatType(
-                          absence.type
-                        )}
-                      </Badge>
-                    </div>
-
-                    <div className="mt-4 grid grid-cols-2 gap-3">
-                      <div className="rounded-2xl bg-white p-3">
-                        <p className="text-xs text-[#64748B]">
-                          Status
-                        </p>
-
-                        <div className="mt-2">
-                          <Badge
-                            variant={getStatusBadgeVariant(
-                              absence.request_status
-                            )}
-                            dot
-                          >
-                            {formatRequestStatus(
-                              absence.request_status
-                            )}
-                          </Badge>
-                        </div>
-                      </div>
-
-                      <div className="rounded-2xl bg-white p-3">
-                        <p className="text-xs text-[#64748B]">
-                          Zeitraum
-                        </p>
-
-                        <p className="mt-2 text-sm font-semibold text-[#0F172A]">
-                          {formatDate(
-                            absence.start_date
-                          )}{" "}
-                          –{" "}
-                          {formatDate(
-                            absence.end_date
-                          )}
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="mt-4">
-                      <Button
-                        type="button"
-                        variant="danger"
-                        fullWidth
-                        onClick={() =>
-                          setAbsenceToDelete(
-                            absence.id
-                          )
-                        }
-                      >
-                        Löschen
-                      </Button>
-                    </div>
-                  </div>
+        {historyAbsences.length > 8 && (
+          <div className="mt-5 flex justify-center">
+            <Button
+              type="button"
+              onClick={() =>
+                setShowAllHistory(
+                  (currentValue) => !currentValue
                 )
-              )}
-            </div>
-
-            <div className="hidden xl:block">
-              <Table>
-                <TableHead>
-                  <tr>
-                    <TableHeaderCell>
-                      Mitarbeiter
-                    </TableHeaderCell>
-
-                    <TableHeaderCell>
-                      Art
-                    </TableHeaderCell>
-
-                    <TableHeaderCell>
-                      Von
-                    </TableHeaderCell>
-
-                    <TableHeaderCell>
-                      Bis
-                    </TableHeaderCell>
-
-                    <TableHeaderCell>
-                      Status
-                    </TableHeaderCell>
-
-                    <TableHeaderCell>
-                      Aktionen
-                    </TableHeaderCell>
-                  </tr>
-                </TableHead>
-
-                <TableBody>
-                  {otherAbsences.map(
-                    (absence) => (
-                      <TableRow
-                        key={absence.id}
-                      >
-                        <TableCell>
-                          <span className="font-semibold">
-                            {
-                              absence.employee_name
-                            }
-                          </span>
-                        </TableCell>
-
-                        <TableCell>
-                          <Badge
-                            variant={getTypeBadgeVariant(
-                              absence.type
-                            )}
-                            dot
-                          >
-                            {formatType(
-                              absence.type
-                            )}
-                          </Badge>
-                        </TableCell>
-
-                        <TableCell>
-                          {formatDate(
-                            absence.start_date
-                          )}
-                        </TableCell>
-
-                        <TableCell>
-                          {formatDate(
-                            absence.end_date
-                          )}
-                        </TableCell>
-
-                        <TableCell>
-                          <Badge
-                            variant={getStatusBadgeVariant(
-                              absence.request_status
-                            )}
-                            dot
-                          >
-                            {formatRequestStatus(
-                              absence.request_status
-                            )}
-                          </Badge>
-                        </TableCell>
-
-                        <TableCell>
-                          <div className="flex justify-end">
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant="danger"
-                              onClick={() =>
-                                setAbsenceToDelete(
-                                  absence.id
-                                )
-                              }
-                            >
-                              Löschen
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    )
-                  )}
-                </TableBody>
-              </Table>
-            </div>
-          </>
-        ) : (
-          <EmptyState
-            compact
-            title="Noch keine Abwesenheiten"
-            description="Genehmigte oder abgelehnte Abwesenheiten erscheinen später in dieser Übersicht."
-          />
+              }
+            >
+              {showAllHistory
+                ? "Weniger anzeigen"
+                : `Alle ${historyAbsences.length} anzeigen`}
+            </Button>
+          </div>
         )}
       </Section>
 

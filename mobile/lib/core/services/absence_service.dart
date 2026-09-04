@@ -92,10 +92,107 @@ class EmployeeAbsence {
   }
 }
 
+class VacationBalance {
+  const VacationBalance({
+    required this.employeeId,
+    required this.vacationYear,
+    required this.annualEntitlementDays,
+    required this.approvedVacationDays,
+    required this.pendingVacationDays,
+    required this.availableVacationDays,
+  });
+
+  final String employeeId;
+  final int vacationYear;
+  final int annualEntitlementDays;
+  final int approvedVacationDays;
+  final int pendingVacationDays;
+  final int availableVacationDays;
+
+  factory VacationBalance.fromJson(Map<String, dynamic> json) {
+    return VacationBalance(
+      employeeId: json['employee_id'] as String,
+      vacationYear: (json['vacation_year'] as num).toInt(),
+      annualEntitlementDays:
+          (json['annual_entitlement_days'] as num).toInt(),
+      approvedVacationDays:
+          (json['approved_vacation_days'] as num).toInt(),
+      pendingVacationDays:
+          (json['pending_vacation_days'] as num).toInt(),
+      availableVacationDays:
+          (json['available_vacation_days'] as num).toInt(),
+    );
+  }
+}
+
 class AbsenceService {
   AbsenceService(this._client);
 
   final SupabaseClient _client;
+
+  Future<VacationBalance> getCurrentVacationBalance() async {
+    final data = await _client.rpc(
+      'get_my_current_vacation_balance',
+    );
+
+    if (data is! List || data.isEmpty) {
+      throw Exception(
+        'Für das aktuelle Urlaubskonto wurden keine Daten gefunden.',
+      );
+    }
+
+    final row = Map<String, dynamic>.from(
+      data.first as Map,
+    );
+
+    return VacationBalance.fromJson(row);
+  }
+
+  Future<String> createVacationRequest({
+    required DateTime startDate,
+    required DateTime endDate,
+    String? note,
+  }) async {
+    final normalizedStart = DateTime(
+      startDate.year,
+      startDate.month,
+      startDate.day,
+    );
+
+    final normalizedEnd = DateTime(
+      endDate.year,
+      endDate.month,
+      endDate.day,
+    );
+
+    if (normalizedEnd.isBefore(normalizedStart)) {
+      throw ArgumentError(
+        'Das Enddatum darf nicht vor dem Startdatum liegen.',
+      );
+    }
+
+    final data = await _client.rpc(
+      'create_own_absence_request',
+      params: {
+        'p_type_code': 'vacation',
+        'p_start_date': _formatDateForDatabase(
+          normalizedStart,
+        ),
+        'p_end_date': _formatDateForDatabase(
+          normalizedEnd,
+        ),
+        'p_note': _normalizeNote(note),
+      },
+    );
+
+    if (data is! String || data.isEmpty) {
+      throw Exception(
+        'Der Urlaubsantrag konnte nicht gespeichert werden.',
+      );
+    }
+
+    return data;
+  }
 
   Future<List<EmployeeAbsence>> getEmployeeAbsences({
     required String employeeId,
@@ -124,14 +221,42 @@ class AbsenceService {
       return EmployeeAbsence(
         id: map['id'] as String,
         employeeId: map['employee_id'] as String,
-        employeeName: (map['employee_name'] as String?)?.trim() ?? '',
-        type: (map['type'] as String?)?.trim() ?? 'other',
-        startDate: DateTime.parse(map['start_date'] as String),
-        endDate: DateTime.parse(map['end_date'] as String),
+        employeeName:
+            (map['employee_name'] as String?)?.trim() ?? '',
+        type:
+            (map['type'] as String?)?.trim() ?? 'other',
+        startDate: DateTime.parse(
+          map['start_date'] as String,
+        ),
+        endDate: DateTime.parse(
+          map['end_date'] as String,
+        ),
         note: (map['note'] as String?)?.trim(),
-        status: parseAbsenceStatus(map['request_status'] as String?),
-        createdAt: DateTime.parse(map['created_at'] as String),
+        status: parseAbsenceStatus(
+          map['request_status'] as String?,
+        ),
+        createdAt: DateTime.parse(
+          map['created_at'] as String,
+        ),
       );
     }).toList();
+  }
+
+  String _formatDateForDatabase(DateTime date) {
+    final year = date.year.toString().padLeft(4, '0');
+    final month = date.month.toString().padLeft(2, '0');
+    final day = date.day.toString().padLeft(2, '0');
+
+    return '$year-$month-$day';
+  }
+
+  String? _normalizeNote(String? value) {
+    final trimmed = value?.trim();
+
+    if (trimmed == null || trimmed.isEmpty) {
+      return null;
+    }
+
+    return trimmed;
   }
 }
