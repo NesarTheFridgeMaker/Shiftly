@@ -1341,14 +1341,14 @@ if (
   }
 
   function getInviteUrl(inviteCode: string) {
-  const appUrl = (
-    process.env.NEXT_PUBLIC_APP_URL || "https://app.dipera.de"
-  ).replace(/\/$/, "");
+    const appUrl = (
+      process.env.NEXT_PUBLIC_APP_URL || "https://app.dipera.de"
+    ).replace(/\/$/, "");
 
-  return `${appUrl}/employee-register?invite=${encodeURIComponent(
-    inviteCode,
-  )}`;
-}
+    return `${appUrl}/employee-register?invite=${encodeURIComponent(
+      inviteCode,
+    )}`;
+  }
 
   function closeCreatedEmployeeInvite() {
     if (
@@ -1378,6 +1378,98 @@ if (
     deliveryMethod: employee.invite.delivery_method,
   });
 }
+
+  async function handleCreateMissingInvite(
+    employee: EmployeeWithTargetHours,
+  ) {
+    if (employee.invite?.used_at) {
+      showToast({
+        type: "warning",
+        title: "Zugang bereits aktiviert",
+        description:
+          "Für diesen Mitarbeiter wurde der Dipera-Zugang bereits aktiviert.",
+      });
+      return;
+    }
+
+    if (employee.invite && !employee.invite.used_at) {
+      handleOpenExistingInvite(employee);
+      return;
+    }
+
+    const businessId = await getBusinessId();
+
+    if (!businessId) {
+      showToast({
+        type: "error",
+        title: "Betrieb nicht gefunden",
+        description: "Die Einladung konnte nicht erstellt werden.",
+      });
+      return;
+    }
+
+    const inviteCode = generateInviteCode();
+
+    const { data: insertedInvite, error: inviteError } = await supabase
+      .from("employee_invites")
+      .insert([
+        {
+          business_id: businessId,
+          employee_id: employee.id,
+          invite_code: inviteCode,
+          email: null,
+          delivery_method: "whatsapp",
+          auth_user_id: null,
+          claimed_at: null,
+        },
+      ])
+      .select(`
+        id,
+        employee_id,
+        business_id,
+        invite_code,
+        email,
+        delivery_method,
+        auth_user_id,
+        claimed_at,
+        used_at
+      `)
+      .single();
+
+    if (inviteError || !insertedInvite) {
+      console.error(
+        "CREATE MISSING EMPLOYEE INVITE ERROR:",
+        inviteError,
+      );
+
+      showToast({
+        type: "error",
+        title: "Einladung konnte nicht erstellt werden",
+        description:
+          inviteError?.message ||
+          "Bitte versuche es erneut.",
+      });
+      return;
+    }
+
+    setInviteEmail("");
+
+    setCreatedEmployeeInvite({
+      employeeId: employee.id,
+      employeeName: employee.name,
+      inviteCode: insertedInvite.invite_code,
+      email: insertedInvite.email,
+      deliveryMethod: insertedInvite.delivery_method,
+    });
+
+    await loadEmployees();
+
+    showToast({
+      type: "success",
+      title: "Einladung erstellt",
+      description: `Die Einladung für ${employee.name} wurde erstellt.`,
+    });
+  }
 
   async function handleSendInviteEmail() {
     if (!createdEmployeeInvite || isSendingInviteEmail) return;
@@ -3828,10 +3920,52 @@ const inactiveEmployees = employees
         onOpenPayroll={() => handleOpenEditPayroll(employee)}
         onDelete={() => setEmployeeToDelete(employee.id)}
         inviteContent={
-          <EmployeeInviteCard
-            invite={employee.invite}
-            onOpenInvite={() => handleOpenExistingInvite(employee)}
-          />
+          employee.invite ? (
+            <EmployeeInviteCard
+              invite={employee.invite}
+              onOpenInvite={() => handleOpenExistingInvite(employee)}
+            />
+          ) : (
+            <div className="rounded-2xl border border-[#E2E8F0] bg-white p-4">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h4 className="font-semibold text-[#0F172A]">
+                      Mitarbeiter-Zugang
+                    </h4>
+
+                    <Badge variant="muted">
+                      Einladung fehlt
+                    </Badge>
+                  </div>
+
+                  <p className="mt-1 text-sm text-[#64748B]">
+                    Einladung für das Mitarbeiter-Dashboard.
+                  </p>
+
+                  <p className="mt-3 text-sm leading-6 text-[#64748B]">
+                    Für diesen Mitarbeiter wurde noch kein Einladungscode
+                    erstellt. Du kannst die Einladung jederzeit nachträglich
+                    erzeugen und anschließend per E-Mail oder WhatsApp
+                    versenden.
+                  </p>
+                </div>
+
+                <div className="shrink-0">
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    type="button"
+                    onClick={() =>
+                      void handleCreateMissingInvite(employee)
+                    }
+                  >
+                    Einladung erstellen
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )
         }
         notesContent={renderNotes(employee)}
       />

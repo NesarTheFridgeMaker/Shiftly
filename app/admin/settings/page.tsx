@@ -33,9 +33,13 @@ type PayRule = {
   rule_type: string;
   starts_at: string | null;
   ends_at: string | null;
+  weekday: number | null;
   percentage: number;
   datev_wage_type: string | null;
   active: boolean;
+  priority: number;
+  stack_with_other_rule_types: boolean;
+  conflict_group: string;
 };
 
 type ShiftTemplate = {
@@ -103,9 +107,32 @@ const federalStateOptions = [
 ];
 
 const payRuleTypeOptions = [
-  { value: "night", label: "Nacht" },
-  { value: "sunday", label: "Sonntag" },
-  { value: "holiday", label: "Feiertag" },
+  { value: "night", label: "Nachtzuschlag" },
+  { value: "sunday", label: "Sonntagszuschlag" },
+  { value: "holiday", label: "Feiertagszuschlag" },
+  { value: "weekday", label: "Wochentagszuschlag" },
+  { value: "time", label: "Freies Zeitfenster" },
+];
+
+const weekdayOptions = [
+  { value: "", label: "Alle Wochentage" },
+  { value: "1", label: "Montag" },
+  { value: "2", label: "Dienstag" },
+  { value: "3", label: "Mittwoch" },
+  { value: "4", label: "Donnerstag" },
+  { value: "5", label: "Freitag" },
+  { value: "6", label: "Samstag" },
+  { value: "7", label: "Sonntag" },
+];
+
+const payRuleScheduleOptions = [
+  { value: "all_day", label: "Ganztägig" },
+  { value: "time_window", label: "Zeitfenster" },
+];
+
+const stackOptions = [
+  { value: "true", label: "Ja, mit anderen Regeltypen kombinieren" },
+  { value: "false", label: "Nein, nur die priorisierte Regel anwenden" },
 ];
 
 function formatError(error: unknown) {
@@ -133,7 +160,26 @@ function formatRuleType(ruleType: string) {
   if (ruleType === "night") return "Nacht";
   if (ruleType === "sunday") return "Sonntag";
   if (ruleType === "holiday") return "Feiertag";
+  if (ruleType === "weekday") return "Wochentag";
+  if (ruleType === "time") return "Zeitfenster";
   return ruleType;
+}
+
+function formatWeekday(weekday: number | null) {
+  if (weekday == null) return "Alle Wochentage";
+
+  return (
+    weekdayOptions.find((option) => option.value === String(weekday))?.label ??
+    `Wochentag ${weekday}`
+  );
+}
+
+function defaultConflictGroup(ruleType: string) {
+  if (ruleType === "night") return "night";
+  if (ruleType === "sunday") return "sunday";
+  if (ruleType === "holiday") return "holiday";
+  if (ruleType === "weekday") return "weekday";
+  return "time";
 }
 
 function getFederalStateLabel(value: string) {
@@ -168,11 +214,17 @@ export default function SettingsPage() {
   const [workTypeName, setWorkTypeName] = useState("");
 
   const [payRules, setPayRules] = useState<PayRule[]>([]);
+  const [editingPayRuleId, setEditingPayRuleId] = useState<string | null>(null);
   const [payRuleName, setPayRuleName] = useState("");
   const [payRuleType, setPayRuleType] = useState("night");
+  const [payRuleSchedule, setPayRuleSchedule] = useState("time_window");
+  const [payRuleWeekday, setPayRuleWeekday] = useState("");
   const [payRuleStart, setPayRuleStart] = useState("");
   const [payRuleEnd, setPayRuleEnd] = useState("");
   const [payRulePercentage, setPayRulePercentage] = useState("");
+  const [payRulePriority, setPayRulePriority] = useState("0");
+  const [payRuleStack, setPayRuleStack] = useState("true");
+  const [payRuleConflictGroup, setPayRuleConflictGroup] = useState("night");
   const [payRuleDatevType, setPayRuleDatevType] = useState("");
 
   const [federalState, setFederalState] = useState("BW");
@@ -529,14 +581,104 @@ if (
     setPayRules((data || []) as PayRule[]);
   }
 
-  async function handleCreatePayRule() {
+  function resetPayRuleForm() {
+    setEditingPayRuleId(null);
+    setPayRuleName("");
+    setPayRuleType("night");
+    setPayRuleSchedule("time_window");
+    setPayRuleWeekday("");
+    setPayRuleStart("");
+    setPayRuleEnd("");
+    setPayRulePercentage("");
+    setPayRulePriority("0");
+    setPayRuleStack("true");
+    setPayRuleConflictGroup("night");
+    setPayRuleDatevType("");
+  }
+
+  function handlePayRuleTypeChange(nextType: string) {
+    setPayRuleType(nextType);
+    setPayRuleConflictGroup(defaultConflictGroup(nextType));
+
+    if (nextType === "holiday") {
+      setPayRuleSchedule("all_day");
+      setPayRuleWeekday("");
+      setPayRuleStart("");
+      setPayRuleEnd("");
+      return;
+    }
+
+    if (nextType === "sunday") {
+      setPayRuleWeekday("7");
+      setPayRuleSchedule("all_day");
+      setPayRuleStart("");
+      setPayRuleEnd("");
+      return;
+    }
+
+    if (nextType === "weekday") {
+      setPayRuleSchedule("all_day");
+      setPayRuleWeekday(
+        payRuleWeekday && payRuleWeekday !== "7" ? payRuleWeekday : "6",
+      );
+      setPayRuleStart("");
+      setPayRuleEnd("");
+      return;
+    }
+
+    setPayRuleSchedule("time_window");
+
+    if (nextType === "night") {
+      setPayRuleWeekday("");
+    }
+  }
+
+  function handlePayRuleScheduleChange(nextSchedule: string) {
+    setPayRuleSchedule(nextSchedule);
+
+    if (nextSchedule === "all_day") {
+      setPayRuleStart("");
+      setPayRuleEnd("");
+    }
+  }
+
+  function handleEditPayRule(rule: PayRule) {
+    setEditingPayRuleId(rule.id);
+    setPayRuleName(rule.name);
+    setPayRuleType(rule.rule_type);
+    setPayRuleSchedule(
+      rule.starts_at && rule.ends_at ? "time_window" : "all_day",
+    );
+    setPayRuleWeekday(
+      rule.rule_type === "sunday"
+        ? "7"
+        : rule.weekday != null
+          ? String(rule.weekday)
+          : "",
+    );
+    setPayRuleStart(rule.starts_at?.slice(0, 5) ?? "");
+    setPayRuleEnd(rule.ends_at?.slice(0, 5) ?? "");
+    setPayRulePercentage(String(rule.percentage));
+    setPayRulePriority(String(rule.priority ?? 0));
+    setPayRuleStack(String(rule.stack_with_other_rule_types ?? true));
+    setPayRuleConflictGroup(
+      rule.conflict_group || defaultConflictGroup(rule.rule_type),
+    );
+    setPayRuleDatevType(rule.datev_wage_type ?? "");
+
+    document
+      .getElementById("pay-rule-editor")
+      ?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  async function handleSavePayRule() {
     const businessId = await getBusinessId();
 
     if (!businessId) {
       showToast({
         type: "error",
         title: "Betrieb nicht gefunden",
-        description: "Der Zuschlag konnte nicht gespeichert werden.",
+        description: "Die Zuschlagsregel konnte nicht gespeichert werden.",
       });
       return;
     }
@@ -545,62 +687,139 @@ if (
       showToast({
         type: "warning",
         title: "Angaben fehlen",
-        description: "Bitte gib Name und Zuschlag ein.",
+        description: "Bitte gib Name und Zuschlagsprozentsatz ein.",
       });
       return;
     }
 
     const percentage = Number(payRulePercentage);
+    const priority = Number(payRulePriority);
 
     if (Number.isNaN(percentage) || percentage <= 0) {
       showToast({
         type: "warning",
         title: "Ungültiger Zuschlag",
-        description: "Bitte gib einen gültigen Prozentwert ein.",
+        description: "Bitte gib einen Zuschlagsprozentsatz größer als 0 ein.",
       });
       return;
     }
 
+    if (!Number.isInteger(priority) || priority < 0) {
+      showToast({
+        type: "warning",
+        title: "Ungültige Priorität",
+        description: "Die Priorität muss eine ganze Zahl ab 0 sein.",
+      });
+      return;
+    }
+
+    if (!payRuleConflictGroup.trim()) {
+      showToast({
+        type: "warning",
+        title: "Konfliktgruppe fehlt",
+        description:
+          "Bitte gib eine Konfliktgruppe an. Regeln derselben Gruppe konkurrieren miteinander.",
+      });
+      return;
+    }
+
+    const effectiveSchedule =
+      payRuleType === "holiday" ? "all_day" : payRuleSchedule;
+
+    if (
+      (payRuleType === "night" || payRuleType === "time") &&
+      effectiveSchedule !== "time_window"
+    ) {
+      showToast({
+        type: "warning",
+        title: "Zeitfenster erforderlich",
+        description:
+          "Nacht- und Zeitfensterregeln benötigen einen Beginn und ein Ende.",
+      });
+      return;
+    }
+
+    if (
+      effectiveSchedule === "time_window" &&
+      (!payRuleStart || !payRuleEnd || payRuleStart === payRuleEnd)
+    ) {
+      showToast({
+        type: "warning",
+        title: "Ungültiges Zeitfenster",
+        description:
+          "Bitte gib unterschiedliche Start- und Endzeiten für das Zeitfenster an.",
+      });
+      return;
+    }
+
+    if (payRuleType === "weekday" && !payRuleWeekday) {
+      showToast({
+        type: "warning",
+        title: "Wochentag fehlt",
+        description: "Bitte wähle den Wochentag für diese Zuschlagsregel.",
+      });
+      return;
+    }
+
+    const weekday =
+      payRuleType === "holiday"
+        ? null
+        : payRuleType === "sunday"
+          ? 7
+          : payRuleWeekday
+            ? Number(payRuleWeekday)
+            : null;
+
+    const payload = {
+      business_id: businessId,
+      name: payRuleName.trim(),
+      rule_type: payRuleType,
+      starts_at:
+        effectiveSchedule === "time_window" ? payRuleStart : null,
+      ends_at:
+        effectiveSchedule === "time_window" ? payRuleEnd : null,
+      weekday,
+      percentage,
+      datev_wage_type: payRuleDatevType.trim() || null,
+      active: true,
+      priority,
+      stack_with_other_rule_types: payRuleStack === "true",
+      conflict_group: payRuleConflictGroup.trim(),
+    };
+
     setIsSaving(true);
 
     try {
-      const { error } = await supabase.from("pay_rules").insert([
-        {
-          business_id: businessId,
-          name: payRuleName.trim(),
-          rule_type: payRuleType,
-          starts_at: payRuleStart || null,
-          ends_at: payRuleEnd || null,
-          percentage,
-          datev_wage_type: payRuleDatevType.trim() || null,
-        },
-      ]);
+      const query = editingPayRuleId
+        ? supabase
+            .from("pay_rules")
+            .update(payload)
+            .eq("id", editingPayRuleId)
+            .eq("business_id", businessId)
+        : supabase.from("pay_rules").insert([payload]);
+
+      const { error } = await query;
 
       if (error) {
-        console.error("CREATE PAY RULE ERROR:", error);
+        console.error("SAVE PAY RULE ERROR:", error);
         showToast({
           type: "error",
-          title: "Zuschlag konnte nicht gespeichert werden",
+          title: "Zuschlagsregel konnte nicht gespeichert werden",
           description: formatError(error),
         });
         return;
       }
 
       const savedName = payRuleName.trim();
+      const wasEditing = Boolean(editingPayRuleId);
 
-      setPayRuleName("");
-      setPayRuleType("night");
-      setPayRuleStart("");
-      setPayRuleEnd("");
-      setPayRulePercentage("");
-      setPayRuleDatevType("");
-
+      resetPayRuleForm();
       await loadPayRules();
 
       showToast({
         type: "success",
-        title: "Zuschlag gespeichert",
-        description: `${savedName} wurde hinzugefügt.`,
+        title: wasEditing ? "Zuschlagsregel aktualisiert" : "Zuschlagsregel gespeichert",
+        description: `${savedName} wurde ${wasEditing ? "aktualisiert" : "hinzugefügt"}.`,
       });
     } finally {
       setIsSaving(false);
@@ -635,6 +854,10 @@ if (
         description: formatError(error),
       });
       return;
+    }
+
+    if (editingPayRuleId === ruleId) {
+      resetPayRuleForm();
     }
 
     await loadPayRules();
@@ -1441,7 +1664,7 @@ if (
 
       <Section
         title="Lohn & Zuschläge"
-        description="Lege Nacht-, Sonn- oder Feiertagszuschläge inklusive DATEV-Lohnart fest."
+        description="Erstelle flexible prozentuale Zuschlagsregeln nach Zeitfenster, Wochentag oder Feiertag."
         action={
           <PageActions>
             <Badge variant="success" dot>
@@ -1451,14 +1674,35 @@ if (
           </PageActions>
         }
       >
-        <div className="rounded-3xl border border-[#E2E8F0] bg-[#F8FAFC] p-5">
-          <div className="mb-5 flex flex-col gap-1">
-            <h3 className="text-base font-semibold text-[#0F172A]">
-              Neuen Zuschlag anlegen
-            </h3>
-            <p className="text-sm text-[#64748B]">
-              Beispiel: Nachtzuschlag 25 % von 22:00 bis 06:00 Uhr.
-            </p>
+        <div
+          id="pay-rule-editor"
+          className="scroll-mt-24 rounded-3xl border border-[#E2E8F0] bg-[#F8FAFC] p-5 md:p-6"
+        >
+          <div className="mb-6 flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+            <div>
+              <h3 className="text-base font-semibold text-[#0F172A]">
+                {editingPayRuleId
+                  ? "Zuschlagsregel bearbeiten"
+                  : "Neue Zuschlagsregel"}
+              </h3>
+
+              <p className="mt-1 max-w-3xl text-sm leading-6 text-[#64748B]">
+                Beispiele: 25 % Nachtzuschlag von 22:00–06:00 Uhr,
+                20 % samstags oder 15 % werktags von 20:00–23:00 Uhr.
+                Regeln derselben Konfliktgruppe konkurrieren über ihre Priorität.
+              </p>
+            </div>
+
+            {editingPayRuleId && (
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={resetPayRuleForm}
+              >
+                Bearbeiten abbrechen
+              </Button>
+            )}
           </div>
 
           <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
@@ -1466,13 +1710,15 @@ if (
               label="Name"
               value={payRuleName}
               onChange={(event) => setPayRuleName(event.target.value)}
-              placeholder="z. B. Nachtzuschlag"
+              placeholder="z. B. Samstag Abend"
             />
 
             <Select
-              label="Typ"
+              label="Regelart"
               value={payRuleType}
-              onChange={(event) => setPayRuleType(event.target.value)}
+              onChange={(event) =>
+                handlePayRuleTypeChange(event.target.value)
+              }
               options={payRuleTypeOptions}
             />
 
@@ -1480,40 +1726,146 @@ if (
               label="Zuschlag %"
               type="number"
               value={payRulePercentage}
-              onChange={(event) => setPayRulePercentage(event.target.value)}
+              onChange={(event) =>
+                setPayRulePercentage(event.target.value)
+              }
               placeholder="25"
             />
 
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              <TimeInput
-                label="Beginn"
-                value={payRuleStart}
-                onChange={setPayRuleStart}
-              />
+            {payRuleType !== "holiday" &&
+              payRuleType !== "sunday" && (
+                <Select
+                  label={
+                    payRuleType === "weekday"
+                      ? "Wochentag"
+                      : "Wochentag (optional)"
+                  }
+                  value={payRuleWeekday}
+                  onChange={(event) =>
+                    setPayRuleWeekday(event.target.value)
+                  }
+                  options={
+                    payRuleType === "weekday"
+                      ? weekdayOptions.filter(
+                          (option) => option.value !== "",
+                        )
+                      : weekdayOptions
+                  }
+                />
+              )}
 
-              <TimeInput
-                label="Ende"
-                value={payRuleEnd}
-                onChange={setPayRuleEnd}
+            {payRuleType === "sunday" && (
+              <div className="rounded-2xl border border-[#E2E8F0] bg-white px-4 py-3">
+                <p className="text-xs font-medium uppercase tracking-wide text-[#94A3B8]">
+                  Wochentag
+                </p>
+                <p className="mt-1 text-sm font-semibold text-[#0F172A]">
+                  Sonntag
+                </p>
+              </div>
+            )}
+
+            {payRuleType !== "holiday" && (
+              <Select
+                label="Gültigkeit"
+                value={payRuleSchedule}
+                onChange={(event) =>
+                  handlePayRuleScheduleChange(event.target.value)
+                }
+                options={
+                  payRuleType === "night" || payRuleType === "time"
+                    ? payRuleScheduleOptions.filter(
+                        (option) => option.value === "time_window",
+                      )
+                    : payRuleScheduleOptions
+                }
               />
-            </div>
+            )}
+
+            {payRuleType === "holiday" && (
+              <div className="rounded-2xl border border-[#E2E8F0] bg-white px-4 py-3">
+                <p className="text-xs font-medium uppercase tracking-wide text-[#94A3B8]">
+                  Gültigkeit
+                </p>
+                <p className="mt-1 text-sm font-semibold text-[#0F172A]">
+                  Ganztägig an gesetzlichen Feiertagen
+                </p>
+              </div>
+            )}
+
+            {payRuleType !== "holiday" &&
+              payRuleSchedule === "time_window" && (
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:col-span-2">
+                  <TimeInput
+                    label="Beginn"
+                    value={payRuleStart}
+                    onChange={setPayRuleStart}
+                  />
+
+                  <TimeInput
+                    label="Ende"
+                    value={payRuleEnd}
+                    onChange={setPayRuleEnd}
+                  />
+                </div>
+              )}
+
+            <Input
+              label="Priorität"
+              type="number"
+              value={payRulePriority}
+              onChange={(event) =>
+                setPayRulePriority(event.target.value)
+              }
+              placeholder="0"
+            />
+
+            <Input
+              label="Konfliktgruppe"
+              value={payRuleConflictGroup}
+              onChange={(event) =>
+                setPayRuleConflictGroup(event.target.value)
+              }
+              placeholder="z. B. weekend"
+            />
+
+            <Select
+              label="Mit anderen Regeltypen kombinieren"
+              value={payRuleStack}
+              onChange={(event) =>
+                setPayRuleStack(event.target.value)
+              }
+              options={stackOptions}
+            />
 
             <Input
               label="DATEV-Lohnart"
               value={payRuleDatevType}
-              onChange={(event) => setPayRuleDatevType(event.target.value)}
-              placeholder="z. B. 150"
+              onChange={(event) =>
+                setPayRuleDatevType(event.target.value)
+              }
+              placeholder="optional, z. B. 150"
             />
           </div>
 
-          <div className="mt-5">
-            <Button
-              type="button"
-              onClick={handleCreatePayRule}
-              loading={isSaving}
-            >
-              Zuschlag speichern
-            </Button>
+          <div className="mt-5 flex flex-col gap-3 border-t border-[#E2E8F0] pt-5 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm leading-6 text-[#64748B]">
+              Innerhalb derselben Konfliktgruppe gewinnt die Regel mit der
+              höheren Priorität. Bei gleicher Priorität entscheidet der höhere
+              Prozentsatz.
+            </p>
+
+            <div className="shrink-0">
+              <Button
+                type="button"
+                onClick={handleSavePayRule}
+                loading={isSaving}
+              >
+                {editingPayRuleId
+                  ? "Änderungen speichern"
+                  : "Zuschlagsregel speichern"}
+              </Button>
+            </div>
           </div>
         </div>
 
@@ -1524,41 +1876,87 @@ if (
                 key={rule.id}
                 className="rounded-3xl border border-[#E2E8F0] bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-[#CBD5E1] hover:shadow-[0_16px_40px_rgba(15,23,42,0.08)]"
               >
-                <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-                  <div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <p className="text-base font-semibold text-[#0F172A]">
-                        {rule.name}
-                      </p>
-                      <Badge variant={rule.active ? "success" : "danger"} dot>
-                        {rule.active ? "Aktiv" : "Inaktiv"}
-                      </Badge>
-                      <Badge variant="muted">
-                        {formatRuleType(rule.rule_type)}
-                      </Badge>
-                    </div>
+                <div className="flex h-full flex-col gap-4">
+                  <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="text-base font-semibold text-[#0F172A]">
+                          {rule.name}
+                        </p>
 
-                    <div className="mt-3 flex flex-wrap gap-2 text-sm text-[#64748B]">
-                      <span className="rounded-full bg-[#F8FAFC] px-3 py-1">
-                        {rule.percentage}% Zuschlag
-                      </span>
+                        <Badge
+                          variant={rule.active ? "success" : "danger"}
+                          dot
+                        >
+                          {rule.active ? "Aktiv" : "Inaktiv"}
+                        </Badge>
 
-                      {rule.starts_at && rule.ends_at && (
+                        <Badge variant="muted">
+                          {formatRuleType(rule.rule_type)}
+                        </Badge>
+                      </div>
+
+                      <div className="mt-3 flex flex-wrap gap-2 text-sm text-[#64748B]">
                         <span className="rounded-full bg-[#F8FAFC] px-3 py-1">
-                          {rule.starts_at.slice(0, 5)} –{" "}
-                          {rule.ends_at.slice(0, 5)}
+                          {rule.percentage}% Zuschlag
                         </span>
-                      )}
 
-                      {rule.datev_wage_type && (
+                        {rule.rule_type === "holiday" ? (
+                          <span className="rounded-full bg-[#F8FAFC] px-3 py-1">
+                            Gesetzliche Feiertage
+                          </span>
+                        ) : (
+                          <span className="rounded-full bg-[#F8FAFC] px-3 py-1">
+                            {rule.rule_type === "sunday"
+                              ? "Sonntag"
+                              : formatWeekday(rule.weekday)}
+                          </span>
+                        )}
+
+                        {rule.starts_at && rule.ends_at ? (
+                          <span className="rounded-full bg-[#F8FAFC] px-3 py-1">
+                            {rule.starts_at.slice(0, 5)} –{" "}
+                            {rule.ends_at.slice(0, 5)}
+                          </span>
+                        ) : (
+                          <span className="rounded-full bg-[#F8FAFC] px-3 py-1">
+                            Ganztägig
+                          </span>
+                        )}
+
                         <span className="rounded-full bg-[#F8FAFC] px-3 py-1">
-                          DATEV {rule.datev_wage_type}
+                          Priorität {rule.priority ?? 0}
                         </span>
-                      )}
+
+                        <span className="rounded-full bg-[#F8FAFC] px-3 py-1">
+                          Gruppe: {rule.conflict_group}
+                        </span>
+
+                        <span className="rounded-full bg-[#F8FAFC] px-3 py-1">
+                          {rule.stack_with_other_rule_types
+                            ? "Kombinierbar"
+                            : "Nicht kombinierbar"}
+                        </span>
+
+                        {rule.datev_wage_type && (
+                          <span className="rounded-full bg-[#F8FAFC] px-3 py-1">
+                            DATEV {rule.datev_wage_type}
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
 
-                  <PageActions className="shrink-0">
+                  <div className="mt-auto flex flex-col gap-2 border-t border-[#E2E8F0] pt-4 sm:flex-row sm:flex-wrap">
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => handleEditPayRule(rule)}
+                    >
+                      Bearbeiten
+                    </Button>
+
                     <Button
                       type="button"
                       variant={rule.active ? "secondary" : "primary"}
@@ -1575,21 +1973,21 @@ if (
                       variant="danger"
                       size="sm"
                       onClick={() =>
-                        showConfirm("Zuschlag wirklich löschen?", () =>
+                        showConfirm("Zuschlagsregel wirklich löschen?", () =>
                           handleDeletePayRule(rule.id),
                         )
                       }
                     >
                       Löschen
                     </Button>
-                  </PageActions>
+                  </div>
                 </div>
               </div>
             ))
           ) : (
             <div className="rounded-2xl border border-dashed border-[#CBD5E1] bg-[#F8FAFC] p-6 text-sm leading-6 text-[#64748B] xl:col-span-2">
-              Noch keine Zuschläge vorhanden. Für viele Betriebe reicht zunächst
-              ein Nachtzuschlag.
+              Noch keine Zuschlagsregeln vorhanden. Du kannst Regeln frei nach
+              Wochentag, Zeitfenster oder Feiertag definieren.
             </div>
           )}
         </div>

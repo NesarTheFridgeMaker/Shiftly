@@ -28,6 +28,8 @@ class _TerminalDashboardPageState extends State<TerminalDashboardPage> {
 
   Timer? _clockTimer;
   Timer? _refreshTimer;
+  Timer? _rateLimitTimer;
+  int _rateLimitSeconds = 0;
 
   DateTime _now = DateTime.now();
   TerminalStatus? _status;
@@ -68,6 +70,7 @@ class _TerminalDashboardPageState extends State<TerminalDashboardPage> {
     _clockTimer?.cancel();
     _refreshTimer?.cancel();
     _service.dispose();
+    _rateLimitTimer?.cancel();
     super.dispose();
   }
 
@@ -111,6 +114,7 @@ class _TerminalDashboardPageState extends State<TerminalDashboardPage> {
   }
 
   void _appendDigit(String digit) {
+    if (_rateLimitSeconds > 0) return;
     if (_checkingPin || _pin.length >= 4) return;
 
     setState(() {
@@ -127,6 +131,7 @@ class _TerminalDashboardPageState extends State<TerminalDashboardPage> {
   }
 
   void _backspace() {
+    if (_rateLimitSeconds > 0) return;
     if (_checkingPin || _pin.isEmpty) return;
 
     setState(() {
@@ -136,12 +141,48 @@ class _TerminalDashboardPageState extends State<TerminalDashboardPage> {
   }
 
   void _clearPin() {
+    if (_rateLimitSeconds > 0) return;
     if (_checkingPin) return;
 
     setState(() {
       _pin = '';
       _errorMessage = null;
     });
+  }
+
+  void _startRateLimitCountdown(int seconds) {
+    _rateLimitTimer?.cancel();
+
+    setState(() {
+      _rateLimitSeconds = seconds;
+      _pin = '';
+      _errorMessage = null;
+    });
+
+    _rateLimitTimer = Timer.periodic(
+      const Duration(seconds: 1),
+      (timer) {
+        if (!mounted) {
+          timer.cancel();
+          return;
+        }
+
+        if (_rateLimitSeconds <= 1) {
+          timer.cancel();
+
+          setState(() {
+            _rateLimitSeconds = 0;
+            _errorMessage = null;
+          });
+
+          return;
+        }
+
+        setState(() {
+          _rateLimitSeconds--;
+        });
+      },
+    );
   }
 
   Future<void> _lookupPin() async {
@@ -169,6 +210,19 @@ class _TerminalDashboardPageState extends State<TerminalDashboardPage> {
       );
     } on TerminalApiException catch (error) {
       if (!mounted) return;
+
+      if (error.code == 'PIN_RATE_LIMITED' &&
+          (error.retryAfterSeconds ?? 0) > 0) {
+        setState(() {
+          _checkingPin = false;
+        });
+
+        _startRateLimitCountdown(
+          error.retryAfterSeconds!,
+        );
+
+        return;
+      }
 
       setState(() {
         _checkingPin = false;
@@ -243,6 +297,19 @@ class _TerminalDashboardPageState extends State<TerminalDashboardPage> {
       await _showSuccessDialog(result);
     } on TerminalApiException catch (error) {
       if (!mounted) return;
+
+      if (error.code == 'PIN_RATE_LIMITED' &&
+          (error.retryAfterSeconds ?? 0) > 0) {
+        setState(() {
+          _checkingPin = false;
+        });
+
+        _startRateLimitCountdown(
+          error.retryAfterSeconds!,
+        );
+
+        return;
+      }
 
       setState(() {
         _checkingPin = false;
@@ -398,6 +465,7 @@ class _TerminalDashboardPageState extends State<TerminalDashboardPage> {
                       pin: _pin,
                       loading: _checkingPin,
                       errorMessage: _errorMessage,
+                      rateLimitSeconds: _rateLimitSeconds,
                       onDigit: _appendDigit,
                       onBackspace: _backspace,
                       onClear: _clearPin,
@@ -525,6 +593,7 @@ class _PinPanel extends StatelessWidget {
     required this.pin,
     required this.loading,
     required this.errorMessage,
+    required this.rateLimitSeconds,
     required this.onDigit,
     required this.onBackspace,
     required this.onClear,
@@ -533,6 +602,7 @@ class _PinPanel extends StatelessWidget {
   final String pin;
   final bool loading;
   final String? errorMessage;
+  final int rateLimitSeconds;
   final ValueChanged<String> onDigit;
   final VoidCallback onBackspace;
   final VoidCallback onClear;
@@ -602,7 +672,43 @@ class _PinPanel extends StatelessWidget {
             ),
           ],
           const SizedBox(height: 22),
-          if (loading)
+          if (rateLimitSeconds > 0)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: AppColors.warningLight,
+                borderRadius: BorderRadius.circular(18),
+              ),
+              child: Column(
+                children: [
+                  const Icon(
+                    Icons.lock_clock_rounded,
+                    color: AppColors.warning,
+                    size: 34,
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    'PIN-Eingabe vorübergehend gesperrt',
+                    textAlign: TextAlign.center,
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'Erneut möglich in '
+                    '${_formatCountdown(rateLimitSeconds)}',
+                    textAlign: TextAlign.center,
+                    style: theme.textTheme.bodyLarge?.copyWith(
+                      color: AppColors.warning,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
+            )
+          else if (loading)
             const Padding(
               padding: EdgeInsets.all(24),
               child: CircularProgressIndicator(),
@@ -849,7 +955,8 @@ class _TeamPanel extends StatelessWidget {
             icon: Icons.home_outlined,
           ),
           const SizedBox(height: 22),
-          Expanded(
+          SizedBox(
+            height: 260,
             child: _PresentEmployees(
               working: status!.workingEmployees,
               onBreak: status!.breakEmployees,
@@ -1085,4 +1192,12 @@ String _actionSuccessSubtitle(String action) {
     'check_out' => 'Deine Arbeitszeit wurde beendet.',
     _ => 'Der Stempelschritt wurde gespeichert.',
   };
+}
+
+String _formatCountdown(int seconds) {
+  final minutes = seconds ~/ 60;
+  final remainingSeconds = seconds % 60;
+
+  return '${minutes.toString().padLeft(2, '0')}:'
+      '${remainingSeconds.toString().padLeft(2, '0')}';
 }

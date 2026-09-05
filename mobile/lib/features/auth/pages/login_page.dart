@@ -6,6 +6,7 @@ import '../../../shared/widgets/dipera_card.dart';
 import '../providers/auth_providers.dart';
 import '../widgets/login_form.dart';
 import '../widgets/login_header.dart';
+import 'employee_register_page.dart';
 
 class LoginPage extends ConsumerWidget {
   const LoginPage({super.key});
@@ -65,27 +66,23 @@ class LoginPage extends ConsumerWidget {
           builder: (context, constraints) {
             final keyboardIsOpen =
                 mediaQuery.viewInsets.bottom > 0;
-
             final compact =
-            constraints.maxHeight < 820 || keyboardIsOpen;
-
+                constraints.maxHeight < 820 || keyboardIsOpen;
             final horizontalPadding =
                 constraints.maxWidth < 380 ? 18.0 : 24.0;
-
             final verticalPadding = compact ? 16.0 : 28.0;
             final headerCardGap = compact ? 18.0 : 30.0;
             final cardPadding = compact ? 18.0 : 24.0;
             final titleFormGap = compact ? 20.0 : 28.0;
-
             final minimumContentHeight =
                 constraints.maxHeight - (verticalPadding * 2);
 
             return SingleChildScrollView(
-            keyboardDismissBehavior:
-            ScrollViewKeyboardDismissBehavior.onDrag,
-            physics: keyboardIsOpen
-            ? const ClampingScrollPhysics()
-            : const NeverScrollableScrollPhysics(),
+              keyboardDismissBehavior:
+                  ScrollViewKeyboardDismissBehavior.onDrag,
+              physics: keyboardIsOpen
+                  ? const ClampingScrollPhysics()
+                  : const NeverScrollableScrollPhysics(),
               padding: EdgeInsets.symmetric(
                 horizontal: horizontalPadding,
                 vertical: verticalPadding,
@@ -98,20 +95,19 @@ class LoginPage extends ConsumerWidget {
                 ),
                 child: Center(
                   child: ConstrainedBox(
-                    constraints: const BoxConstraints(
-                      maxWidth: 420,
-                    ),
+                    constraints:
+                        const BoxConstraints(maxWidth: 420),
                     child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
+                      mainAxisAlignment:
+                          MainAxisAlignment.center,
                       children: [
-                        LoginHeader(
-                          compact: compact,
-                        ),
+                        LoginHeader(compact: compact),
                         SizedBox(height: headerCardGap),
                         DiperaCard(
                           padding: EdgeInsets.zero,
                           child: Padding(
-                            padding: EdgeInsets.all(cardPadding),
+                            padding:
+                                EdgeInsets.all(cardPadding),
                             child: Column(
                               crossAxisAlignment:
                                   CrossAxisAlignment.start,
@@ -122,26 +118,32 @@ class LoginPage extends ConsumerWidget {
                                       .textTheme
                                       .headlineSmall
                                       ?.copyWith(
-                                    color: const Color(0xFF101828),
-                                    fontWeight: FontWeight.w700,
-                                    fontSize: compact ? 22 : null,
+                                    color:
+                                        const Color(0xFF101828),
+                                    fontWeight:
+                                        FontWeight.w700,
+                                    fontSize:
+                                        compact ? 22 : null,
                                   ),
                                 ),
                                 SizedBox(
                                   height: compact ? 6 : 8,
                                 ),
                                 Text(
-                                  'Melde dich an, um deine '
-                                  'Arbeitszeiten, Schichten und '
-                                  'Urlaubsanträge im Blick zu behalten.',
-                                  style: theme.textTheme.bodyLarge
+                                  'Melde dich an, um deine Arbeitszeiten, Schichten und Urlaubsanträge im Blick zu behalten.',
+                                  style: theme
+                                      .textTheme.bodyLarge
                                       ?.copyWith(
-                                    color: const Color(0xFF667085),
+                                    color:
+                                        const Color(0xFF667085),
                                     height: 1.4,
-                                    fontSize: compact ? 14 : null,
+                                    fontSize:
+                                        compact ? 14 : null,
                                   ),
                                 ),
-                                SizedBox(height: titleFormGap),
+                                SizedBox(
+                                  height: titleFormGap,
+                                ),
                                 LoginForm(
                                   compact: compact,
                                   onLogin: ({
@@ -150,7 +152,9 @@ class LoginPage extends ConsumerWidget {
                                   }) async {
                                     try {
                                       await ref
-                                          .read(authServiceProvider)
+                                          .read(
+                                            authServiceProvider,
+                                          )
                                           .signIn(
                                             email: email,
                                             password: password,
@@ -168,7 +172,6 @@ class LoginPage extends ConsumerWidget {
                                         ),
                                         isError: true,
                                       );
-
                                       rethrow;
                                     }
                                   },
@@ -176,8 +179,7 @@ class LoginPage extends ConsumerWidget {
                                     _showMessage(
                                       context,
                                       message:
-                                          'Das Zurücksetzen des '
-                                          'Passworts folgt später.',
+                                          'Das Zurücksetzen des Passworts folgt später.',
                                     );
                                   },
                                 ),
@@ -187,29 +189,17 @@ class LoginPage extends ConsumerWidget {
                                 Center(
                                   child: TextButton(
                                     onPressed: () {
-                                      _showMessage(
-                                        context,
-                                        message:
-                                            'Das Erstellen eines '
-                                            'Kontos über eine '
-                                            'Einladung folgt später.',
+                                      Navigator.of(context).push(
+                                        MaterialPageRoute<void>(
+                                          builder: (_) =>
+                                              const EmployeeRegisterPage(),
+                                        ),
                                       );
                                     },
-                                    style: TextButton.styleFrom(
-                                      padding:
-                                          const EdgeInsets.symmetric(
-                                        horizontal: 6,
-                                        vertical: 6,
-                                      ),
-                                      minimumSize: Size.zero,
-                                      tapTargetSize:
-                                          MaterialTapTargetSize
-                                              .shrinkWrap,
-                                    ),
                                     child: const Text(
-                                      'Einladung erhalten? '
-                                      'Konto erstellen',
-                                      textAlign: TextAlign.center,
+                                      'Einladung erhalten? Konto erstellen',
+                                      textAlign:
+                                          TextAlign.center,
                                     ),
                                   ),
                                 ),

@@ -7,6 +7,7 @@ import '../../../core/services/shift_service.dart';
 import '../../../core/services/document_service.dart';
 import '../../../core/services/absence_service.dart';
 import '../../../core/services/push_notification_service.dart';
+import '../../../core/services/employee_registration_service.dart';
 
 final supabaseClientProvider = Provider<SupabaseClient>((ref) {
   return Supabase.instance.client;
@@ -16,6 +17,19 @@ final authServiceProvider = Provider<AuthService>((ref) {
   final client = ref.watch(supabaseClientProvider);
 
   return AuthService(client);
+});
+
+final employeeRegistrationServiceProvider =
+    Provider<EmployeeRegistrationService>((ref) {
+  final client = ref.watch(supabaseClientProvider);
+
+  final service = EmployeeRegistrationService(
+    client: client,
+  );
+
+  ref.onDispose(service.dispose);
+
+  return service;
 });
 
 final employeeServiceProvider = Provider<EmployeeService>((ref) {

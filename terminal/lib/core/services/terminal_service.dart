@@ -242,6 +242,8 @@ class TerminalService {
           mapped['code']?.toString() ?? 'REQUEST_FAILED',
           mapped['message']?.toString() ??
               'Die Anfrage konnte nicht verarbeitet werden.',
+          retryAfterSeconds:
+              (mapped['retryAfterSeconds'] as num?)?.toInt(),
         );
       }
 
@@ -260,10 +262,15 @@ class TerminalService {
 }
 
 class TerminalApiException implements Exception {
-  const TerminalApiException(this.code, this.message);
+  const TerminalApiException(
+    this.code,
+    this.message, {
+    this.retryAfterSeconds,
+  });
 
   final String code;
   final String message;
+  final int? retryAfterSeconds;
 
   @override
   String toString() => message;
