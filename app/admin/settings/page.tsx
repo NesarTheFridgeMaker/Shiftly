@@ -212,6 +212,8 @@ export default function SettingsPage() {
 
   const [workTypes, setWorkTypes] = useState<WorkType[]>([]);
   const [workTypeName, setWorkTypeName] = useState("");
+  const [showAllWorkTypes, setShowAllWorkTypes] = useState(false);
+  const [showAllShiftTemplates, setShowAllShiftTemplates] = useState(false);
 
   const [payRules, setPayRules] = useState<PayRule[]>([]);
   const [editingPayRuleId, setEditingPayRuleId] = useState<string | null>(null);
@@ -1267,6 +1269,14 @@ if (
     loadSettings();
   }, []);
 
+  const visibleWorkTypes = showAllWorkTypes
+    ? workTypes
+    : workTypes.slice(0, 4);
+
+  const visibleShiftTemplates = showAllShiftTemplates
+    ? shiftTemplates
+    : shiftTemplates.slice(0, 4);
+
   if (isLoading) {
     return (
       <div className="space-y-8">
@@ -1292,33 +1302,35 @@ if (
         description="Verwalte Unternehmensdaten, Arbeitstypen, Schichtvorlagen und Zuschläge."
       />
 
-      <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-4">
-        <StatCard
-          title="Arbeitstypen"
-          value={workTypes.length}
-          badge="Planung"
-          badgeVariant="primary"
-        />
+      <div className="rounded-3xl border border-[#D7DEE8] bg-[#EEF2F6] p-4 shadow-[0_6px_18px_rgba(15,23,42,0.08)] md:p-5">
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-4">
+          <StatCard
+            title="Arbeitstypen"
+            value={workTypes.length}
+            badge="Planung"
+            badgeVariant="primary"
+          />
 
-        <StatCard
-          title="Schichtvorlagen"
-          value={shiftTemplates.length}
-          badge="Vorlagen"
-          badgeVariant="muted"
-        />
+          <StatCard
+            title="Schichtvorlagen"
+            value={shiftTemplates.length}
+            badge="Vorlagen"
+            badgeVariant="muted"
+          />
 
-        <StatCard
-          title="Aktive Zuschläge"
-          value={activePayRules.length}
-          badge="Lohn"
-          badgeVariant={activePayRules.length > 0 ? "success" : "muted"}
-        />
+          <StatCard
+            title="Aktive Zuschläge"
+            value={activePayRules.length}
+            badge="Lohn"
+            badgeVariant={activePayRules.length > 0 ? "success" : "muted"}
+          />
 
-        <StatCard
-          title="Bundesland"
-          value={federalState}
-          subtitle={getFederalStateLabel(federalState)}
-        />
+          <StatCard
+            title="Bundesland"
+            value={federalState}
+            subtitle={getFederalStateLabel(federalState)}
+          />
+        </div>
       </div>
 
       <Section
@@ -1367,7 +1379,7 @@ if (
         }
       >
         {showLocationEditor && (
-          <div className="mb-6 rounded-3xl border border-[#E2E8F0] bg-[#F8FAFC] p-4 md:p-6">
+          <div className="mb-6 rounded-3xl border border-[#CBD5E1] bg-[#EEF2F6] p-4 shadow-[0_8px_22px_rgba(15,23,42,0.09)] md:p-6">
             <div className="mb-6">
               <h3 className="text-xl font-semibold text-[#0F172A]">
                 {editingLocation
@@ -1396,7 +1408,7 @@ if (
             businessLocations.map((location) => (
               <div
                 key={location.id}
-                className="rounded-3xl border border-[#E2E8F0] bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-[#CBD5E1] hover:shadow-[0_16px_40px_rgba(15,23,42,0.08)]"
+                className="rounded-3xl border border-[#CBD5E1] bg-[#F8FAFC] p-5 shadow-[0_8px_22px_rgba(15,23,42,0.10)] transition hover:-translate-y-0.5 hover:border-[#B8C4D1] hover:shadow-[0_14px_34px_rgba(15,23,42,0.14)]"
               >
                 <div className="flex flex-col gap-5">
                   <div className="flex items-start gap-3">
@@ -1424,11 +1436,11 @@ if (
                       </p>
 
                       <div className="mt-3 flex flex-wrap gap-2">
-                        <span className="rounded-full bg-[#F8FAFC] px-3 py-1 text-xs font-medium text-[#64748B]">
+                        <span className="rounded-full bg-[#E9EEF4] px-3 py-1 text-xs font-medium text-[#64748B]">
                           Radius {location.radius_meters} m
                         </span>
 
-                        <span className="rounded-full bg-[#F8FAFC] px-3 py-1 text-xs font-medium text-[#64748B]">
+                        <span className="rounded-full bg-[#E9EEF4] px-3 py-1 text-xs font-medium text-[#64748B]">
                           {location.timezone}
                         </span>
                       </div>
@@ -1474,7 +1486,7 @@ if (
               </div>
             ))
           ) : (
-            <div className="rounded-3xl border border-dashed border-[#CBD5E1] bg-[#F8FAFC] px-6 py-10 text-center xl:col-span-2">
+            <div className="rounded-3xl border border-dashed border-[#B8C4D1] bg-[#EEF2F6] px-6 py-10 text-center shadow-[0_4px_14px_rgba(15,23,42,0.05)] xl:col-span-2">
               <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-[#EFF6FF] text-[#005CA8]">
                 <MapPin className="h-5 w-5" />
               </div>
@@ -1525,10 +1537,10 @@ if (
 
           <div className="mt-6 flex flex-col gap-3">
             {workTypes.length > 0 ? (
-              workTypes.map((type) => (
+              visibleWorkTypes.map((type) => (
                 <div
                   key={type.id}
-                  className="flex flex-col gap-3 rounded-2xl border border-[#E2E8F0] bg-[#F8FAFC] p-4 transition hover:border-[#CBD5E1] md:flex-row md:items-center md:justify-between"
+                  className="flex flex-col gap-3 rounded-2xl border border-[#CBD5E1] bg-[#EEF2F6] p-4 shadow-[0_5px_14px_rgba(15,23,42,0.07)] transition hover:border-[#B8C4D1] hover:shadow-[0_8px_18px_rgba(15,23,42,0.10)] md:flex-row md:items-center md:justify-between"
                 >
                   <div className="flex items-center gap-3">
                     <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-[#EFF6FF] text-sm font-semibold text-[#2563EB]">
@@ -1566,6 +1578,23 @@ if (
               </div>
             )}
           </div>
+
+          {workTypes.length > 4 && (
+            <div className="mt-4 flex justify-center">
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() =>
+                  setShowAllWorkTypes((currentValue) => !currentValue)
+                }
+              >
+                {showAllWorkTypes
+                  ? "Weniger anzeigen"
+                  : `Alle ${workTypes.length} Arbeitstypen anzeigen`}
+              </Button>
+            </div>
+          )}
         </Section>
 
         <Section
@@ -1616,10 +1645,10 @@ if (
 
           <div className="mt-6 grid grid-cols-1 gap-3">
             {shiftTemplates.length > 0 ? (
-              shiftTemplates.map((template) => (
+              visibleShiftTemplates.map((template) => (
                 <div
                   key={template.id}
-                  className="flex flex-col gap-3 rounded-2xl border border-[#E2E8F0] bg-[#F8FAFC] p-4 transition hover:border-[#CBD5E1] md:flex-row md:items-center md:justify-between"
+                  className="flex flex-col gap-3 rounded-2xl border border-[#CBD5E1] bg-[#EEF2F6] p-4 shadow-[0_5px_14px_rgba(15,23,42,0.07)] transition hover:border-[#B8C4D1] hover:shadow-[0_8px_18px_rgba(15,23,42,0.10)] md:flex-row md:items-center md:justify-between"
                 >
                   <div>
                     <p className="text-sm font-semibold text-[#0F172A]">
@@ -1659,6 +1688,23 @@ if (
               </div>
             )}
           </div>
+
+          {shiftTemplates.length > 4 && (
+            <div className="mt-4 flex justify-center">
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() =>
+                  setShowAllShiftTemplates((currentValue) => !currentValue)
+                }
+              >
+                {showAllShiftTemplates
+                  ? "Weniger anzeigen"
+                  : `Alle ${shiftTemplates.length} Schichtvorlagen anzeigen`}
+              </Button>
+            </div>
+          )}
         </Section>
       </div>
 
@@ -1676,7 +1722,7 @@ if (
       >
         <div
           id="pay-rule-editor"
-          className="scroll-mt-24 rounded-3xl border border-[#E2E8F0] bg-[#F8FAFC] p-5 md:p-6"
+          className="scroll-mt-24 rounded-3xl border border-[#CBD5E1] bg-[#EEF2F6] p-5 shadow-[0_8px_22px_rgba(15,23,42,0.09)] md:p-6"
         >
           <div className="mb-6 flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
             <div>
@@ -1874,7 +1920,7 @@ if (
             payRules.map((rule) => (
               <div
                 key={rule.id}
-                className="rounded-3xl border border-[#E2E8F0] bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-[#CBD5E1] hover:shadow-[0_16px_40px_rgba(15,23,42,0.08)]"
+                className="rounded-3xl border border-[#CBD5E1] bg-[#F8FAFC] p-5 shadow-[0_8px_22px_rgba(15,23,42,0.10)] transition hover:-translate-y-0.5 hover:border-[#B8C4D1] hover:shadow-[0_14px_34px_rgba(15,23,42,0.14)]"
               >
                 <div className="flex h-full flex-col gap-4">
                   <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
@@ -1897,16 +1943,16 @@ if (
                       </div>
 
                       <div className="mt-3 flex flex-wrap gap-2 text-sm text-[#64748B]">
-                        <span className="rounded-full bg-[#F8FAFC] px-3 py-1">
+                        <span className="rounded-full bg-[#E9EEF4] px-3 py-1">
                           {rule.percentage}% Zuschlag
                         </span>
 
                         {rule.rule_type === "holiday" ? (
-                          <span className="rounded-full bg-[#F8FAFC] px-3 py-1">
+                          <span className="rounded-full bg-[#E9EEF4] px-3 py-1">
                             Gesetzliche Feiertage
                           </span>
                         ) : (
-                          <span className="rounded-full bg-[#F8FAFC] px-3 py-1">
+                          <span className="rounded-full bg-[#E9EEF4] px-3 py-1">
                             {rule.rule_type === "sunday"
                               ? "Sonntag"
                               : formatWeekday(rule.weekday)}
@@ -1914,32 +1960,32 @@ if (
                         )}
 
                         {rule.starts_at && rule.ends_at ? (
-                          <span className="rounded-full bg-[#F8FAFC] px-3 py-1">
+                          <span className="rounded-full bg-[#E9EEF4] px-3 py-1">
                             {rule.starts_at.slice(0, 5)} –{" "}
                             {rule.ends_at.slice(0, 5)}
                           </span>
                         ) : (
-                          <span className="rounded-full bg-[#F8FAFC] px-3 py-1">
+                          <span className="rounded-full bg-[#E9EEF4] px-3 py-1">
                             Ganztägig
                           </span>
                         )}
 
-                        <span className="rounded-full bg-[#F8FAFC] px-3 py-1">
+                        <span className="rounded-full bg-[#E9EEF4] px-3 py-1">
                           Priorität {rule.priority ?? 0}
                         </span>
 
-                        <span className="rounded-full bg-[#F8FAFC] px-3 py-1">
+                        <span className="rounded-full bg-[#E9EEF4] px-3 py-1">
                           Gruppe: {rule.conflict_group}
                         </span>
 
-                        <span className="rounded-full bg-[#F8FAFC] px-3 py-1">
+                        <span className="rounded-full bg-[#E9EEF4] px-3 py-1">
                           {rule.stack_with_other_rule_types
                             ? "Kombinierbar"
                             : "Nicht kombinierbar"}
                         </span>
 
                         {rule.datev_wage_type && (
-                          <span className="rounded-full bg-[#F8FAFC] px-3 py-1">
+                          <span className="rounded-full bg-[#E9EEF4] px-3 py-1">
                             DATEV {rule.datev_wage_type}
                           </span>
                         )}

@@ -922,7 +922,7 @@ export default function CorrectionsPage() {
         description="Prüfe offene Zeitprobleme und greife bei Bedarf auf die paginierte Historie zu."
       />
 
-      <div className="rounded-3xl border border-[#DCE5F2] bg-white p-2 shadow-sm">
+      <div className="rounded-3xl border border-[#D7DEE8] bg-[#EEF2F6] p-2 shadow-[0_6px_18px_rgba(15,23,42,0.08)]">
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2" role="tablist" aria-label="Korrekturansicht">
           <button
             type="button"
@@ -933,7 +933,7 @@ export default function CorrectionsPage() {
               "rounded-2xl border px-5 py-4 text-left transition-all duration-200",
               activeView === "open"
                 ? "border-[#2563EB] bg-[#2563EB] text-white shadow-[0_10px_24px_rgba(37,99,235,0.20)]"
-                : "border-transparent bg-[#F8FAFC] text-[#0F172A] hover:border-[#BFDBFE] hover:bg-[#EFF6FF]",
+                : "border-transparent bg-[#E9EEF4] text-[#0F172A] shadow-[0_3px_9px_rgba(15,23,42,0.06)] hover:border-[#BFDBFE] hover:bg-[#E8F2FB]",
             ].join(" ")}
           >
             <div className="flex items-center justify-between gap-3">
@@ -966,7 +966,7 @@ export default function CorrectionsPage() {
               "rounded-2xl border px-5 py-4 text-left transition-all duration-200",
               activeView === "history"
                 ? "border-[#2563EB] bg-[#2563EB] text-white shadow-[0_10px_24px_rgba(37,99,235,0.20)]"
-                : "border-transparent bg-[#F8FAFC] text-[#0F172A] hover:border-[#BFDBFE] hover:bg-[#EFF6FF]",
+                : "border-transparent bg-[#E9EEF4] text-[#0F172A] shadow-[0_3px_9px_rgba(15,23,42,0.06)] hover:border-[#BFDBFE] hover:bg-[#E8F2FB]",
             ].join(" ")}
           >
             <div className="flex items-center justify-between gap-3">
@@ -989,36 +989,38 @@ export default function CorrectionsPage() {
 
       {activeView === "open" && (
         <>
-          <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-4">
-            <StatCard
-              title="Systemkonflikte"
-              value={openConflicts.length}
-              badge="Prüfen"
-              badgeVariant={openConflicts.length > 0 ? "warning" : "muted"}
-            />
+          <div className="rounded-3xl border border-[#D7DEE8] bg-[#EEF2F6] p-4 shadow-[0_6px_18px_rgba(15,23,42,0.08)] md:p-5">
+            <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-4">
+              <StatCard
+                title="Systemkonflikte"
+                value={openConflicts.length}
+                badge="Prüfen"
+                badgeVariant={openConflicts.length > 0 ? "warning" : "muted"}
+              />
 
-            <StatCard
-              title="Arbeitszeit-Warnungen"
-              value={openComplianceWarnings.length}
-              badge="Prüfen"
-              badgeVariant={
-                openComplianceWarnings.length > 0 ? "warning" : "muted"
-              }
-            />
+              <StatCard
+                title="Arbeitszeit-Warnungen"
+                value={openComplianceWarnings.length}
+                badge="Prüfen"
+                badgeVariant={
+                  openComplianceWarnings.length > 0 ? "warning" : "muted"
+                }
+              />
 
-            <StatCard
-              title="Mitarbeiteranträge"
-              value={openRequests.length}
-              badge="Offen"
-              badgeVariant={openRequests.length > 0 ? "warning" : "muted"}
-            />
+              <StatCard
+                title="Mitarbeiteranträge"
+                value={openRequests.length}
+                badge="Offen"
+                badgeVariant={openRequests.length > 0 ? "warning" : "muted"}
+              />
 
-            <StatCard
-              title="Gesamt offen"
-              value={totalOpen}
-              badge="Aufgaben"
-              badgeVariant={totalOpen > 0 ? "warning" : "success"}
-            />
+              <StatCard
+                title="Gesamt offen"
+                value={totalOpen}
+                badge="Aufgaben"
+                badgeVariant={totalOpen > 0 ? "warning" : "success"}
+              />
+            </div>
           </div>
 
           <Section
@@ -1044,7 +1046,7 @@ export default function CorrectionsPage() {
                 {openConflicts.map((conflict) => (
                   <div
                     key={conflict.conflict_id}
-                    className="rounded-3xl border border-[#FDE68A] bg-white p-5 shadow-sm"
+                    className="rounded-3xl border border-[#F6D58B] bg-[#FFFDF7] p-5 shadow-[0_8px_22px_rgba(15,23,42,0.10)] transition hover:shadow-[0_12px_30px_rgba(15,23,42,0.13)]"
                   >
                     <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
                       <div>
@@ -1075,7 +1077,7 @@ export default function CorrectionsPage() {
                     </div>
 
                     <div className="mt-5 grid grid-cols-1 gap-3 md:grid-cols-3">
-                      <div className="rounded-2xl bg-[#F8FAFC] p-4">
+                      <div className="rounded-2xl border border-[#D7DEE8] bg-[#EEF2F6] p-4 shadow-[0_3px_10px_rgba(15,23,42,0.05)]">
                         <p className="text-xs font-medium text-[#64748B]">
                           Arbeitstag
                         </p>
@@ -1086,7 +1088,7 @@ export default function CorrectionsPage() {
                         </p>
                       </div>
 
-                      <div className="rounded-2xl bg-[#F8FAFC] p-4">
+                      <div className="rounded-2xl border border-[#D7DEE8] bg-[#EEF2F6] p-4 shadow-[0_3px_10px_rgba(15,23,42,0.05)]">
                         <p className="text-xs font-medium text-[#64748B]">
                           Eingestempelt
                         </p>
@@ -1095,7 +1097,7 @@ export default function CorrectionsPage() {
                         </p>
                       </div>
 
-                      <div className="rounded-2xl bg-[#F8FAFC] p-4">
+                      <div className="rounded-2xl border border-[#D7DEE8] bg-[#EEF2F6] p-4 shadow-[0_3px_10px_rgba(15,23,42,0.05)]">
                         <p className="text-xs font-medium text-[#64748B]">
                           Konflikt erkannt
                         </p>
@@ -1146,7 +1148,7 @@ export default function CorrectionsPage() {
                   return (
                     <div
                       key={warning.id}
-                      className="rounded-3xl border border-[#FDE68A] bg-white p-5 shadow-sm"
+                      className="rounded-3xl border border-[#F6D58B] bg-[#FFFDF7] p-5 shadow-[0_8px_22px_rgba(15,23,42,0.10)] transition hover:shadow-[0_12px_30px_rgba(15,23,42,0.13)]"
                     >
                       <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
                         <div>
@@ -1184,7 +1186,7 @@ export default function CorrectionsPage() {
                       </div>
 
                       <div className="mt-5 grid grid-cols-1 gap-3 md:grid-cols-3">
-                        <div className="rounded-2xl bg-[#F8FAFC] p-4">
+                        <div className="rounded-2xl border border-[#D7DEE8] bg-[#EEF2F6] p-4 shadow-[0_3px_10px_rgba(15,23,42,0.05)]">
                           <p className="text-xs font-medium text-[#64748B]">
                             Arbeitstag
                           </p>
@@ -1197,7 +1199,7 @@ export default function CorrectionsPage() {
 
                         {isDailyLimit && (
                           <>
-                            <div className="rounded-2xl bg-[#F8FAFC] p-4">
+                            <div className="rounded-2xl border border-[#D7DEE8] bg-[#EEF2F6] p-4 shadow-[0_3px_10px_rgba(15,23,42,0.05)]">
                               <p className="text-xs font-medium text-[#64748B]">
                                 Nettoarbeitszeit
                               </p>
@@ -1206,7 +1208,7 @@ export default function CorrectionsPage() {
                               </p>
                             </div>
 
-                            <div className="rounded-2xl bg-[#F8FAFC] p-4">
+                            <div className="rounded-2xl border border-[#D7DEE8] bg-[#EEF2F6] p-4 shadow-[0_3px_10px_rgba(15,23,42,0.05)]">
                               <p className="text-xs font-medium text-[#64748B]">
                                 Über 10 Stunden
                               </p>
@@ -1219,7 +1221,7 @@ export default function CorrectionsPage() {
 
                         {isRestPeriod && (
                           <>
-                            <div className="rounded-2xl bg-[#F8FAFC] p-4">
+                            <div className="rounded-2xl border border-[#D7DEE8] bg-[#EEF2F6] p-4 shadow-[0_3px_10px_rgba(15,23,42,0.05)]">
                               <p className="text-xs font-medium text-[#64748B]">
                                 Tatsächliche Ruhezeit
                               </p>
@@ -1228,7 +1230,7 @@ export default function CorrectionsPage() {
                               </p>
                             </div>
 
-                            <div className="rounded-2xl bg-[#F8FAFC] p-4">
+                            <div className="rounded-2xl border border-[#D7DEE8] bg-[#EEF2F6] p-4 shadow-[0_3px_10px_rgba(15,23,42,0.05)]">
                               <p className="text-xs font-medium text-[#64748B]">
                                 Fehlende Ruhezeit
                               </p>
@@ -1241,7 +1243,7 @@ export default function CorrectionsPage() {
 
                         {isInsufficientBreak && (
                           <>
-                            <div className="rounded-2xl bg-[#F8FAFC] p-4">
+                            <div className="rounded-2xl border border-[#D7DEE8] bg-[#EEF2F6] p-4 shadow-[0_3px_10px_rgba(15,23,42,0.05)]">
                               <p className="text-xs font-medium text-[#64748B]">
                                 Erfasste Pause
                               </p>
@@ -1250,7 +1252,7 @@ export default function CorrectionsPage() {
                               </p>
                             </div>
 
-                            <div className="rounded-2xl bg-[#F8FAFC] p-4">
+                            <div className="rounded-2xl border border-[#D7DEE8] bg-[#EEF2F6] p-4 shadow-[0_3px_10px_rgba(15,23,42,0.05)]">
                               <p className="text-xs font-medium text-[#64748B]">
                                 Fehlende Pausenzeit
                               </p>
@@ -1263,7 +1265,7 @@ export default function CorrectionsPage() {
 
                         {isContinuousWork && (
                           <>
-                            <div className="rounded-2xl bg-[#F8FAFC] p-4">
+                            <div className="rounded-2xl border border-[#D7DEE8] bg-[#EEF2F6] p-4 shadow-[0_3px_10px_rgba(15,23,42,0.05)]">
                               <p className="text-xs font-medium text-[#64748B]">
                                 Längste Arbeitsphase
                               </p>
@@ -1272,7 +1274,7 @@ export default function CorrectionsPage() {
                               </p>
                             </div>
 
-                            <div className="rounded-2xl bg-[#F8FAFC] p-4">
+                            <div className="rounded-2xl border border-[#D7DEE8] bg-[#EEF2F6] p-4 shadow-[0_3px_10px_rgba(15,23,42,0.05)]">
                               <p className="text-xs font-medium text-[#64748B]">
                                 Über 6 Stunden
                               </p>
@@ -1287,7 +1289,7 @@ export default function CorrectionsPage() {
                           !isRestPeriod &&
                           !isInsufficientBreak &&
                           !isContinuousWork && (
-                          <div className="rounded-2xl bg-[#F8FAFC] p-4 md:col-span-2">
+                          <div className="rounded-2xl border border-[#D7DEE8] bg-[#EEF2F6] p-4 shadow-[0_3px_10px_rgba(15,23,42,0.05)] md:col-span-2">
                             <p className="text-xs font-medium text-[#64748B]">
                               Hinweis
                             </p>
@@ -1299,7 +1301,7 @@ export default function CorrectionsPage() {
                         )}
                       </div>
 
-                      <div className="mt-4 rounded-2xl bg-[#FFFBEB] p-4">
+                      <div className="mt-4 rounded-2xl border border-[#F6D58B] bg-[#FFF8E8] p-4 shadow-[0_3px_10px_rgba(146,64,14,0.05)]">
                         <p className="text-xs font-medium text-[#92400E]">
                           Einordnung
                         </p>
@@ -1342,7 +1344,7 @@ export default function CorrectionsPage() {
                 {openRequests.map((request) => (
                   <div
                     key={request.id}
-                    className="rounded-3xl border border-[#E2E8F0] bg-white p-5 shadow-sm"
+                    className="rounded-3xl border border-[#CBD5E1] bg-[#F8FAFC] p-5 shadow-[0_8px_22px_rgba(15,23,42,0.10)] transition hover:shadow-[0_12px_30px_rgba(15,23,42,0.13)]"
                   >
                     <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
                       <div>
@@ -1384,7 +1386,7 @@ export default function CorrectionsPage() {
                     </div>
 
                     <div className="mt-5 grid grid-cols-1 gap-3 md:grid-cols-3">
-                      <div className="rounded-2xl bg-[#F8FAFC] p-4">
+                      <div className="rounded-2xl border border-[#D7DEE8] bg-[#EEF2F6] p-4 shadow-[0_3px_10px_rgba(15,23,42,0.05)]">
                         <p className="text-xs font-medium text-[#64748B]">
                           Datum
                         </p>
@@ -1393,7 +1395,7 @@ export default function CorrectionsPage() {
                         </p>
                       </div>
 
-                      <div className="rounded-2xl bg-[#F8FAFC] p-4">
+                      <div className="rounded-2xl border border-[#D7DEE8] bg-[#EEF2F6] p-4 shadow-[0_3px_10px_rgba(15,23,42,0.05)]">
                         <p className="text-xs font-medium text-[#64748B]">
                           Arbeitsbeginn
                         </p>
@@ -1402,7 +1404,7 @@ export default function CorrectionsPage() {
                         </p>
                       </div>
 
-                      <div className="rounded-2xl bg-[#F8FAFC] p-4">
+                      <div className="rounded-2xl border border-[#D7DEE8] bg-[#EEF2F6] p-4 shadow-[0_3px_10px_rgba(15,23,42,0.05)]">
                         <p className="text-xs font-medium text-[#64748B]">
                           Arbeitsende
                         </p>
@@ -1430,7 +1432,7 @@ export default function CorrectionsPage() {
 
       {activeView === "history" && (
         <>
-          <div className="rounded-3xl border border-[#BFDBFE] bg-[#EFF6FF] px-6 py-5">
+          <div className="rounded-3xl border border-[#CBD5E1] bg-[#E9EEF4] px-6 py-5 shadow-[0_6px_18px_rgba(15,23,42,0.07)]">
             <h2 className="text-xl font-semibold text-[#0F172A]">Erledigt & Historie</h2>
             <p className="mt-1 text-sm leading-6 text-[#475569]">
               Hier findest du geprüfte Arbeitszeit-Warnungen, erledigte Systemkorrekturen und bearbeitete Mitarbeiteranträge.
@@ -1454,7 +1456,7 @@ export default function CorrectionsPage() {
                     setConflictHistoryPage(0);
                     setComplianceHistoryPage(0);
                   }}
-                  className="w-full rounded-2xl border border-[#CBD5E1] bg-white px-4 py-3 text-sm text-[#0F172A] outline-none transition focus:border-[#2563EB] focus:ring-4 focus:ring-[#2563EB]/10"
+                  className="w-full rounded-2xl border border-transparent bg-[#E9EEF4] px-4 py-3 text-sm text-[#0F172A] outline-none shadow-[0_3px_9px_rgba(15,23,42,0.05)] transition hover:bg-[#E3E9F0] focus:border-[#60A5FA] focus:bg-white focus:ring-4 focus:ring-[#DBEAFE]"
                 >
                   {monthOptions.map((month) => (
                     <option key={month.value} value={month.value}>
@@ -1477,7 +1479,7 @@ export default function CorrectionsPage() {
                     setConflictHistoryPage(0);
                     setComplianceHistoryPage(0);
                   }}
-                  className="w-full rounded-2xl border border-[#CBD5E1] bg-white px-4 py-3 text-sm text-[#0F172A] outline-none transition focus:border-[#2563EB] focus:ring-4 focus:ring-[#2563EB]/10"
+                  className="w-full rounded-2xl border border-transparent bg-[#E9EEF4] px-4 py-3 text-sm text-[#0F172A] outline-none shadow-[0_3px_9px_rgba(15,23,42,0.05)] transition hover:bg-[#E3E9F0] focus:border-[#60A5FA] focus:bg-white focus:ring-4 focus:ring-[#DBEAFE]"
                 >
                   {historyYearOptions.map((year) => (
                     <option key={year} value={year}>
@@ -1500,7 +1502,7 @@ export default function CorrectionsPage() {
                     setConflictHistoryPage(0);
                     setComplianceHistoryPage(0);
                   }}
-                  className="w-full rounded-2xl border border-[#CBD5E1] bg-white px-4 py-3 text-sm text-[#0F172A] outline-none transition focus:border-[#2563EB] focus:ring-4 focus:ring-[#2563EB]/10"
+                  className="w-full rounded-2xl border border-transparent bg-[#E9EEF4] px-4 py-3 text-sm text-[#0F172A] outline-none shadow-[0_3px_9px_rgba(15,23,42,0.05)] transition hover:bg-[#E3E9F0] focus:border-[#60A5FA] focus:bg-white focus:ring-4 focus:ring-[#DBEAFE]"
                 >
                   <option value="all">Alle Mitarbeiter</option>
                   {historyEmployees.map((employee) => (
@@ -1548,7 +1550,7 @@ export default function CorrectionsPage() {
                   {historyConflicts.map((conflict) => (
                     <details
                       key={conflict.conflict_id}
-                      className="rounded-2xl border border-[#E2E8F0] bg-white"
+                      className="rounded-2xl border border-[#CBD5E1] bg-[#F8FAFC] shadow-[0_5px_14px_rgba(15,23,42,0.07)]"
                     >
                       <summary className="flex cursor-pointer list-none flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
                         <div>
@@ -1583,9 +1585,9 @@ export default function CorrectionsPage() {
                         </span>
                       </summary>
 
-                      <div className="border-t border-[#E2E8F0] p-4">
+                      <div className="border-t border-[#CBD5E1] bg-[#EEF2F6] p-4">
                         <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
-                          <div className="rounded-2xl bg-[#F8FAFC] p-4">
+                          <div className="rounded-2xl border border-[#D7DEE8] bg-[#EEF2F6] p-4 shadow-[0_3px_10px_rgba(15,23,42,0.05)]">
                             <p className="text-xs font-medium text-[#64748B]">
                               Eingestempelt
                             </p>
@@ -1594,7 +1596,7 @@ export default function CorrectionsPage() {
                             </p>
                           </div>
 
-                          <div className="rounded-2xl bg-[#F8FAFC] p-4">
+                          <div className="rounded-2xl border border-[#D7DEE8] bg-[#EEF2F6] p-4 shadow-[0_3px_10px_rgba(15,23,42,0.05)]">
                             <p className="text-xs font-medium text-[#64748B]">
                               Korrigiertes Arbeitsende
                             </p>
@@ -1605,7 +1607,7 @@ export default function CorrectionsPage() {
                             </p>
                           </div>
 
-                          <div className="rounded-2xl bg-[#F8FAFC] p-4">
+                          <div className="rounded-2xl border border-[#D7DEE8] bg-[#EEF2F6] p-4 shadow-[0_3px_10px_rgba(15,23,42,0.05)]">
                             <p className="text-xs font-medium text-[#64748B]">
                               Erledigt am
                             </p>
@@ -1614,7 +1616,7 @@ export default function CorrectionsPage() {
                             </p>
                           </div>
 
-                          <div className="rounded-2xl bg-[#F8FAFC] p-4">
+                          <div className="rounded-2xl border border-[#D7DEE8] bg-[#EEF2F6] p-4 shadow-[0_3px_10px_rgba(15,23,42,0.05)]">
                             <p className="text-xs font-medium text-[#64748B]">
                               Bearbeiter
                             </p>
@@ -1642,7 +1644,7 @@ export default function CorrectionsPage() {
                   ))}
                 </div>
 
-                <div className="mt-6 flex items-center justify-between border-t border-[#E2E8F0] pt-5">
+                <div className="mt-6 flex items-center justify-between border-t border-[#CBD5E1] pt-5">
                   <Button
                     type="button"
                     variant="secondary"
@@ -1722,7 +1724,7 @@ export default function CorrectionsPage() {
                     return (
                       <details
                         key={warning.id}
-                        className="rounded-2xl border border-[#E2E8F0] bg-white"
+                        className="rounded-2xl border border-[#CBD5E1] bg-[#F8FAFC] shadow-[0_5px_14px_rgba(15,23,42,0.07)]"
                       >
                         <summary className="flex cursor-pointer list-none flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
                           <div>
@@ -1754,9 +1756,9 @@ export default function CorrectionsPage() {
                           </span>
                         </summary>
 
-                        <div className="border-t border-[#E2E8F0] p-4">
+                        <div className="border-t border-[#CBD5E1] bg-[#EEF2F6] p-4">
                           <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
-                            <div className="rounded-2xl bg-[#F8FAFC] p-4">
+                            <div className="rounded-2xl border border-[#D7DEE8] bg-[#EEF2F6] p-4 shadow-[0_3px_10px_rgba(15,23,42,0.05)]">
                               <p className="text-xs font-medium text-[#64748B]">
                                 Arbeitstag
                               </p>
@@ -1769,7 +1771,7 @@ export default function CorrectionsPage() {
 
                             {isDailyLimit && (
                               <>
-                                <div className="rounded-2xl bg-[#F8FAFC] p-4">
+                                <div className="rounded-2xl border border-[#D7DEE8] bg-[#EEF2F6] p-4 shadow-[0_3px_10px_rgba(15,23,42,0.05)]">
                                   <p className="text-xs font-medium text-[#64748B]">
                                     Nettoarbeitszeit
                                   </p>
@@ -1778,7 +1780,7 @@ export default function CorrectionsPage() {
                                   </p>
                                 </div>
 
-                                <div className="rounded-2xl bg-[#F8FAFC] p-4">
+                                <div className="rounded-2xl border border-[#D7DEE8] bg-[#EEF2F6] p-4 shadow-[0_3px_10px_rgba(15,23,42,0.05)]">
                                   <p className="text-xs font-medium text-[#64748B]">
                                     Über 10 Stunden
                                   </p>
@@ -1791,7 +1793,7 @@ export default function CorrectionsPage() {
 
                             {isRestPeriod && (
                               <>
-                                <div className="rounded-2xl bg-[#F8FAFC] p-4">
+                                <div className="rounded-2xl border border-[#D7DEE8] bg-[#EEF2F6] p-4 shadow-[0_3px_10px_rgba(15,23,42,0.05)]">
                                   <p className="text-xs font-medium text-[#64748B]">
                                     Tatsächliche Ruhezeit
                                   </p>
@@ -1800,7 +1802,7 @@ export default function CorrectionsPage() {
                                   </p>
                                 </div>
 
-                                <div className="rounded-2xl bg-[#F8FAFC] p-4">
+                                <div className="rounded-2xl border border-[#D7DEE8] bg-[#EEF2F6] p-4 shadow-[0_3px_10px_rgba(15,23,42,0.05)]">
                                   <p className="text-xs font-medium text-[#64748B]">
                                     Fehlende Ruhezeit
                                   </p>
@@ -1813,7 +1815,7 @@ export default function CorrectionsPage() {
 
                             {isInsufficientBreak && (
                               <>
-                                <div className="rounded-2xl bg-[#F8FAFC] p-4">
+                                <div className="rounded-2xl border border-[#D7DEE8] bg-[#EEF2F6] p-4 shadow-[0_3px_10px_rgba(15,23,42,0.05)]">
                                   <p className="text-xs font-medium text-[#64748B]">
                                     Erfasste Pause
                                   </p>
@@ -1822,7 +1824,7 @@ export default function CorrectionsPage() {
                                   </p>
                                 </div>
 
-                                <div className="rounded-2xl bg-[#F8FAFC] p-4">
+                                <div className="rounded-2xl border border-[#D7DEE8] bg-[#EEF2F6] p-4 shadow-[0_3px_10px_rgba(15,23,42,0.05)]">
                                   <p className="text-xs font-medium text-[#64748B]">
                                     Fehlende Pausenzeit
                                   </p>
@@ -1835,7 +1837,7 @@ export default function CorrectionsPage() {
 
                             {isContinuousWork && (
                               <>
-                                <div className="rounded-2xl bg-[#F8FAFC] p-4">
+                                <div className="rounded-2xl border border-[#D7DEE8] bg-[#EEF2F6] p-4 shadow-[0_3px_10px_rgba(15,23,42,0.05)]">
                                   <p className="text-xs font-medium text-[#64748B]">
                                     Längste Arbeitsphase
                                   </p>
@@ -1844,7 +1846,7 @@ export default function CorrectionsPage() {
                                   </p>
                                 </div>
 
-                                <div className="rounded-2xl bg-[#F8FAFC] p-4">
+                                <div className="rounded-2xl border border-[#D7DEE8] bg-[#EEF2F6] p-4 shadow-[0_3px_10px_rgba(15,23,42,0.05)]">
                                   <p className="text-xs font-medium text-[#64748B]">
                                     Über 6 Stunden
                                   </p>
@@ -1855,7 +1857,7 @@ export default function CorrectionsPage() {
                               </>
                             )}
 
-                            <div className="rounded-2xl bg-[#F8FAFC] p-4">
+                            <div className="rounded-2xl border border-[#D7DEE8] bg-[#EEF2F6] p-4 shadow-[0_3px_10px_rgba(15,23,42,0.05)]">
                               <p className="text-xs font-medium text-[#64748B]">
                                 Statuszeitpunkt
                               </p>
@@ -1890,7 +1892,7 @@ export default function CorrectionsPage() {
                   })}
                 </div>
 
-                <div className="mt-6 flex items-center justify-between border-t border-[#E2E8F0] pt-5">
+                <div className="mt-6 flex items-center justify-between border-t border-[#CBD5E1] pt-5">
                   <Button
                     type="button"
                     variant="secondary"
@@ -1962,7 +1964,7 @@ export default function CorrectionsPage() {
                   {historyRequests.map((request) => (
                     <details
                       key={request.id}
-                      className="rounded-2xl border border-[#E2E8F0] bg-white"
+                      className="rounded-2xl border border-[#CBD5E1] bg-[#F8FAFC] shadow-[0_5px_14px_rgba(15,23,42,0.07)]"
                     >
                       <summary className="flex cursor-pointer list-none flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
                         <div>
@@ -1990,8 +1992,8 @@ export default function CorrectionsPage() {
                         </span>
                       </summary>
 
-                      <div className="border-t border-[#E2E8F0] p-4">
-                        <div className="rounded-2xl bg-[#F8FAFC] p-4">
+                      <div className="border-t border-[#CBD5E1] bg-[#EEF2F6] p-4">
+                        <div className="rounded-2xl border border-[#D7DEE8] bg-[#EEF2F6] p-4 shadow-[0_3px_10px_rgba(15,23,42,0.05)]">
                           <p className="text-xs font-medium text-[#64748B]">
                             Begründung
                           </p>
@@ -2004,7 +2006,7 @@ export default function CorrectionsPage() {
                   ))}
                 </div>
 
-                <div className="mt-6 flex items-center justify-between border-t border-[#E2E8F0] pt-5">
+                <div className="mt-6 flex items-center justify-between border-t border-[#CBD5E1] pt-5">
                   <Button
                     type="button"
                     variant="secondary"
@@ -2050,9 +2052,9 @@ export default function CorrectionsPage() {
       )}
 
       {selectedComplianceWarning && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#0F172A]/40 p-4 backdrop-blur-sm">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#0F172A]/48 p-4 backdrop-blur-sm">
           <div
-            className="w-full max-w-xl rounded-3xl border border-[#E2E8F0] bg-white p-6 shadow-[0_24px_80px_rgba(15,23,42,0.22)]"
+            className="w-full max-w-xl rounded-3xl border border-[#CBD5E1] bg-[#F8FAFC] p-6 shadow-[0_28px_90px_rgba(15,23,42,0.30)]"
             role="dialog"
             aria-modal="true"
             aria-labelledby="compliance-acknowledgement-title"
@@ -2117,7 +2119,7 @@ export default function CorrectionsPage() {
                 }
                 placeholder="z. B. Arbeitszeit geprüft; tatsächlicher Sondereinsatz."
                 rows={4}
-                className="w-full resize-none rounded-2xl border border-[#CBD5E1] bg-white px-4 py-3 text-sm text-[#0F172A] outline-none transition focus:border-[#2563EB] focus:ring-4 focus:ring-[#2563EB]/10"
+                className="w-full resize-none rounded-2xl border border-transparent bg-[#E9EEF4] px-4 py-3 text-sm text-[#0F172A] outline-none shadow-[0_3px_9px_rgba(15,23,42,0.05)] transition hover:bg-[#E3E9F0] focus:border-[#60A5FA] focus:bg-white focus:ring-4 focus:ring-[#DBEAFE]"
               />
             </div>
 
@@ -2145,9 +2147,9 @@ export default function CorrectionsPage() {
       )}
 
       {selectedConflict && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#0F172A]/40 p-4 backdrop-blur-sm">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#0F172A]/48 p-4 backdrop-blur-sm">
           <div
-            className="w-full max-w-xl rounded-3xl border border-[#E2E8F0] bg-white p-6 shadow-[0_24px_80px_rgba(15,23,42,0.22)]"
+            className="w-full max-w-xl rounded-3xl border border-[#CBD5E1] bg-[#F8FAFC] p-6 shadow-[0_28px_90px_rgba(15,23,42,0.30)]"
             role="dialog"
             aria-modal="true"
             aria-labelledby="conflict-correction-title"
@@ -2204,7 +2206,7 @@ export default function CorrectionsPage() {
                 onChange={(event) => setResolutionReason(event.target.value)}
                 placeholder="z. B. Mitarbeiter hat das Ausstempeln nach Schichtende vergessen."
                 rows={4}
-                className="w-full resize-none rounded-2xl border border-[#CBD5E1] bg-white px-4 py-3 text-sm text-[#0F172A] outline-none transition focus:border-[#2563EB] focus:ring-4 focus:ring-[#2563EB]/10"
+                className="w-full resize-none rounded-2xl border border-transparent bg-[#E9EEF4] px-4 py-3 text-sm text-[#0F172A] outline-none shadow-[0_3px_9px_rgba(15,23,42,0.05)] transition hover:bg-[#E3E9F0] focus:border-[#60A5FA] focus:bg-white focus:ring-4 focus:ring-[#DBEAFE]"
               />
             </div>
 

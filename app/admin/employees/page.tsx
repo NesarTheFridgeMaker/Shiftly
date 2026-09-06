@@ -2186,7 +2186,7 @@ async function handleOpenWhatsAppInvite() {
             {employee.notes.map((note) => (
               <div
                 key={note.id}
-                className="rounded-2xl border border-[#E2E8F0] bg-[#F8FAFC] p-4 transition hover:border-[#CBD5E1]"
+                className="rounded-2xl border border-[#D7DEE8] bg-[#EEF2F6] p-4 shadow-[0_4px_12px_rgba(15,23,42,0.07)] transition hover:border-[#B8C4D1] hover:shadow-[0_6px_16px_rgba(15,23,42,0.10)]"
               >
                 <p className="whitespace-pre-wrap text-sm leading-6 text-[#0F172A]">
                   {note.note}
@@ -3231,7 +3231,7 @@ const inactiveEmployees = employees
         description="Alle aktiven Mitarbeiter deines Betriebs."
       >
         {showForm && (
-          <div className="mb-6 rounded-3xl border border-[#E2E8F0] bg-[#F8FAFC] p-4 md:p-6">
+          <div className="mb-6 rounded-3xl border border-[#D7DEE8] bg-[#EEF2F6] p-4 shadow-[0_6px_18px_rgba(15,23,42,0.08)] md:p-6">
             <h2 className="mb-4 text-2xl font-semibold tracking-[-0.02em] text-[#0F172A]">
               Neuer Mitarbeiter
             </h2>
@@ -3769,11 +3769,12 @@ const inactiveEmployees = employees
         onChange={(event) => setEmployeeSearch(event.target.value)}
         placeholder="Mitarbeiter nach Name, Rolle oder PIN suchen..."
         className={[
-          "h-12 w-full rounded-2xl border border-[#CBD5E1] bg-white",
+          "h-12 w-full rounded-2xl border border-transparent bg-[#E9EEF4]",
           "pl-12 pr-12 text-sm text-[#0F172A] outline-none",
-          "placeholder:text-[#94A3B8]",
-          "transition focus:border-[#005CA8]",
-          "focus:ring-4 focus:ring-[#005CA8]/10",
+          "placeholder:text-[#64748B]",
+          "transition hover:bg-[#E3E9F0]",
+          "focus:border-[#60A5FA] focus:bg-white",
+          "focus:ring-4 focus:ring-[#DBEAFE]",
         ].join(" ")}
       />
 
@@ -3812,7 +3813,7 @@ const inactiveEmployees = employees
 )}
 
 {activeEmployees.length === 0 ? (
-  <div className="rounded-3xl border border-dashed border-[#CBD5E1] bg-[#F8FAFC] px-6 py-12 text-center">
+  <div className="rounded-3xl border border-dashed border-[#B8C4D1] bg-[#EEF2F6] px-6 py-12 text-center shadow-[0_4px_14px_rgba(15,23,42,0.05)]">
     <h3 className="text-xl font-semibold text-[#0F172A]">
       Noch keine Mitarbeiter vorhanden
     </h3>
@@ -3833,7 +3834,7 @@ const inactiveEmployees = employees
     </div>
   </div>
 ) : filteredActiveEmployees.length === 0 ? (
-  <div className="rounded-3xl border border-dashed border-[#CBD5E1] bg-[#F8FAFC] px-6 py-12 text-center">
+  <div className="rounded-3xl border border-dashed border-[#B8C4D1] bg-[#EEF2F6] px-6 py-12 text-center shadow-[0_4px_14px_rgba(15,23,42,0.05)]">
     <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-[#E8F2FB] text-[#005CA8]">
       <svg
         viewBox="0 0 24 24"
@@ -3869,8 +3870,9 @@ const inactiveEmployees = employees
     </div>
   </div>
 ) : (
-  <div className="grid grid-cols-1 gap-5 lg:grid-cols-2 2xl:grid-cols-3">
-    {visibleActiveEmployees.map((employee) => (
+  <div className="rounded-3xl border border-[#D7DEE8] bg-[#EEF2F6] p-4 shadow-[0_6px_18px_rgba(15,23,42,0.07)]">
+    <div className="grid grid-cols-1 gap-5 lg:grid-cols-2 2xl:grid-cols-3">
+      {visibleActiveEmployees.map((employee) => (
       <EmployeeCard
         key={employee.id}
         employee={employee}
@@ -3969,12 +3971,13 @@ const inactiveEmployees = employees
         }
         notesContent={renderNotes(employee)}
       />
-    ))}
+      ))}
+    </div>
   </div>
 )}
 
         {inactiveEmployees.length > 0 && (
-  <div className="mt-8 border-t border-[#E2E8F0] pt-6">
+  <div className="mt-8 border-t border-[#CBD5E1] pt-6">
     <Button
       variant="secondary"
       type="button"
@@ -3992,7 +3995,7 @@ const inactiveEmployees = employees
         {inactiveEmployees.map((employee) => (
           <div
             key={employee.id}
-            className="rounded-2xl border border-[#E2E8F0] bg-[#F8FAFC] p-4 transition hover:border-[#CBD5E1]"
+            className="rounded-2xl border border-[#D7DEE8] bg-[#EEF2F6] p-4 shadow-[0_4px_12px_rgba(15,23,42,0.07)] transition hover:border-[#B8C4D1] hover:shadow-[0_6px_16px_rgba(15,23,42,0.10)]"
           >
             <div className="flex items-center justify-between gap-4">
               <div>

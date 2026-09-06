@@ -35,6 +35,9 @@ type Shift = {
   work_type_id?: string;
   work_type_name?: string;
   is_published: boolean;
+  absence_conflict_override?: boolean;
+  absence_conflict_override_by?: string | null;
+  absence_conflict_override_at?: string | null;
 };
 
 type Absence = {
@@ -123,9 +126,24 @@ function getWeekDays(weekStart: Date) {
 }
 
 function formatAbsenceType(type: string) {
-  if (type === "vacation") return "Urlaub";
-  if (type === "sick") return "Krankheit";
-  return type;
+  switch (type) {
+    case "vacation":
+      return "Urlaub";
+    case "sick":
+      return "Krankheit";
+    case "sick_child":
+      return "Kind krank";
+    case "work_accident":
+      return "Arbeitsunfall";
+    case "paid_leave":
+      return "Bezahlte Freistellung";
+    case "unpaid_leave":
+      return "Unbezahlte Freistellung";
+    case "other":
+      return "Sonstige Abwesenheit";
+    default:
+      return type;
+  }
 }
 
 function isOvernightShift(
@@ -591,6 +609,7 @@ setPlannedBreakMinutes(
 
   async function handleSaveShift(
     forceOvernight = false,
+    forceAbsence = false,
   ) {
     if (
       !employeeId ||
@@ -668,7 +687,10 @@ setPlannedBreakMinutes(
       showConfirm(
         "Das Schichtende liegt vor dem Beginn. Soll diese Schicht als Nachtschicht gespeichert werden?",
         () => {
-          void handleSaveShift(true);
+          void handleSaveShift(
+            true,
+            forceAbsence,
+          );
         },
       );
 
@@ -717,15 +739,49 @@ setPlannedBreakMinutes(
         date,
       );
 
-    if (absenceForShift) {
-      setWarning(
-        `Achtung: ${selectedEmployee.name} ist an diesem Tag als ${formatAbsenceType(
-          absenceForShift.type,
-        )} eingetragen. Die Schicht wurde trotzdem gespeichert.`,
+    const editingShift =
+      editingShiftId
+        ? shifts.find(
+            (shift) =>
+              shift.id ===
+              editingShiftId,
+          )
+        : null;
+
+    const canReuseExistingAbsenceOverride =
+      Boolean(
+        absenceForShift &&
+          editingShift &&
+          editingShift.employee_id ===
+            selectedEmployee.id &&
+          editingShift.shift_date ===
+            date &&
+          editingShift.absence_conflict_override,
       );
-    } else {
-      setWarning("");
+
+    if (
+      absenceForShift &&
+      !forceAbsence &&
+      !canReuseExistingAbsenceOverride
+    ) {
+      showConfirm(
+        `${selectedEmployee.name} hat am ${formatDateForDisplay(
+          date,
+        )} eine genehmigte Abwesenheit (${formatAbsenceType(
+          absenceForShift.type,
+        )}). Möchtest du die Schicht trotzdem speichern?`,
+        () => {
+          void handleSaveShift(
+            forceOvernight,
+            true,
+          );
+        },
+      );
+
+      return;
     }
+
+    setWarning("");
 
     const shiftPayload = {
       employee_id:
@@ -755,6 +811,15 @@ setPlannedBreakMinutes(
         )?.name || null,
 
       is_published: false,
+
+      absence_conflict_override:
+        Boolean(
+          absenceForShift &&
+            (
+              forceAbsence ||
+              canReuseExistingAbsenceOverride
+            ),
+        ),
     };
 
     if (editingShiftId) {
@@ -809,9 +874,13 @@ setPlannedBreakMinutes(
         ? "Schicht aktualisiert"
         : "Schicht angelegt",
 
-      wasEditing
-        ? "Die Änderungen wurden gespeichert."
-        : "Die Schicht wurde dem Wochenplan hinzugefügt.",
+      absenceForShift
+        ? `Die Schicht wurde trotz bestätigter Abwesenheit (${formatAbsenceType(
+            absenceForShift.type,
+          )}) gespeichert.`
+        : wasEditing
+          ? "Die Änderungen wurden gespeichert."
+          : "Die Schicht wurde dem Wochenplan hinzugefügt.",
     );
   }
 
@@ -1068,8 +1137,22 @@ setPlannedBreakMinutes(
             null,
 
           is_published: false,
+
+          absence_conflict_override:
+            false,
         };
       });
+
+    const copiedAbsenceConflicts =
+      copiedShifts.filter(
+        (shift) =>
+          Boolean(
+            findAbsenceForShift(
+              shift.employee_id,
+              shift.shift_date,
+            ),
+          ),
+      );
 
     const targetDates =
       copiedShifts.map(
@@ -1111,7 +1194,9 @@ setPlannedBreakMinutes(
     }
 
     showConfirm(
-      `${copiedShifts.length} Schichten in nächste Woche kopieren?`,
+      copiedAbsenceConflicts.length > 0
+        ? `${copiedShifts.length} Schichten in die nächste Woche kopieren? ${copiedAbsenceConflicts.length} Schicht(en) treffen dort auf eine genehmigte Abwesenheit. Diese Konflikte bleiben im Plan sichtbar.`
+        : `${copiedShifts.length} Schichten in nächste Woche kopieren?`,
       async () => {
         const { error } =
           await supabase
@@ -1380,40 +1465,12 @@ setPlannedBreakMinutes(
     }
   }
 
-  async function handleDropOnDay(
-    event: DragEvent<HTMLDivElement>,
+  async function moveShiftToCell(
+    shiftToMove: Shift,
+    targetEmployee: Employee,
     selectedDate: string,
+    forceAbsence = false,
   ) {
-    event.preventDefault();
-
-    const payload =
-      readDragPayload(event);
-
-    setDraggedPayload(null);
-    setDragOverDay(null);
-
-    if (!payload) return;
-
-    if (
-      payload.type === "employee"
-    ) {
-      prefillNewShift(
-        selectedDate,
-        payload.employeeId,
-      );
-
-      return;
-    }
-
-    const shiftToMove =
-      shifts.find(
-        (shift) =>
-          shift.id ===
-          payload.shiftId,
-      );
-
-    if (!shiftToMove) return;
-
     const businessId =
       await getBusinessId();
 
@@ -1425,15 +1482,52 @@ setPlannedBreakMinutes(
       return;
     }
 
+    const absenceForTarget =
+      findAbsenceForShift(
+        targetEmployee.id,
+        selectedDate,
+      );
+
+    if (
+      absenceForTarget &&
+      !forceAbsence
+    ) {
+      showConfirm(
+        `${targetEmployee.name} hat am ${formatDateForDisplay(
+          selectedDate,
+        )} eine genehmigte Abwesenheit (${formatAbsenceType(
+          absenceForTarget.type,
+        )}). Möchtest du die Schicht trotzdem dorthin verschieben?`,
+        () => {
+          void moveShiftToCell(
+            shiftToMove,
+            targetEmployee,
+            selectedDate,
+            true,
+          );
+        },
+      );
+
+      return;
+    }
+
     const { error } =
       await supabase
         .from("shifts")
         .update({
+          employee_id:
+            targetEmployee.id,
+          employee_name:
+            targetEmployee.name,
           shift_date:
             selectedDate,
-
           is_published:
             false,
+          absence_conflict_override:
+            Boolean(
+              absenceForTarget &&
+                forceAbsence,
+            ),
         })
         .eq(
           "id",
@@ -1460,7 +1554,62 @@ setPlannedBreakMinutes(
 
     showSuccess(
       "Schicht verschoben",
-      "Die Schicht wurde auf den neuen Tag gesetzt.",
+      absenceForTarget
+        ? `Die Schicht wurde trotz bestätigter Abwesenheit (${formatAbsenceType(
+            absenceForTarget.type,
+          )}) verschoben.`
+        : "Die Schicht wurde auf den neuen Mitarbeiter bzw. Tag gesetzt.",
+    );
+  }
+
+  async function handleDropOnScheduleCell(
+    event: DragEvent<HTMLDivElement>,
+    targetEmployee: Employee,
+    selectedDate: string,
+  ) {
+    event.preventDefault();
+
+    const payload =
+      readDragPayload(event);
+
+    setDraggedPayload(null);
+    setDragOverDay(null);
+
+    if (!payload) return;
+
+    if (
+      payload.type === "employee"
+    ) {
+      prefillNewShift(
+        selectedDate,
+        targetEmployee.id,
+      );
+
+      return;
+    }
+
+    const shiftToMove =
+      shifts.find(
+        (shift) =>
+          shift.id ===
+          payload.shiftId,
+      );
+
+    if (!shiftToMove) return;
+
+    if (
+      shiftToMove.employee_id ===
+        targetEmployee.id &&
+      shiftToMove.shift_date ===
+        selectedDate
+    ) {
+      return;
+    }
+
+    await moveShiftToCell(
+      shiftToMove,
+      targetEmployee,
+      selectedDate,
     );
   }
 
@@ -1638,15 +1787,12 @@ setPlannedBreakMinutes(
       <div className="space-y-8">
         <PageHeader
           title="Schichtplanung"
-          description="Plane die Woche mit klaren Tages-Spalten. Ziehe Mitarbeiter auf einen Tag und lege die Details im Dialog fest."
+          description="Plane alle Mitarbeiter und Wochentage in einer kompakten Wochenmatrix. Klicke in eine Zelle oder verschiebe bestehende Schichten per Drag & Drop."
         />
 
         <StatsSkeleton />
 
-        <div className="grid grid-cols-1 gap-6 xl:grid-cols-[320px_minmax(0,1fr)]">
-          <PageSkeleton />
-          <PageSkeleton />
-        </div>
+        <PageSkeleton />
       </div>
     );
   }
@@ -1655,131 +1801,220 @@ setPlannedBreakMinutes(
     <div className="space-y-8">
       <PageHeader
         title="Schichtplanung"
-        description="Plane die Woche mit klaren Tages-Spalten. Ziehe Mitarbeiter auf einen Tag und lege die Details im Dialog fest."
-        action={
-          <PageActions>
-            <Button
-              variant="secondary"
-              onClick={
-                goToPreviousWeek
-              }
-            >
-              Vorherige Woche
-            </Button>
-
-            <Button
-              variant="secondary"
-              onClick={
-                goToCurrentWeek
-              }
-            >
-              Aktuelle Woche
-            </Button>
-
-            <Button
-              variant="secondary"
-              onClick={
-                goToNextWeek
-              }
-            >
-              Nächste Woche
-            </Button>
-          </PageActions>
-        }
+        description="Plane alle Mitarbeiter und Wochentage in einer kompakten Wochenmatrix. Klicke in eine Zelle oder verschiebe bestehende Schichten per Drag & Drop."
       />
 
-      <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-4">
-        <StatCard
-          title="Mitarbeiter"
-          value={employees.length}
-        />
+      <div className="rounded-3xl border border-[#D7DEE8] bg-[#EEF2F6] p-4 shadow-[0_6px_18px_rgba(15,23,42,0.08)] md:p-5">
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-4">
+          <StatCard
+            title="Mitarbeiter"
+            value={employees.length}
+          />
 
-        <StatCard
-          title="Schichten diese Woche"
-          value={
-            shiftsInSelectedWeek.length
-          }
-        />
+          <StatCard
+            title="Schichten diese Woche"
+            value={
+              shiftsInSelectedWeek.length
+            }
+          />
 
-        <StatCard
-          title="Schichten heute"
-          value={
-            todaysShifts.length
-          }
-        />
+          <StatCard
+            title="Schichten heute"
+            value={
+              todaysShifts.length
+            }
+          />
 
-        <StatCard
-          title="Status"
-          value={
-            isSelectedWeekPublished
-              ? "Live"
-              : "Entwurf"
-          }
-          badge={
-            isSelectedWeekPublished
-              ? "Veröffentlicht"
-              : "Entwurf"
-          }
-          badgeVariant={
-            isSelectedWeekPublished
-              ? "success"
-              : "warning"
-          }
-        />
+          <StatCard
+            title="Status"
+            value={
+              isSelectedWeekPublished
+                ? "Live"
+                : "Entwurf"
+            }
+            badge={
+              isSelectedWeekPublished
+                ? "Veröffentlicht"
+                : "Entwurf"
+            }
+            badgeVariant={
+              isSelectedWeekPublished
+                ? "success"
+                : "warning"
+            }
+          />
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[320px_minmax(0,1fr)]">
-        <div className="order-2 space-y-6 xl:order-1">
-          <Section
-            title="Mitarbeiter"
-            description="Ziehe Mitarbeiter auf den gewünschten Tag. Danach wählst du Uhrzeit, Pause und Arbeitstyp im Dialog."
-            bodyClassName="max-h-[520px] space-y-3 overflow-y-auto"
-          >
-            {employees.length > 0 ? (
-              employees.map(
-                (employee) => (
-                  <button
+      <Section
+        title="Wochenplanung"
+        description={`${weekStartText} bis ${weekEndText} · Eine Zeile pro Mitarbeiter, eine Spalte pro Wochentag.`}
+        action={
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <button
+              type="button"
+              onClick={goToPreviousWeek}
+              className="inline-flex h-9 items-center justify-center rounded-lg border border-[#CBD5E1] bg-white px-3 text-xs font-semibold text-[#334155] shadow-[0_3px_9px_rgba(15,23,42,0.09)] transition hover:bg-[#EEF2F6] hover:shadow-[0_5px_12px_rgba(15,23,42,0.12)]"
+            >
+              ← Vorherige
+            </button>
+
+            <button
+              type="button"
+              onClick={goToCurrentWeek}
+              className="inline-flex h-9 items-center justify-center rounded-lg border border-[#CBD5E1] bg-white px-3 text-xs font-semibold text-[#334155] shadow-[0_3px_9px_rgba(15,23,42,0.09)] transition hover:bg-[#EEF2F6] hover:shadow-[0_5px_12px_rgba(15,23,42,0.12)]"
+            >
+              Aktuelle Woche
+            </button>
+
+            <button
+              type="button"
+              onClick={goToNextWeek}
+              className="inline-flex h-9 items-center justify-center rounded-lg border border-[#CBD5E1] bg-white px-3 text-xs font-semibold text-[#334155] shadow-[0_3px_9px_rgba(15,23,42,0.09)] transition hover:bg-[#EEF2F6] hover:shadow-[0_5px_12px_rgba(15,23,42,0.12)]"
+            >
+              Nächste →
+            </button>
+
+            <div className="mx-1 hidden h-6 w-px bg-[#D7DEE8] xl:block" />
+
+            <button
+              type="button"
+              onClick={handleCopyWeekToNext}
+              className="inline-flex h-9 items-center justify-center rounded-lg border border-[#CBD5E1] bg-white px-3 text-xs font-semibold text-[#334155] shadow-[0_3px_9px_rgba(15,23,42,0.09)] transition hover:bg-[#EEF2F6] hover:shadow-[0_5px_12px_rgba(15,23,42,0.12)]"
+            >
+              Woche kopieren
+            </button>
+
+            <button
+              type="button"
+              onClick={handlePublishSelectedWeek}
+              className="inline-flex h-9 items-center justify-center rounded-lg bg-[#2563EB] px-3.5 text-xs font-semibold text-white shadow-[0_6px_14px_rgba(37,99,235,0.24)] transition hover:bg-[#1D4ED8] hover:shadow-[0_8px_18px_rgba(37,99,235,0.28)]"
+            >
+              Veröffentlichen
+            </button>
+          </div>
+        }
+        bodyClassName="p-0"
+      >
+        <div className="border-b border-[#CBD5E1] bg-[#E9EEF4] px-5 py-3 shadow-[0_3px_10px_rgba(15,23,42,0.05)]">
+          <div className="flex flex-wrap items-center gap-3">
+            <Badge
+              variant={
+                isSelectedWeekPublished
+                  ? "success"
+                  : "warning"
+              }
+            >
+              {isSelectedWeekPublished
+                ? "Veröffentlicht"
+                : "Entwurf"}
+            </Badge>
+
+            <span className="text-sm text-[#64748B]">
+              Klicke in eine Zelle, um eine Schicht anzulegen.
+              Bestehende Schichten kannst du per Drag & Drop auf
+              einen anderen Mitarbeiter oder Wochentag verschieben.
+            </span>
+          </div>
+        </div>
+
+        <div className="max-h-[72vh] overflow-y-auto">
+          <div className="sticky top-0 z-30 grid grid-cols-[minmax(190px,1.35fr)_repeat(7,minmax(0,1fr))] border-b border-[#CBD5E1] bg-[#EEF2F6] shadow-[0_4px_12px_rgba(15,23,42,0.10)]">
+            <div className="flex min-h-[82px] items-center border-r border-[#CBD5E1] px-4">
+              <div>
+                <p className="text-sm font-semibold text-[#0F172A]">
+                  Mitarbeiter
+                </p>
+                <p className="mt-1 text-xs text-[#64748B]">
+                  {employees.length} aktiv
+                </p>
+              </div>
+            </div>
+
+            {weekDays.map(
+              (day) => {
+                const daySummary =
+                  getDaySummary(
+                    day.date,
+                  );
+
+                return (
+                  <div
                     key={
-                      employee.id
+                      day.date
                     }
+                    className={`min-w-0 border-r border-[#CBD5E1] px-2 py-3 text-center last:border-r-0 ${
+                      day.date ===
+                      todayDate
+                        ? "bg-[#DBEAFE]"
+                        : ""
+                    }`}
+                  >
+                    <div className="flex items-center justify-center gap-1.5">
+                      <p className="truncate text-sm font-semibold text-[#0F172A]">
+                        {
+                          day.label
+                        }
+                      </p>
+
+                      {day.date ===
+                        todayDate && (
+                        <span className="h-2 w-2 shrink-0 rounded-full bg-[#2563EB]" />
+                      )}
+                    </div>
+
+                    <p className="mt-1 text-[11px] text-[#64748B]">
+                      {
+                        day.displayDate
+                      }
+                    </p>
+
+                    <p className="mt-1 truncate text-[10px] font-medium text-[#475569]">
+                      {
+                        daySummary.count
+                      }{" "}
+                      Schicht
+                      {daySummary.count ===
+                      1
+                        ? ""
+                        : "en"}{" "}
+                      ·{" "}
+                      {
+                        daySummary.hours
+                      }{" "}
+                      h
+                    </p>
+                  </div>
+                );
+              },
+            )}
+          </div>
+
+          {employees.length > 0 ? (
+            employees.map(
+              (employee) => (
+                <div
+                  key={
+                    employee.id
+                  }
+                  className="grid grid-cols-[minmax(190px,1.35fr)_repeat(7,minmax(0,1fr))] border-b border-[#DCE3EC] last:border-b-0"
+                >
+                  <button
                     type="button"
-                    draggable
                     onClick={() =>
                       setEmployeeId(
                         employee.id,
                       )
                     }
-                    onDragStart={(
-                      event,
-                    ) =>
-                      handleDragStart(
-                        event,
-                        {
-                          type:
-                            "employee",
-                          employeeId:
-                            employee.id,
-                        },
-                      )
-                    }
-                    onDragEnd={() => {
-                      setDraggedPayload(
-                        null,
-                      );
-
-                      setDragOverDay(
-                        null,
-                      );
-                    }}
-                    className={`w-full cursor-grab rounded-2xl border px-4 py-4 text-left transition active:cursor-grabbing ${
+                    className={`min-w-0 border-r border-[#CBD5E1] px-3 py-3 text-left transition ${
                       employeeId ===
                       employee.id
-                        ? "border-[#2563EB] bg-[#EFF6FF] shadow-[0_10px_24px_rgba(37,99,235,0.12)]"
-                        : "border-[#E2E8F0] bg-white hover:border-[#BFDBFE] hover:bg-[#F8FAFC]"
+                        ? "bg-[#E8F2FB]"
+                        : "bg-[#F8FAFC] hover:bg-[#EEF2F6]"
                     }`}
                   >
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-[#2563EB] text-sm font-medium text-white">
+                    <div className="flex min-w-0 items-center gap-2.5">
+                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#2563EB] text-xs font-semibold text-white shadow-[0_4px_10px_rgba(37,99,235,0.18)]">
                         {employee.name
                           .slice(
                             0,
@@ -1789,400 +2024,268 @@ setPlannedBreakMinutes(
                       </div>
 
                       <div className="min-w-0">
-                        <p className="truncate text-sm font-medium text-[#0F172A]">
+                        <p className="truncate text-sm font-semibold text-[#0F172A]">
                           {
                             employee.name
                           }
                         </p>
 
-                        <p className="truncate text-xs text-[#64748B]">
+                        <p className="mt-0.5 truncate text-[11px] text-[#64748B]">
                           {employee.note ||
                             "Bereit für die Planung"}
                         </p>
                       </div>
                     </div>
                   </button>
-                ),
-              )
-            ) : (
-              <p className="text-sm text-[#64748B]">
-                Keine aktiven
-                Mitarbeiter gefunden.
-              </p>
-            )}
-          </Section>
 
-          <Section
-            title="Planungslogik"
-            description="Der Tag ist die Arbeitsfläche. Beginn, Ende, geplante Pause und Arbeitstyp werden pro Schicht festgelegt."
-          >
-            <div className="space-y-3 text-sm text-[#64748B]">
-              <p>
-                Die angezeigten
-                geplanten Stunden sind
-                Nettoarbeitszeiten.
-                Geplante unbezahlte
-                Pausen werden bereits
-                abgezogen.
-              </p>
+                  {weekDays.map(
+                    (day) => {
+                      const cellKey =
+                        `${employee.id}:${day.date}`;
 
-              <p>
-                Bestehende Schichten
-                kannst du auf andere
-                Tage ziehen oder per
-                Klick bearbeiten.
-              </p>
-            </div>
-          </Section>
-        </div>
+                      const cellShifts =
+                        shiftsInSelectedWeek
+                          .filter(
+                            (shift) =>
+                              shift.employee_id ===
+                                employee.id &&
+                              shift.shift_date ===
+                                day.date,
+                          )
+                          .sort(
+                            (
+                              first,
+                              second,
+                            ) =>
+                              first.start_time.localeCompare(
+                                second.start_time,
+                              ),
+                          );
 
-        <Section
-          className="order-1 xl:order-2"
-          title="Wochenplanung"
-          description={`${weekStartText} bis ${weekEndText}`}
-          action={
-            <div className="flex flex-col gap-3 sm:flex-row">
-              <Button
-                variant="secondary"
-                onClick={
-                  handleCopyWeekToNext
-                }
-              >
-                Woche kopieren
-              </Button>
-
-              <Button
-                onClick={
-                  handlePublishSelectedWeek
-                }
-              >
-                Veröffentlichen
-              </Button>
-            </div>
-          }
-          bodyClassName="p-0"
-        >
-          <div className="border-b border-[#E2E8F0] px-6 py-4">
-            <div className="flex flex-wrap items-center gap-3">
-              <Badge
-                variant={
-                  isSelectedWeekPublished
-                    ? "success"
-                    : "warning"
-                }
-              >
-                {isSelectedWeekPublished
-                  ? "Veröffentlicht"
-                  : "Entwurf"}
-              </Badge>
-
-              <span className="text-sm text-[#64748B]">
-                Mitarbeiter auf
-                einen Tag ziehen.
-                Zeiten, Pause und
-                Arbeitstyp werden
-                danach im Dialog
-                festgelegt.
-              </span>
-            </div>
-          </div>
-
-          <div className="overflow-x-auto">
-            <div className="grid min-w-[1540px] grid-cols-7 divide-x divide-[#E2E8F0]">
-              {weekDays.map(
-                (day) => {
-                  const dayShifts =
-                    shiftsInSelectedWeek
-                      .filter(
-                        (shift) =>
-                          shift.shift_date ===
-                          day.date,
-                      )
-                      .sort(
-                        (
-                          first,
-                          second,
-                        ) =>
-                          first.start_time.localeCompare(
-                            second.start_time,
-                          ),
-                      );
-
-                  const daySummary =
-                    getDaySummary(
-                      day.date,
-                    );
-
-                  return (
-                    <div
-                      key={day.date}
-                      onDragOver={(
-                        event,
-                      ) => {
-                        event.preventDefault();
-
-                        event.dataTransfer.dropEffect =
-                          "move";
-
-                        setDragOverDay(
+                      const absenceForCell =
+                        findAbsenceForShift(
+                          employee.id,
                           day.date,
                         );
-                      }}
-                      onDragLeave={() =>
-                        setDragOverDay(
-                          null,
-                        )
-                      }
-                      onDrop={(
-                        event,
-                      ) =>
-                        handleDropOnDay(
-                          event,
-                          day.date,
-                        )
-                      }
-                      className={`min-h-[500px] bg-white transition ${
-                        day.date ===
-                        todayDate
-                          ? "bg-[#EFF6FF]/35"
-                          : ""
-                      } ${
-                        dragOverDay ===
-                        day.date
-                          ? "bg-[#DBEAFE]"
-                          : ""
-                      }`}
-                    >
-                      <button
-                        type="button"
-                        onClick={() =>
-                          prefillNewShift(
-                            day.date,
-                          )
-                        }
-                        className="sticky top-0 z-10 w-full border-b border-[#E2E8F0] bg-white/95 px-4 py-4 text-left backdrop-blur transition hover:bg-[#F8FAFC]"
-                      >
-                        <div className="flex items-start justify-between gap-3">
-                          <div>
-                            <p className="text-sm font-medium text-[#0F172A]">
-                              {
-                                day.label
-                              }
-                            </p>
 
-                            <p className="mt-1 text-xs text-[#64748B]">
-                              {
-                                day.displayDate
-                              }
-                            </p>
-                          </div>
+                      return (
+                        <div
+                          key={
+                            cellKey
+                          }
+                          onDragOver={(
+                            event,
+                          ) => {
+                            event.preventDefault();
 
-                          {day.date ===
-                            todayDate && (
-                            <Badge variant="primary">
-                              Heute
-                            </Badge>
-                          )}
-                        </div>
+                            event.dataTransfer.dropEffect =
+                              "move";
 
-                        <div className="mt-3 flex flex-wrap gap-2">
-                          <Badge variant="muted">
-                            {
-                              daySummary.count
-                            }{" "}
-                            Schichten
-                          </Badge>
-
-                          <Badge variant="muted">
-                            {
-                              daySummary.hours
-                            }{" "}
-                            h netto
-                          </Badge>
-                        </div>
-                      </button>
-
-                      <div className="space-y-2 px-3 py-4">
-                        {dayShifts.map(
-                          (shift) => {
-                            const absenceForShift =
-                              findAbsenceForShift(
-                                shift.employee_id,
-                                shift.shift_date,
-                              );
-
-                            const shiftNetMinutes =
-                              getPlannedNetMinutes(
-                                shift.start_time,
-                                shift.end_time,
-                                shift.planned_break_minutes ??
-                                  0,
-                              );
-
-                            return (
-                              <div
-                                key={
-                                  shift.id
-                                }
-                                draggable
-                                onDragStart={(
-                                  event,
-                                ) =>
-                                  handleDragStart(
-                                    event,
-                                    {
-                                      type:
-                                        "shift",
-                                      shiftId:
-                                        shift.id,
-                                    },
-                                  )
-                                }
-                                onDragEnd={() => {
-                                  setDraggedPayload(
-                                    null,
-                                  );
-
-                                  setDragOverDay(
-                                    null,
-                                  );
-                                }}
-                                className="cursor-grab rounded-2xl border border-[#1D4ED8] bg-[#2563EB] p-3 text-white shadow-[0_12px_26px_rgba(37,99,235,0.22)] transition hover:-translate-y-0.5 hover:bg-[#1D4ED8] hover:shadow-[0_16px_34px_rgba(37,99,235,0.26)] active:cursor-grabbing"
-                              >
-                                <div className="flex items-start justify-between gap-3">
-                                  <div className="min-w-0">
-                                    <p className="text-sm font-semibold text-white">
-                                      {formatShiftTime(
-                                        shift.start_time,
-                                        shift.end_time,
-                                      )}
-                                    </p>
-
-                                    <p className="mt-1 truncate text-sm font-medium text-white">
-                                      {
-                                        shift.employee_name
-                                      }
-                                    </p>
-
-                                    <p className="mt-1 text-xs text-white/80">
-                                      {formatMinutesAsHours(
-                                        shiftNetMinutes,
-                                      )}{" "}
-                                      Std.
-                                      netto
-                                    </p>
-                                  </div>
-
-                                  {!shift.is_published && (
-                                    <span className="shrink-0 rounded-full bg-white/90 px-2 py-0.5 text-[11px] font-medium text-[#B45309]">
-                                      Entwurf
-                                    </span>
-                                  )}
-                                </div>
-
-                                <div className="mt-2 flex flex-wrap gap-2">
-                                  {shift.work_type_name && (
-                                    <span className="rounded-full bg-white/15 px-2.5 py-1 text-xs font-medium text-white ring-1 ring-white/20">
-                                      {
-                                        shift.work_type_name
-                                      }
-                                    </span>
-                                  )}
-
-                                  {shift.planned_break_minutes >
-                                    0 && (
-                                    <span className="rounded-full bg-white/15 px-2.5 py-1 text-xs font-medium text-white ring-1 ring-white/20">
-                                      Pause{" "}
-                                      {
-                                        shift.planned_break_minutes
-                                      }{" "}
-                                      Min.
-                                    </span>
-                                  )}
-
-                                  {absenceForShift && (
-                                    <span className="rounded-full bg-white/90 px-2.5 py-1 text-xs font-medium text-[#B45309]">
-                                      {formatAbsenceType(
-                                        absenceForShift.type,
-                                      )}
-                                    </span>
-                                  )}
-                                </div>
-
-                                <div className="mt-3 grid grid-cols-2 gap-2">
-                                  <Button
-                                    size="sm"
-                                    variant="secondary"
-                                    className="h-8 px-2 text-xs"
-                                    onClick={() =>
-                                      handleEditShift(
-                                        shift,
-                                      )
-                                    }
-                                  >
-                                    Bearbeiten
-                                  </Button>
-
-                                  <Button
-                                    size="sm"
-                                    variant="secondary"
-                                    className="h-8 px-2 text-xs text-[#EF4444] hover:text-[#DC2626]"
-                                    onClick={() =>
-                                      showConfirm(
-                                        "Möchtest du diese Schicht wirklich löschen?",
-                                        () =>
-                                          handleDeleteShift(
-                                            shift.id,
-                                          ),
-                                      )
-                                    }
-                                  >
-                                    Löschen
-                                  </Button>
-                                </div>
-                              </div>
+                            setDragOverDay(
+                              cellKey,
                             );
-                          },
-                        )}
-
-                        <button
-                          type="button"
-                          onClick={() =>
-                            prefillNewShift(
+                          }}
+                          onDragLeave={() =>
+                            setDragOverDay(
+                              null,
+                            )
+                          }
+                          onDrop={(
+                            event,
+                          ) =>
+                            handleDropOnScheduleCell(
+                              event,
+                              employee,
                               day.date,
                             )
                           }
-                          className={`flex min-h-[116px] w-full flex-col items-center justify-center rounded-2xl border border-dashed px-4 py-5 text-center text-sm transition ${
+                          className={`group relative min-h-[112px] min-w-0 border-r border-[#CBD5E1] p-1.5 last:border-r-0 transition ${
+                            day.date ===
+                            todayDate
+                              ? "bg-[#EAF2FF]"
+                              : "bg-[#F8FAFC]"
+                          } ${
+                            absenceForCell
+                              ? "bg-[#FFF8E8]"
+                              : ""
+                          } ${
                             dragOverDay ===
-                            day.date
-                              ? "border-[#2563EB] bg-[#EFF6FF] text-[#2563EB]"
-                              : "border-[#CBD5E1] bg-[#F8FAFC] text-[#64748B] hover:border-[#2563EB] hover:bg-[#EFF6FF] hover:text-[#2563EB]"
+                            cellKey
+                              ? "bg-[#DBEAFE] ring-2 ring-inset ring-[#60A5FA]"
+                              : ""
                           }`}
                         >
-                          <span className="mb-2 flex h-8 w-8 items-center justify-center rounded-full bg-white text-lg font-light shadow-[0_8px_18px_rgba(17,24,39,0.08)]">
-                            +
-                          </span>
+                          <button
+                            type="button"
+                            aria-label={`Schicht für ${employee.name} am ${day.displayDate} anlegen`}
+                            onClick={() =>
+                              prefillNewShift(
+                                day.date,
+                                employee.id,
+                              )
+                            }
+                            className="absolute inset-0 z-0 cursor-pointer"
+                          />
 
-                          <span className="font-medium">
-                            Neue
-                            Schicht
-                          </span>
+                          <div className="pointer-events-none relative z-10">
+                            {absenceForCell && (
+                              <div className="mb-1.5">
+                                <span className="inline-flex max-w-full items-center gap-1 rounded-md border border-[#F6D58B] bg-[#FFF3CD] px-1.5 py-1 text-[10px] font-semibold text-[#92400E]">
+                                  <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#F59E0B]" />
+                                  <span className="truncate">
+                                    {formatAbsenceType(
+                                      absenceForCell.type,
+                                    )}
+                                  </span>
+                                </span>
+                              </div>
+                            )}
 
-                          <span className="mt-1 text-xs">
-                            Mitarbeiter
-                            hier ablegen
-                            oder klicken
-                          </span>
-                        </button>
-                      </div>
-                    </div>
-                  );
-                },
-              )}
+                            <div className="space-y-1.5">
+                              {cellShifts.map(
+                                (shift) => {
+                                  const shiftNetMinutes =
+                                    getPlannedNetMinutes(
+                                      shift.start_time,
+                                      shift.end_time,
+                                      shift.planned_break_minutes ??
+                                        0,
+                                    );
+
+                                  return (
+                                    <div
+                                      key={
+                                        shift.id
+                                      }
+                                      draggable
+                                      onDragStart={(
+                                        event,
+                                      ) => {
+                                        event.stopPropagation();
+
+                                        handleDragStart(
+                                          event,
+                                          {
+                                            type:
+                                              "shift",
+                                            shiftId:
+                                              shift.id,
+                                          },
+                                        );
+                                      }}
+                                      onDragEnd={() => {
+                                        setDraggedPayload(
+                                          null,
+                                        );
+
+                                        setDragOverDay(
+                                          null,
+                                        );
+                                      }}
+                                      onClick={(
+                                        event,
+                                      ) => {
+                                        event.stopPropagation();
+
+                                        handleEditShift(
+                                          shift,
+                                        );
+                                      }}
+                                      className="pointer-events-auto relative cursor-grab rounded-lg border border-[#1D4ED8] bg-[#2563EB] px-2 py-1.5 text-white shadow-[0_6px_14px_rgba(37,99,235,0.24)] transition hover:-translate-y-px hover:bg-[#1D4ED8] hover:shadow-[0_9px_20px_rgba(37,99,235,0.30)] active:cursor-grabbing"
+                                    >
+                                      <button
+                                        type="button"
+                                        title="Schicht löschen"
+                                        onClick={(
+                                          event,
+                                        ) => {
+                                          event.stopPropagation();
+
+                                          showConfirm(
+                                            "Möchtest du diese Schicht wirklich löschen?",
+                                            () =>
+                                              handleDeleteShift(
+                                                shift.id,
+                                              ),
+                                          );
+                                        }}
+                                        className="absolute right-1 top-1 flex h-4 w-4 items-center justify-center rounded-full bg-white/15 text-[11px] leading-none text-white/90 transition hover:bg-white/30 hover:text-white"
+                                      >
+                                        ×
+                                      </button>
+
+                                      <p className="truncate pr-4 text-[11px] font-bold leading-4 text-white">
+                                        {shift.start_time.slice(
+                                          0,
+                                          5,
+                                        )}
+                                        {" – "}
+                                        {shift.end_time.slice(
+                                          0,
+                                          5,
+                                        )}
+                                      </p>
+
+                                      {shift.work_type_name && (
+                                        <p className="mt-0.5 truncate text-[10px] font-medium leading-4 text-white/90">
+                                          {
+                                            shift.work_type_name
+                                          }
+                                        </p>
+                                      )}
+
+                                      <div className="mt-1 flex min-w-0 items-center justify-between gap-1 text-[9px] leading-3 text-white/75">
+                                        <span className="truncate">
+                                          {formatMinutesAsHours(
+                                            shiftNetMinutes,
+                                          )}{" "}
+                                          h netto
+                                        </span>
+
+                                        {!shift.is_published && (
+                                          <span className="shrink-0 rounded bg-white/15 px-1 py-0.5 font-semibold text-white">
+                                            Entwurf
+                                          </span>
+                                        )}
+                                      </div>
+                                    </div>
+                                  );
+                                },
+                              )}
+                            </div>
+                          </div>
+
+                          {cellShifts.length ===
+                            0 &&
+                            !absenceForCell && (
+                            <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center opacity-0 transition group-hover:opacity-100">
+                              <span className="rounded-lg border border-dashed border-[#93C5FD] bg-[#EFF6FF] px-2 py-1 text-[10px] font-medium text-[#2563EB]">
+                                + Schicht
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    },
+                  )}
+                </div>
+              ),
+            )
+          ) : (
+            <div className="px-6 py-12 text-center">
+              <p className="text-sm font-medium text-[#475569]">
+                Keine aktiven Mitarbeiter gefunden.
+              </p>
             </div>
-          </div>
-        </Section>
-      </div>
+          )}
+        </div>
+
+        <div className="border-t border-[#CBD5E1] bg-[#E9EEF4] px-5 py-3 text-xs text-[#64748B]">
+          Genehmigte Abwesenheiten werden direkt in der Matrix markiert.
+          Beim Anlegen oder Verschieben einer Schicht auf einen solchen Tag
+          verlangt Dipera eine ausdrückliche Bestätigung.
+        </div>
+      </Section>
 
       <Section
         title="Heute"
@@ -2206,7 +2309,7 @@ setPlannedBreakMinutes(
                     key={
                       shift.id
                     }
-                    className="flex flex-col gap-4 rounded-2xl border border-[#E2E8F0] bg-[#F8FAFC] px-4 py-4 md:flex-row md:items-center md:justify-between"
+                    className="flex flex-col gap-4 rounded-2xl border border-[#CBD5E1] bg-[#EEF2F6] px-4 py-4 shadow-[0_6px_16px_rgba(15,23,42,0.08)] transition hover:shadow-[0_9px_22px_rgba(15,23,42,0.11)] md:flex-row md:items-center md:justify-between"
                   >
                     <div>
                       <p className="text-sm font-medium text-[#0F172A]">
@@ -2280,7 +2383,7 @@ setPlannedBreakMinutes(
             )}
           </div>
         ) : (
-          <div className="rounded-3xl border border-dashed border-[#CBD5E1] bg-[#F8FAFC] px-6 py-10 text-center">
+          <div className="rounded-3xl border border-dashed border-[#B8C4D1] bg-[#EEF2F6] px-6 py-10 text-center shadow-[0_4px_14px_rgba(15,23,42,0.05)]">
             <h3 className="text-lg font-semibold text-[#0F172A]">
               Heute keine
               Schichten
@@ -2299,9 +2402,9 @@ setPlannedBreakMinutes(
       </Section>
 
       {showShiftDialog && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#0F172A]/35 p-6 backdrop-blur-sm">
-          <div className="w-full max-w-2xl rounded-[28px] border border-[#E2E8F0] bg-white shadow-[0_24px_70px_rgba(17,24,39,0.18)]">
-            <div className="border-b border-[#E2E8F0] px-6 py-5">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#0F172A]/45 p-6 backdrop-blur-sm">
+          <div className="w-full max-w-2xl overflow-hidden rounded-[28px] border border-[#CBD5E1] bg-white shadow-[0_28px_90px_rgba(15,23,42,0.28)]">
+            <div className="border-b border-[#CBD5E1] bg-[#F8FAFC] px-6 py-5">
               <p className="text-sm text-[#2563EB]">
                 {editingShiftId
                   ? "Schicht bearbeiten"
@@ -2320,7 +2423,7 @@ setPlannedBreakMinutes(
               </p>
             </div>
 
-            <div className="space-y-5 px-6 py-6">
+            <div className="space-y-5 bg-[#EEF2F6] px-6 py-6">
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <Select
                   label="Mitarbeiter"
@@ -2431,7 +2534,7 @@ setPlannedBreakMinutes(
               </div>
 
               {start && end && (
-                <div className="rounded-2xl border border-[#E2E8F0] bg-[#F8FAFC] px-4 py-4">
+                <div className="rounded-2xl border border-[#CBD5E1] bg-white px-4 py-4 shadow-[0_4px_12px_rgba(15,23,42,0.06)]">
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                     <div>
                       <p className="text-xs font-medium uppercase tracking-[0.06em] text-[#64748B]">
@@ -2515,7 +2618,7 @@ setPlannedBreakMinutes(
               )}
             </div>
 
-            <div className="flex flex-col-reverse gap-3 border-t border-[#E2E8F0] px-6 py-5 sm:flex-row sm:justify-end">
+            <div className="flex flex-col-reverse gap-3 border-t border-[#CBD5E1] bg-[#F8FAFC] px-6 py-5 sm:flex-row sm:justify-end">
               <Button
                 type="button"
                 variant="secondary"

@@ -82,6 +82,7 @@ type PayrollSnapshot = {
   target_minutes_confirmed_at: string | null;
   target_minutes_confirmed_by: string | null;
   employee_name?: string | null;
+  time_account_period?: string | null;
 };
 
 type PayrollAuditEntry = {
@@ -235,6 +236,30 @@ function formatMoney(value: number | null | undefined) {
   }).format(value ?? 0);
 }
 
+
+function escapeXml(value: string) {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;");
+}
+
+function excelTextCell(value: string) {
+  return `<Cell><Data ss:Type="String">${escapeXml(value)}</Data></Cell>`;
+}
+
+function excelNumberCell(value: number) {
+  return `<Cell><Data ss:Type="Number">${Number.isFinite(value) ? value : 0}</Data></Cell>`;
+}
+
+function getTimeAccountLabel(snapshot: PayrollSnapshot) {
+  return snapshot.time_account_period === "none"
+    ? "Kein Stundenkonto"
+    : formatMinutes(snapshot.target_minutes);
+}
+
 function getValidationLabel(code: string | null) {
   switch (code) {
     case "period_not_ended":
@@ -330,6 +355,7 @@ export default function PayrollPage() {
   const [auditEntries, setAuditEntries] = useState<PayrollAuditEntry[]>([]);
   const [ledgerTransactions, setLedgerTransactions] = useState<LedgerTransaction[]>([]);
   const [datevExports, setDatevExports] = useState<DatevExport[]>([]);
+  const [, setTimeAccountPeriods] = useState<Record<string, string | null>>({});
 
   const [showReopenDialog, setShowReopenDialog] = useState(false);
   const [reopenReason, setReopenReason] = useState("");
@@ -887,8 +913,115 @@ export default function PayrollPage() {
     );
   }
 
+  function handleExcelExport() {
+    if (!selectedPeriod || snapshots.length === 0) {
+      showToast({
+        type: "warning",
+        title: "Kein Export möglich",
+        description: "Für diese Abrechnungsperiode sind keine Payroll-Snapshots vorhanden.",
+      });
+      return;
+    }
+
+    const rows = snapshots.map((snapshot) => {
+      const hasTimeAccount = snapshot.time_account_period !== "none";
+
+      return [
+        snapshot.employee_name || snapshot.employee_id,
+        snapshot.wage_type || "—",
+        hasTimeAccount ? formatMinutes(snapshot.target_minutes) : "Kein Stundenkonto",
+        formatMinutes(snapshot.worked_minutes),
+        formatMinutes(snapshot.credited_minutes),
+        formatMinutes(snapshot.accountable_minutes),
+        hasTimeAccount ? formatMinutes(snapshot.balance_minutes) : "Kein Stundenkonto",
+        hasTimeAccount ? formatMinutes(snapshot.payout_overtime_minutes) : "—",
+        hasTimeAccount ? formatMinutes(snapshot.carried_balance_minutes) : "—",
+        Number(snapshot.base_gross ?? 0),
+        Number(snapshot.hourly_allowance_gross ?? 0),
+        Number(snapshot.total_surcharge_gross ?? 0),
+        Number(snapshot.estimated_gross ?? 0),
+      ];
+    });
+
+    const headers = [
+      "Mitarbeiter",
+      "Lohnmodell",
+      "Soll",
+      "Ist",
+      "Abwesenheit",
+      "Abrechenbar",
+      "Saldo",
+      "Auszahlung",
+      "Übertrag",
+      "Grundbrutto",
+      "Stundenzulage",
+      "Zuschläge",
+      "Brutto gesamt",
+    ];
+
+    const headerXml = headers.map(excelTextCell).join("");
+    const rowXml = rows
+      .map((row) => {
+        const cells = row
+          .map((value, index) =>
+            index >= 9
+              ? excelNumberCell(Number(value))
+              : excelTextCell(String(value)),
+          )
+          .join("");
+
+        return `<Row>${cells}</Row>`;
+      })
+      .join("");
+
+    const workbook = `<?xml version="1.0"?>
+<?mso-application progid="Excel.Sheet"?>
+<Workbook
+  xmlns="urn:schemas-microsoft-com:office:spreadsheet"
+  xmlns:o="urn:schemas-microsoft-com:office:office"
+  xmlns:x="urn:schemas-microsoft-com:office:excel"
+  xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+  <Styles>
+    <Style ss:ID="Header">
+      <Font ss:Bold="1"/>
+      <Interior ss:Color="#E2E8F0" ss:Pattern="Solid"/>
+    </Style>
+    <Style ss:ID="Money">
+      <NumberFormat ss:Format="#,##0.00 [$€-407]"/>
+    </Style>
+  </Styles>
+  <Worksheet ss:Name="Abrechnung">
+    <Table>
+      <Row ss:StyleID="Header">${headerXml}</Row>
+      ${rowXml}
+    </Table>
+  </Worksheet>
+</Workbook>`;
+
+    const blob = new Blob([workbook], {
+      type: "application/vnd.ms-excel;charset=utf-8",
+    });
+    const objectUrl = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    const month = String(selectedPeriod.period_month).padStart(2, "0");
+
+    anchor.href = objectUrl;
+    anchor.download = `Dipera_Abrechnung_${selectedPeriod.period_year}-${month}.xls`;
+    anchor.style.display = "none";
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(objectUrl);
+
+    showToast({
+      type: "success",
+      title: "Excel-Export erstellt",
+      description: `${formatMonth(selectedPeriod)} wurde als Excel-Datei exportiert.`,
+    });
+  }
+
   async function loadPeriodDetails(periodId: string) {
-    const [validationResult, snapshotResult, auditResult, ledgerResult] =
+    const [validationResult, snapshotResult, auditResult, ledgerResult, settingsResult] =
       await Promise.all([
         supabase.rpc("validate_payroll_period_close", {
           p_payroll_period_id: periodId,
@@ -940,6 +1073,10 @@ export default function PayrollPage() {
           `)
           .eq("payroll_period_id", periodId)
           .order("transaction_date", { ascending: true }),
+
+        supabase
+          .from("employee_time_account_settings")
+          .select("employee_id, time_account_period"),
       ]);
 
     if (validationResult.error) {
@@ -955,6 +1092,18 @@ export default function PayrollPage() {
       );
     }
 
+    const nextTimeAccountPeriods: Record<string, string | null> = {};
+
+    if (settingsResult.error) {
+      console.error("TIME ACCOUNT SETTINGS LOAD ERROR:", settingsResult.error);
+    } else {
+      for (const setting of settingsResult.data || []) {
+        nextTimeAccountPeriods[setting.employee_id] = setting.time_account_period;
+      }
+    }
+
+    setTimeAccountPeriods(nextTimeAccountPeriods);
+
     if (snapshotResult.error) {
       console.error("PAYROLL SNAPSHOTS LOAD ERROR:", snapshotResult.error);
       showToast({
@@ -968,6 +1117,8 @@ export default function PayrollPage() {
         (snapshot: any) => ({
           ...snapshot,
           employee_name: snapshot.employees?.name ?? null,
+          time_account_period:
+            nextTimeAccountPeriods[snapshot.employee_id] ?? null,
         }),
       );
       setSnapshots(normalizedSnapshots as PayrollSnapshot[]);
@@ -1740,7 +1891,7 @@ export default function PayrollPage() {
                     {blockers.map((blocker, index) => (
                       <div
                         key={`${blocker.employee_id ?? "period"}-${blocker.error_code ?? index}`}
-                        className="rounded-2xl border border-[#E2E8F0] bg-white p-4"
+                        className="rounded-2xl border border-[#CBD5E1] bg-[#F8FAFC] p-4 shadow-[0_10px_24px_rgba(15,23,42,0.09)]"
                       >
                         <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
                           <div>
@@ -1781,60 +1932,35 @@ export default function PayrollPage() {
               </Section>
 
               <Section
-                title="Mitarbeiterabrechnungen"
-                description="Finale Payroll-Snapshots der ausgewählten Periode."
+                title="Export"
+                description="Exportiere die zentral berechneten Payroll-Daten der ausgewählten Abrechnungsperiode für Excel."
               >
-                {snapshots.length === 0 ? (
-                  <div className="rounded-2xl border border-dashed border-[#CBD5E1] bg-[#F8FAFC] px-5 py-8 text-center text-sm text-[#64748B]">
-                    Für diese Periode sind noch keine Payroll-Snapshots vorhanden.
+                <div className="rounded-3xl border border-[#CBD5E1] bg-[#E9EEF5] p-5 shadow-[0_14px_34px_rgba(15,23,42,0.12)]">
+                  <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+                    <div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h3 className="text-lg font-semibold text-[#0F172A]">
+                          Excel-Abrechnung
+                        </h3>
+                        <Badge variant="muted">{formatMonth(selectedPeriod)}</Badge>
+                      </div>
+                      <p className="mt-2 max-w-2xl text-sm leading-6 text-[#475569]">
+                        Enthält die zentralen Monatswerte je Mitarbeiter: Arbeitszeit,
+                        Abwesenheiten, Zeitkonto – sofern vorhanden – sowie Grundvergütung,
+                        Zuschläge und Gesamtbrutto.
+                      </p>
+                    </div>
+
+                    <Button
+                      variant="primary"
+                      type="button"
+                      disabled={snapshots.length === 0}
+                      onClick={handleExcelExport}
+                    >
+                      Excel herunterladen
+                    </Button>
                   </div>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <table className="min-w-[1280px] w-full border-collapse">
-                      <thead>
-                        <tr className="border-b border-[#E2E8F0] text-left text-xs font-semibold uppercase tracking-[0.06em] text-[#64748B]">
-                          <th className="px-3 py-3">Mitarbeiter</th>
-                          <th className="px-3 py-3">Lohnmodell</th>
-                          <th className="px-3 py-3">Soll</th>
-                          <th className="px-3 py-3">Ist</th>
-                          <th className="px-3 py-3">Abwesenheit</th>
-                          <th className="px-3 py-3">Abrechenbar</th>
-                          <th className="px-3 py-3">Saldo</th>
-                          <th className="px-3 py-3">Auszahlung</th>
-                          <th className="px-3 py-3">Übertrag</th>
-                          <th className="px-3 py-3">Grundbrutto</th>
-                          <th className="px-3 py-3">Stundenzulage</th>
-                          <th className="px-3 py-3">Zuschläge</th>
-                          <th className="px-3 py-3">Brutto gesamt</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {snapshots.map((snapshot) => (
-                          <tr
-                            key={snapshot.id}
-                            className="border-b border-[#F1F5F9] text-sm text-[#0F172A]"
-                          >
-                            <td className="px-3 py-4 font-semibold">
-                              {snapshot.employee_name || snapshot.employee_id}
-                            </td>
-                            <td className="px-3 py-4">{snapshot.wage_type || "—"}</td>
-                            <td className="px-3 py-4">{formatMinutes(snapshot.target_minutes)}</td>
-                            <td className="px-3 py-4">{formatMinutes(snapshot.worked_minutes)}</td>
-                            <td className="px-3 py-4">{formatMinutes(snapshot.credited_minutes)}</td>
-                            <td className="px-3 py-4">{formatMinutes(snapshot.accountable_minutes)}</td>
-                            <td className="px-3 py-4">{formatMinutes(snapshot.balance_minutes)}</td>
-                            <td className="px-3 py-4">{formatMinutes(snapshot.payout_overtime_minutes)}</td>
-                            <td className="px-3 py-4">{formatMinutes(snapshot.carried_balance_minutes)}</td>
-                            <td className="px-3 py-4">{formatMoney(snapshot.base_gross)}</td>
-                            <td className="px-3 py-4">{formatMoney(snapshot.hourly_allowance_gross)}</td>
-                            <td className="px-3 py-4">{formatMoney(snapshot.total_surcharge_gross)}</td>
-                            <td className="px-3 py-4 font-semibold">{formatMoney(snapshot.estimated_gross)}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
+                </div>
               </Section>
 
               <Section
@@ -1893,7 +2019,7 @@ export default function PayrollPage() {
                     {auditEntries.map((entry) => (
                       <div
                         key={entry.id}
-                        className="rounded-2xl border border-[#E2E8F0] bg-white p-4"
+                        className="rounded-2xl border border-[#CBD5E1] bg-[#F8FAFC] p-4 shadow-[0_10px_24px_rgba(15,23,42,0.09)]"
                       >
                         <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                           <div>
@@ -2099,7 +2225,7 @@ export default function PayrollPage() {
       : "Prüfe den geschlossenen Abrechnungszeitraum für DATEV LODAS und verwalte die unveränderliche Exporthistorie."
   }
 >
-                <div className="mb-5 rounded-2xl border border-[#E2E8F0] bg-[#F8FAFC] p-5">
+                <div className="mb-5 rounded-3xl border border-[#CBD5E1] bg-[#E9EEF5] p-5 shadow-[0_14px_34px_rgba(15,23,42,0.12)]">
                   <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                     <div className="w-full max-w-sm">
   <Select
@@ -2190,7 +2316,7 @@ export default function PayrollPage() {
                             .map((row, index) => (
                               <div
                                 key={`${row.employee_id ?? "period"}-${row.source_id ?? "source"}-${row.error_code ?? index}`}
-                                className="rounded-2xl border border-[#E2E8F0] bg-white p-4"
+                                className="rounded-2xl border border-[#CBD5E1] bg-[#F8FAFC] p-4 shadow-[0_10px_24px_rgba(15,23,42,0.09)]"
                               >
                                 <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
                                   <div>
@@ -2236,7 +2362,7 @@ export default function PayrollPage() {
                       return (
                         <div
                           key={datevExport.id}
-                          className="rounded-2xl border border-[#E2E8F0] bg-white p-5"
+                          className="rounded-2xl border border-[#CBD5E1] bg-[#F8FAFC] p-5 shadow-[0_10px_24px_rgba(15,23,42,0.09)]"
                         >
                           <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
                             <div className="min-w-0">

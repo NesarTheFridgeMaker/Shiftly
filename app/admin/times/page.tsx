@@ -1,1684 +1,289 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
-import ExcelJS from "exceljs";
+import React, { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
-import { getBusinessId } from "@/lib/getBusinessId";
-import DiperaPopup from "@/components/DiperaPopup";
 import PageHeader from "@/components/ui/PageHeader";
-import PageActions from "@/components/ui/PageActions";
 import Section from "@/components/ui/Section";
 import StatCard from "@/components/ui/StatCard";
 import Button from "@/components/ui/Button";
-import Input from "@/components/ui/Input";
-import Select from "@/components/ui/Select";
 import Badge from "@/components/ui/Badge";
 import EmptyState from "@/components/ui/EmptyState";
-import { useToast } from "@/components/ui/ToastProvider";
-import TableSkeleton from "@/components/skeletons/TableSkeleton";
 import StatsSkeleton from "@/components/skeletons/StatsSkeleton";
-import {
-  buildWorkSessions
-} from "@/lib/payroll/buildWorkSessions";
+import TableSkeleton from "@/components/skeletons/TableSkeleton";
+import { useToast } from "@/components/ui/ToastProvider";
 
-import {
-  calculateSurcharges
-} from "@/lib/payroll/calculateSurcharges";
-import {
-  calculatePayrollPreview
-} from "@/lib/payroll/calculatePayrollPreview";
-import TimeInput from "@/components/ui/TimeInput";
+type MonthOverviewRow = {
+  payroll_period_id: string;
+  period_year: number;
+  period_month: number;
+  period_status: "open" | "review" | "closed" | "reopened" | string;
 
-type TimeEntry = {
-  id: string;
   employee_id: string;
   employee_name: string;
-  action: string;
-  created_at: string;
-};
+  employee_account_status: string;
+  employment_type: string | null;
 
-type Employee = {
-  id: string;
-  name: string;
-  account_status: string;
-  datev_personnel_number: string | null;
-  cost_center: string | null;
-  wage_type: "hourly" | "fixed_hourly" | "salary" | null;
+  wage_type: "hourly" | "fixed_hourly" | "salary" | string;
+  time_account_period: "none" | "weekly" | "monthly" | string;
+
+  target_minutes: number;
+  worked_minutes: number;
+  credited_minutes: number;
+  accountable_minutes: number;
+  raw_difference_minutes: number;
+
+  opening_balance_minutes: number;
+  current_balance_minutes: number;
+  carried_balance_minutes: number;
+  payout_overtime_minutes: number;
+
+  target_minutes_requires_review: boolean;
+
   hourly_rate: number | null;
   monthly_salary: number | null;
-  eligible_for_surcharges: boolean;
+  hourly_allowance_rate: number | null;
+
+  base_gross: number;
+  hourly_allowance_gross: number;
+  overtime_gross: number;
+
+  night_surcharge_gross: number;
+  sunday_surcharge_gross: number;
+  holiday_surcharge_gross: number;
+  other_surcharge_gross: number;
+  total_surcharge_gross: number;
+
+  estimated_gross: number;
 };
 
-type EmployeeTargetHour = {
-  id: string;
-  employee_id: string;
-  weekly_hours: number;
-  monthly_hours: number;
-};
+function getInitialMonth() {
+  const now = new Date();
 
-type PayRule = {
-  id: string;
-  name: string;
-  rule_type: string;
-  starts_at: string | null;
-  ends_at: string | null;
-  percentage: number;
-  datev_wage_type: string | null;
-  active: boolean;
-};
-
-type Absence = {
-  id: string;
-  employee_id: string;
-  employee_name: string;
-  type: "vacation" | "sick" | string;
-  start_date: string;
-  end_date: string;
-  request_status: string;
-  business_id: string;
-};
-
-type WorkSummary = {
-  key: string;
-  employee_id: string;
-  employee_name: string;
-  date: string;
-  rawDate: string;
-  start: string;
-  end: string;
-  workMinutes: number;
-  pauseMinutes: number;
-  workDuration: string;
-  pauseDuration: string;
-  entries: TimeEntry[];
-};
-
-type PeriodSummary = {
-  key: string;
-  employee_name: string;
-  period: string;
-  workMinutes: number;
-  pauseMinutes: number;
-};
-
-function formatAction(action: string) {
-  if (action === "check_in") return "Einstempeln";
-  if (action === "break_start") return "Pausenbeginn";
-  if (action === "break_end") return "Pausenende";
-  if (action === "check_out") return "Ausstempeln";
-  return action;
+  return {
+    year: now.getFullYear(),
+    month: now.getMonth() + 1,
+  };
 }
 
-function formatTime(dateString: string) {
-  return new Date(dateString).toLocaleTimeString("de-DE", {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
-
-function formatDate(dateString: string) {
-  return new Date(dateString).toLocaleDateString("de-DE");
-}
-
-function formatDateForDatabase(date: Date) {
-  return date.toLocaleDateString("en-CA");
-}
-
-function formatMonth(dateString: string) {
-  return new Date(dateString).toLocaleDateString("de-DE", {
+function formatMonthLabel(year: number, month: number) {
+  return new Date(year, month - 1, 1).toLocaleDateString("de-DE", {
     month: "long",
     year: "numeric",
   });
 }
 
-function getWeekNumber(date: Date) {
-  const copiedDate = new Date(
-    Date.UTC(date.getFullYear(), date.getMonth(), date.getDate())
-  );
-  const dayNumber = copiedDate.getUTCDay() || 7;
+function formatMinutes(minutes: number | null | undefined) {
+  const safeMinutes = Math.max(0, Math.round(minutes ?? 0));
+  const hours = Math.floor(safeMinutes / 60);
+  const rest = safeMinutes % 60;
 
-  copiedDate.setUTCDate(copiedDate.getUTCDate() + 4 - dayNumber);
-
-  const yearStart = new Date(Date.UTC(copiedDate.getUTCFullYear(), 0, 1));
-
-  return Math.ceil(
-    ((copiedDate.getTime() - yearStart.getTime()) / 86400000 + 1) / 7
-  );
+  return `${hours}:${String(rest).padStart(2, "0")} h`;
 }
 
-function formatWeek(dateString: string) {
-  const date = new Date(dateString);
-  const week = getWeekNumber(date);
-  const year = date.getFullYear();
+function formatSignedMinutes(minutes: number | null | undefined) {
+  const value = Math.round(minutes ?? 0);
+  const sign = value > 0 ? "+" : value < 0 ? "−" : "";
+  const absolute = Math.abs(value);
+  const hours = Math.floor(absolute / 60);
+  const rest = absolute % 60;
 
-  return `KW ${week} / ${year}`;
+  return `${sign}${hours}:${String(rest).padStart(2, "0")} h`;
 }
 
-function formatMinutes(totalMinutes: number) {
-  const hours = Math.floor(totalMinutes / 60);
-  const minutes = totalMinutes % 60;
+function formatCurrency(value: number | null | undefined) {
+  return new Intl.NumberFormat("de-DE", {
+    style: "currency",
+    currency: "EUR",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(Number(value ?? 0));
+}
 
-  if (hours <= 0) {
-    return `${minutes} Min.`;
+function wageTypeLabel(value: string) {
+  if (value === "salary") return "Monatsgehalt";
+  if (value === "fixed_hourly") return "Fixer Monatslohn auf Stundenbasis";
+  if (value === "hourly") return "Stundenlohn";
+
+  return value;
+}
+
+function employmentTypeLabel(value: string | null) {
+  if (!value) return "Beschäftigungsart nicht hinterlegt";
+
+  const normalized = value.toLowerCase();
+
+  if (normalized === "full_time" || normalized === "vollzeit") {
+    return "Vollzeit";
   }
 
-  return `${hours} Std. ${minutes} Min.`;
-}
-
-function buildDateTime(date: string, time: string) {
-  const [year, month, day] = date.split("-").map(Number);
-  const [hour, minute] = time.split(":").map(Number);
-
-  return new Date(
-    year,
-    month - 1,
-    day,
-    hour,
-    minute,
-    0
-  ).toISOString();
-}
-
-function buildDailySummaries(entries: TimeEntry[]): WorkSummary[] {
-  const entriesByEmployee: Record<string, TimeEntry[]> = {};
-
-  entries.forEach((entry) => {
-    if (!entriesByEmployee[entry.employee_id]) {
-      entriesByEmployee[entry.employee_id] = [];
-    }
-
-    entriesByEmployee[entry.employee_id].push(entry);
-  });
-
-  const summaries: WorkSummary[] = [];
-
-  Object.entries(entriesByEmployee).forEach(([employeeId, employeeEntries]) => {
-    const sortedEntries = [...employeeEntries].sort(
-      (a, b) =>
-        new Date(a.created_at).getTime() -
-        new Date(b.created_at).getTime()
-    );
-
-    let currentSession: TimeEntry[] = [];
-
-    sortedEntries.forEach((entry) => {
-      if (entry.action === "check_in") {
-        if (currentSession.length > 0) {
-          summaries.push(buildSummaryFromEntries(currentSession));
-        }
-
-        currentSession = [entry];
-        return;
-      }
-
-      if (currentSession.length === 0) {
-        currentSession = [entry];
-      } else {
-        currentSession.push(entry);
-      }
-
-      if (entry.action === "check_out") {
-        summaries.push(buildSummaryFromEntries(currentSession));
-        currentSession = [];
-      }
-    });
-
-    if (currentSession.length > 0) {
-      summaries.push(buildSummaryFromEntries(currentSession));
-    }
-  });
-
-  return summaries;
-}
-
-function buildSummaryFromEntries(sortedEntries: TimeEntry[]): WorkSummary {
-  const checkIn = sortedEntries.find(
-    (entry) => entry.action === "check_in"
-  );
-
-  const checkOut = [...sortedEntries]
-    .reverse()
-    .find((entry) => entry.action === "check_out");
-
-  let pauseMinutes = 0;
-  let currentPauseStart: Date | null = null;
-
-  sortedEntries.forEach((entry) => {
-    if (entry.action === "break_start") {
-      currentPauseStart = new Date(entry.created_at);
-    }
-
-    if (entry.action === "break_end" && currentPauseStart) {
-      const pauseEnd = new Date(entry.created_at);
-
-      pauseMinutes += Math.round(
-        (pauseEnd.getTime() - currentPauseStart.getTime()) / 60000
-      );
-
-      currentPauseStart = null;
-    }
-  });
-
-  let workMinutes = 0;
-
-  if (checkIn && checkOut) {
-    const start = new Date(checkIn.created_at);
-    const end = new Date(checkOut.created_at);
-
-    workMinutes = Math.round(
-      (end.getTime() - start.getTime()) / 60000
-    );
-
-    workMinutes = workMinutes - pauseMinutes;
+  if (normalized === "part_time" || normalized === "teilzeit") {
+    return "Teilzeit";
   }
 
-  const dateSource = checkIn || sortedEntries[0];
-  const rawDate = formatDateForDatabase(
-    new Date(dateSource.created_at)
-  );
+  if (
+    normalized === "mini_job" ||
+    normalized === "minijob" ||
+    normalized === "mini-job"
+  ) {
+    return "Minijob";
+  }
+
+  return value;
+}
+
+function periodStatusLabel(status: string) {
+  if (status === "open") return "Offen";
+  if (status === "review") return "In Prüfung";
+  if (status === "closed") return "Abgeschlossen";
+  if (status === "reopened") return "Wieder geöffnet";
+
+  return status;
+}
+
+function periodStatusVariant(
+  status: string,
+): "success" | "warning" | "primary" | "muted" {
+  if (status === "closed") return "success";
+  if (status === "review") return "warning";
+  if (status === "reopened") return "primary";
+
+  return "muted";
+}
+
+function balanceTone(minutes: number) {
+  if (minutes > 0) {
+    return {
+      text: "text-[#047857]",
+      bg: "bg-[#ECFDF5]",
+      border: "border-[#A7F3D0]",
+    };
+  }
+
+  if (minutes < 0) {
+    return {
+      text: "text-[#B91C1C]",
+      bg: "bg-[#FEF2F2]",
+      border: "border-[#FECACA]",
+    };
+  }
 
   return {
-    key: `${sortedEntries[0].employee_id}-${rawDate}-${sortedEntries[0].id}`,
-    employee_id: sortedEntries[0].employee_id,
-    employee_name: sortedEntries[0].employee_name,
-    date: formatDate(dateSource.created_at),
-    rawDate,
-    start: checkIn ? formatTime(checkIn.created_at) : "Offen",
-    end: checkOut ? formatTime(checkOut.created_at) : "Offen",
-    workMinutes,
-    pauseMinutes,
-    workDuration:
-      checkIn && checkOut ? formatMinutes(workMinutes) : "Noch offen",
-    pauseDuration: formatMinutes(pauseMinutes),
-    entries: sortedEntries,
+    text: "text-[#475569]",
+    bg: "bg-[#F8FAFC]",
+    border: "border-[#E2E8F0]",
   };
-}
-
-function buildPeriodSummaries(
-  dailySummaries: WorkSummary[],
-  periodType: "week" | "month"
-): PeriodSummary[] {
-  const groups: Record<string, PeriodSummary> = {};
-
-  dailySummaries.forEach((summary) => {
-    const firstEntry = summary.entries[0];
-
-    const period =
-      periodType === "week"
-        ? formatWeek(firstEntry.created_at)
-        : formatMonth(firstEntry.created_at);
-
-    const key = `${summary.employee_id}-${period}`;
-
-    if (!groups[key]) {
-      groups[key] = {
-        key,
-        employee_name: summary.employee_name,
-        period,
-        workMinutes: 0,
-        pauseMinutes: 0,
-      };
-    }
-
-    groups[key].workMinutes += summary.workMinutes;
-    groups[key].pauseMinutes += summary.pauseMinutes;
-  });
-
-  return Object.values(groups);
 }
 
 export default function TimesPage() {
   const { showToast } = useToast();
 
+  const initialMonth = getInitialMonth();
+
+  const [year, setYear] = useState(initialMonth.year);
+  const [month, setMonth] = useState(initialMonth.month);
+
+  const [rows, setRows] = useState<MonthOverviewRow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [timeEntries, setTimeEntries] = useState<TimeEntry[]>([]);
-  const [employees, setEmployees] = useState<Employee[]>([]);
-  const [targetHours, setTargetHours] = useState<EmployeeTargetHour[]>([]);
-  const [absences, setAbsences] = useState<Absence[]>([]);
-  function countAbsenceDaysForMonth(
-  employeeId: string,
-  type: "vacation" | "sick",
-  month: string
-) {
-  const [year, monthNumber] = month.split("-").map(Number);
+  const [search, setSearch] = useState("");
 
-  const monthStart = new Date(year, monthNumber - 1, 1);
-  const monthEnd = new Date(year, monthNumber, 0);
-
-  let count = 0;
-
-  absences
-    .filter(
-      (absence) =>
-        absence.employee_id === employeeId &&
-        absence.type === type
-    )
-    .forEach((absence) => {
-      const start = new Date(absence.start_date);
-      const end = new Date(absence.end_date);
-
-      const current = new Date(
-        Math.max(start.getTime(), monthStart.getTime())
-      );
-
-      const final = new Date(
-        Math.min(end.getTime(), monthEnd.getTime())
-      );
-
-      while (current <= final) {
-        count += 1;
-        current.setDate(current.getDate() + 1);
-      }
-    });
-
-  return count;
-}
-  const [payRules, setPayRules] =
-  useState<PayRule[]>([]);
-  const [federalState, setFederalState] =
-  useState("BW");
-  const [
-  datevRegularHoursWageType,
-  setDatevRegularHoursWageType
-] = useState("100");
-const [
-  datevSalaryWageType,
-  setDatevSalaryWageType
-] = useState("101");
-const [
-  datevOvertimeWageType,
-  setDatevOvertimeWageType
-] = useState("130");
-const [
-  datevVacationWageType,
-  setDatevVacationWageType
-] = useState("140");
-
-const [
-  datevSickWageType,
-  setDatevSickWageType
-] = useState("141");
-  const [openDetails, setOpenDetails] = useState<string | null>(null);
-  const [businessName, setBusinessName] = useState("Dipera");
-  const [popupMessage, setPopupMessage] = useState("");
-  const [showPopup, setShowPopup] = useState(false);
-
-const [confirmMessage, setConfirmMessage] = useState("");
-const [confirmAction, setConfirmAction] =
-  useState<(() => void) | null>(null);
-
-const [showConfirmPopup, setShowConfirmPopup] =
-  useState(false);
-
-const [successMessage, setSuccessMessage] =
-  useState("");
-
-const [showSuccessPopup, setShowSuccessPopup] =
-  useState(false);
-
-  const [selectedEmployeeId, setSelectedEmployeeId] = useState("");
-  const [selectedAction, setSelectedAction] = useState("check_in");
-  const [selectedDate, setSelectedDate] = useState("");
-  const [selectedTime, setSelectedTime] = useState("");
-  const [exportMonth, setExportMonth] = useState(
-  formatDateForDatabase(new Date()).slice(0, 7)
-);
-const [viewMonth, setViewMonth] = useState(
-  formatDateForDatabase(new Date()).slice(0, 7)
-);
-const [openEmployeeId, setOpenEmployeeId] =
-  useState<string | null>(null);
-  const [editingSummary, setEditingSummary] =
-  useState<WorkSummary | null>(null);
-
-const [editStartTime, setEditStartTime] =
-  useState("");
-
-const [editEndTime, setEditEndTime] =
-  useState("");
-  const [pendingDeleteSummary, setPendingDeleteSummary] =
-  useState<WorkSummary | null>(null);
-
-function showDiperaPopup(text: string) {
-  setPopupMessage(text);
-  setShowPopup(true);
-}
-
-function showSuccess(text: string) {
-  showToast({
-    type: "success",
-    title: text,
-  });
-}
-
-function changeMonth(direction: number) {
-  const date = new Date(`${viewMonth}-01`);
-
-  date.setMonth(date.getMonth() + direction);
-
-  setViewMonth(formatDateForDatabase(date).slice(0, 7));
-}
-
-function showConfirm(text: string, action: () => void) {
-  setConfirmMessage(text);
-  setConfirmAction(() => action);
-  setShowConfirmPopup(true);
-}
-
-function handleOpenEditSummary(summary: WorkSummary) {
-  setEditingSummary(summary);
-  setEditStartTime(summary.start || "");
-  setEditEndTime(summary.end || "");
-}
-
-function handleAskDeleteEditedSummary() {
-  if (!editingSummary) return;
-
-  setPendingDeleteSummary(editingSummary);
-}
-
-async function handleSaveEditedSummary() {
-  if (!editingSummary) return;
-
-  const checkInEntry =
-    editingSummary.entries.find(
-      (entry) => entry.action === "check_in"
-    );
-
-  const checkOutEntry =
-    editingSummary.entries.find(
-      (entry) => entry.action === "check_out"
-    );
-
-  if (!checkInEntry || !checkOutEntry) {
-    showDiperaPopup(
-      "Diese Arbeitszeit kann nicht automatisch bearbeitet werden, weil Ein- oder Ausstempelung fehlt."
-    );
-    return;
-  }
-
-  const startDateTime =
-    `${editingSummary.rawDate}T${editStartTime}:00`;
-
-  const endDateTime =
-    `${editingSummary.rawDate}T${editEndTime}:00`;
-
-  const startDate =
-    new Date(startDateTime);
-
-  let endDate =
-    new Date(endDateTime);
-
-  if (endDate <= startDate) {
-    endDate.setDate(
-      endDate.getDate() + 1
-    );
-  }
-
-  const { error: startError } =
-    await supabase
-      .from("time_entries")
-      .update({
-        created_at: startDate.toISOString(),
-      })
-      .eq("id", checkInEntry.id);
-
-  if (startError) {
-    console.error(startError);
-    showToast({
-      type: "error",
-      title: "Arbeitsbeginn konnte nicht gespeichert werden",
-      description: startError.message,
-    });
-    return;
-  }
-
-  const { error: endError } =
-    await supabase
-      .from("time_entries")
-      .update({
-        created_at: endDate.toISOString(),
-      })
-      .eq("id", checkOutEntry.id);
-
-  if (endError) {
-    console.error(endError);
-    showToast({
-      type: "error",
-      title: "Arbeitsende konnte nicht gespeichert werden",
-      description: endError.message,
-    });
-    return;
-  }
-
-  setEditingSummary(null);
-
-  await loadTimeEntries();
-
-  showDiperaPopup(
-    "Arbeitszeit wurde aktualisiert."
-  );
-}
-
-async function handleConfirmDeleteSummary() {
-  if (!pendingDeleteSummary) return;
-
-  const entryIds = pendingDeleteSummary.entries.map(
-    (entry) => entry.id
-  );
-
-  if (entryIds.length === 0) {
-    showToast({
-    type: "warning",
-    title: "Keine Stempelungen gefunden",
-    description: "Für diese Arbeitszeit konnten keine Einträge gefunden werden.",
-  });
-    return;
-  }
-
-  const { error } = await supabase
-    .from("time_entries")
-    .delete()
-    .in("id", entryIds);
-
-  if (error) {
-    console.error(error);
-    showToast({
-    type: "error",
-    title: "Arbeitszeit konnte nicht gelöscht werden",
-    description: error.message,
-  });
-    return;
-  }
-
-  setPendingDeleteSummary(null);
-  setEditingSummary(null);
-
-  await loadTimeEntries();
-
-  showToast({
-    type: "success",
-    title: "Arbeitszeit gelöscht",
-    description: "Die Stempelungen wurden entfernt.",
-  });
-}
-
-
-  async function loadTimeEntries() {
-    const businessId = await getBusinessId();
-
-    if (!businessId) {
-      console.error("Keine Business-ID gefunden.");
-      return;
-    }
-
-    const { data, error } = await supabase
-      .from("time_entries")
-      .select("*")
-      .eq("business_id", businessId)
-      .order("created_at", { ascending: false });
-
-    if (error) {
-      console.error(error);
-      showToast({
-      type: "error",
-      title: "Fehler",
-      description: "Bitte versuche es erneut.",
-    });
-      return;
-    }
-
-    setTimeEntries(data || []);
-  }
-
-  async function loadEmployees() {
-    const businessId = await getBusinessId();
-
-    if (!businessId) {
-      console.error("Keine Business-ID gefunden.");
-      return;
-    }
-
-    const { data, error } = await supabase
-      .from("employees")
-      .select("id, name, account_status, datev_personnel_number, cost_center, wage_type, hourly_rate, monthly_salary, eligible_for_surcharges")
-      .eq("business_id", businessId)
-      .eq("account_status", "active")
-      .order("name", { ascending: true });
-
-    if (error) {
-      console.error(error);
-      return;
-    }
-
-    setEmployees(data || []);
-  }
-
-  async function loadBusiness() {
-  const businessId = await getBusinessId();
-
-  if (!businessId) return;
-
-  const { data, error } = await supabase
-    .from("businesses")
-    .select(
-  "name, federal_state, datev_regular_hours_wage_type, datev_salary_wage_type, datev_overtime_wage_type, datev_vacation_wage_type, datev_sick_wage_type"
-)
-    .eq("id", businessId)
-    .single();
-
-  if (error) {
-    console.error(error);
-    return;
-  }
-
-  if (data.datev_overtime_wage_type) {
-  setDatevOvertimeWageType(
-    data.datev_overtime_wage_type
-  );
-}
-
-  if (data.datev_salary_wage_type) {
-  setDatevSalaryWageType(
-    data.datev_salary_wage_type
-  );
-}
-
-  if (data?.name) {
-    setBusinessName(data.name);
-  }
-  if (data.federal_state) {
-  setFederalState(
-    data.federal_state
-  );
-}
-
-if (data.datev_regular_hours_wage_type) {
-  setDatevRegularHoursWageType(
-    data.datev_regular_hours_wage_type
-  );
-}
-
-if (data.datev_vacation_wage_type) {
-  setDatevVacationWageType(data.datev_vacation_wage_type);
-}
-
-if (data.datev_sick_wage_type) {
-  setDatevSickWageType(data.datev_sick_wage_type);
-}
-
-}
-
-useEffect(() => {
-  async function loadInitialData() {
+  async function loadOverview() {
     setIsLoading(true);
 
-    try {
-  await Promise.all([
-    loadTimeEntries(),
-    loadEmployees(),
-    loadBusiness(),
-    loadTargetHours(),
-    loadPayRules(),
-    loadAbsences(),
-  ]);
-} finally {
-      setIsLoading(false);
-    }
-  }
-
-  loadInitialData();
-}, []);
-
-  async function loadTargetHours() {
-  const businessId = await getBusinessId();
-
-  if (!businessId) return;
-
-  const { data, error } = await supabase
-    .from("employee_target_hours")
-    .select("id, employee_id, weekly_hours, monthly_hours")
-
-  if (error) {
-    console.error(error);
-    return;
-  }
-
-  setTargetHours((data || []) as EmployeeTargetHour[]);
-}
-
-async function loadPayRules() {
-  const businessId =
-    await getBusinessId();
-
-  if (!businessId) return;
-
-  const { data,error } =
-    await supabase
-    .from("pay_rules")
-    .select("*")
-    .eq(
-      "business_id",
-      businessId
-    )
-    .eq(
-      "active",
-      true
-    );
-
-  if(error){
-    console.error(error);
-    return;
-  }
-
-  setPayRules(data || []);
-}
-
-async function loadAbsences() {
-  const businessId = await getBusinessId();
-
-  if (!businessId) return;
-
-  const { data, error } = await supabase
-    .from("absences")
-    .select(
-      "id, employee_id, employee_name, type, start_date, end_date, request_status, business_id"
-    )
-    .eq("business_id", businessId)
-    .eq("request_status", "approved");
-
-  if (error) {
-    console.error(error);
-    return;
-  }
-
-  setAbsences(data || []);
-}
-
-  async function handleAddTimeEntry(skipNightCheck = false) {
-    if (!selectedEmployeeId || !selectedAction || !selectedDate || !selectedTime) {
-      showToast({
-        type: "warning",
-        title: "Angaben fehlen",
-        description: "Bitte wähle Mitarbeiter, Aktion, Datum und Uhrzeit aus.",
-      });
-      return;
-    }
-
-    const businessId = await getBusinessId();
-
-    if (!businessId) {
-      showToast({
-        type: "error",
-        title: "Betrieb nicht gefunden",
-        description: "Die Aktion konnte nicht ausgeführt werden.",
-      });
-      return;
-    }
-
-    const selectedEmployee = employees.find(
-      (employee) => employee.id === selectedEmployeeId
-    );
-    
-
-    if (!selectedEmployee) {
-      showToast({
-        type: "error",
-        title: "Mitarbeiter nicht gefunden",
-        description: "Bitte lade die Seite neu und versuche es erneut.",
-      });
-      return;
-    }
-
-    let entryDate = selectedDate;
-
-if (selectedAction === "check_out") {
-  const selectedHour =
-    Number(selectedTime.split(":")[0]);
-
-if (
-  selectedHour < 6 &&
-  !skipNightCheck
-) {
-    showConfirm(
-      "Diese Uhrzeit liegt nachts. Soll der Stempel als Folgetag gespeichert werden?",
-      () => {
-  handleAddTimeEntry(true);
-}
-    );
-
-    return;
-  }
-
-  if (selectedHour < 6) {
-    const [year, month, day] =
-  selectedDate.split("-").map(Number);
-
-const nextDay = new Date(
-  year,
-  month - 1,
-  day
-);
-
-nextDay.setDate(nextDay.getDate() + 1);
-
-entryDate = formatDateForDatabase(nextDay);
-  }
-}
-
-    const createdAt = buildDateTime(entryDate, selectedTime);
-
-    const { error } = await supabase.from("time_entries").insert([
+    const { data, error } = await supabase.rpc(
+      "get_business_month_work_pay_overview",
       {
-        employee_id: selectedEmployee.id,
-        employee_name: selectedEmployee.name,
-        action: selectedAction,
-        created_at: createdAt,
-        business_id: businessId,
+        p_year: year,
+        p_month: month,
       },
-    ]);
+    );
 
     if (error) {
-      console.error(error);
+      console.warn("MONTH OVERVIEW RPC ERROR:", error);
+
       showToast({
-      type: "error",
-      title: "Fehler",
-      description: "Bitte versuche es erneut.",
-    });
+        type: "error",
+        title: "Monatsübersicht konnte nicht geladen werden",
+        description: error.message || "Bitte versuche es erneut.",
+      });
+
+      setRows([]);
+      setIsLoading(false);
       return;
     }
 
-    let newEmployeeStatus = "";
-
-if (selectedAction === "check_in") {
-  newEmployeeStatus = "checked_in";
-}
-
-if (selectedAction === "break_start") {
-  newEmployeeStatus = "on_break";
-}
-
-if (selectedAction === "break_end") {
-  newEmployeeStatus = "checked_in";
-}
-
-if (selectedAction === "check_out") {
-  newEmployeeStatus = "not_checked_in";
-}
-
-if (newEmployeeStatus) {
-  const { error: statusError } = await supabase
-    .from("employees")
-    .update({ status: newEmployeeStatus })
-    .eq("id", selectedEmployee.id)
-    .eq("business_id", businessId);
-
-  if (statusError) {
-    console.error(statusError);
-    showToast({
-      type: "error",
-      title: "Fehler",
-      description: "Bitte versuche es erneut.",
-    });
-    return;
-  }
-}
-
-    setSelectedEmployeeId("");
-    setSelectedAction("check_in");
-    setSelectedDate("");
-    setSelectedTime("");
-
-    await loadTimeEntries();
-
-    showSuccess("Stempel wurde hinzugefügt.");
+    setRows((data || []) as MonthOverviewRow[]);
+    setIsLoading(false);
   }
 
-  async function handleQuickAddFromSummary(
-    summary: WorkSummary,
-    action: string
-  ) {
-    setSelectedEmployeeId(summary.employee_id);
-    setSelectedAction(action);
-    setSelectedDate(summary.rawDate);
-    setSelectedTime("");
-    window.scrollTo({ top: 0, behavior: "smooth" });
+  useEffect(() => {
+    void loadOverview();
+  }, [year, month]);
+
+  function changeMonth(direction: number) {
+    const date = new Date(year, month - 1, 1);
+    date.setMonth(date.getMonth() + direction);
+
+    setYear(date.getFullYear());
+    setMonth(date.getMonth() + 1);
   }
 
-async function handleExportExcel() {
-  const selectedSummaries = dailySummaries.filter((summary) =>
-    summary.rawDate.startsWith(exportMonth)
-  );
+  function goToCurrentMonth() {
+    const now = new Date();
 
-  if (selectedSummaries.length === 0) {
-    showToast({
-    type: "warning",
-    title: "Keine Arbeitszeiten vorhanden",
-    description: "Für diesen Monat gibt es keine Daten zum Exportieren.",
-  });
-    return;
+    setYear(now.getFullYear());
+    setMonth(now.getMonth() + 1);
   }
 
-  const workbook = new ExcelJS.Workbook();
-  const worksheet = workbook.addWorksheet("Arbeitszeiten");
-  const datevSheet = workbook.addWorksheet("DATEV-Vorbereitung");
-  const payrollSheet = workbook.addWorksheet("Lohnübersicht");
-  const datevRows: Array<Array<string | number>> = [];
+  const filteredRows = useMemo(() => {
+    const query = search.trim().toLocaleLowerCase("de-DE");
 
-function addDatevRow(row: Array<string | number>) {
-  datevRows.push(row);
-  datevSheet.addRow(row);
-}
-
-const datevCsvHeader = [
-  "Personalnummer",
-  "Mitarbeiter",
-  "Kostenstelle",
-  "Lohnart",
-  "Bezeichnung",
-  "Menge",
-  "Einheit",
-  "Prozent",
-  "Betrag",
-];
-
-datevSheet.mergeCells("A1:H1");
-datevSheet.getCell("A1").value =
-  `${businessName} — DATEV-Vorbereitung ${exportMonth}`;
-datevSheet.getCell("A1").font = { bold: true, size: 18, color: { argb: "FFFFFFFF" } };
-datevSheet.getCell("A1").alignment = { horizontal: "center" };
-datevSheet.getCell("A1").fill = {
-  type: "pattern",
-  pattern: "solid",
-  fgColor: { argb: "FF172554" },
-};
-
-datevSheet.mergeCells("A2:H2");
-datevSheet.getCell("A2").value =
-  "Vorbereitete Bewegungsdaten – keine vollständige Lohnabrechnung";
-datevSheet.getCell("A2").font = { italic: true, size: 11 };
-datevSheet.getCell("A2").alignment = { horizontal: "center" };
-
-datevSheet.addRow([]);
-
-const datevHeader = datevSheet.addRow([
-  "Personalnummer",
-  "Mitarbeiter",
-  "Kostenstelle",
-  "Lohnart",
-  "Bezeichnung",
-  "Menge",
-  "Einheit",
-  "Prozent",
-  "Betrag",
-]);
-
-payrollSheet.mergeCells("A1:I1");
-payrollSheet.getCell("A1").value =
-  `${businessName} — Lohnübersicht ${exportMonth}`;
-payrollSheet.getCell("A1").font = { bold: true, size: 18, color: { argb: "FFFFFFFF" } };
-payrollSheet.getCell("A1").alignment = { horizontal: "center" };
-payrollSheet.getCell("A1").fill = {
-  type: "pattern",
-  pattern: "solid",
-  fgColor: { argb: "FF172554" },
-};
-
-payrollSheet.mergeCells("A2:I2");
-payrollSheet.getCell("A2").value =
-  "Voraussichtliche Bruttowerte zur internen Lohnvorbereitung";
-payrollSheet.getCell("A2").font = { italic: true, size: 11 };
-payrollSheet.getCell("A2").alignment = { horizontal: "center" };
-
-payrollSheet.addRow([]);
-
-const payrollHeader = payrollSheet.addRow([
-  "Mitarbeiter",
-  "Vergütungsart",
-  "Urlaubstage",
-  "Kranktage",
-  "Rechnerischer Stundenlohn",
-  "Grundlohn",
-  "Überstunden",
-  "Nachtzuschlag",
-  "Sonntagszuschlag",
-  "Feiertagszuschlag",
-  "Zuschläge gesamt",
-  "Voraussichtliches Brutto",
-]);
-
-[datevHeader, payrollHeader].forEach((row) => {
-  row.font = { bold: true, color: { argb: "FFFFFFFF" } };
-
-  row.eachCell((cell) => {
-    cell.fill = {
-      type: "pattern",
-      pattern: "solid",
-      fgColor: { argb: "FF1E3A8A" },
-    };
-
-    cell.alignment = {
-      horizontal: "center",
-      vertical: "middle",
-    };
-
-    cell.border = {
-      top: { style: "thin" },
-      left: { style: "thin" },
-      bottom: { style: "thin" },
-      right: { style: "thin" },
-    };
-  });
-});
-
-  const monthDate = new Date(`${exportMonth}-01`);
-
-  const monthLabel = monthDate.toLocaleDateString("de-DE", {
-    month: "long",
-    year: "numeric",
-  });
-
-  worksheet.mergeCells("A1:H1");
-  worksheet.getCell("A1").value =
-    `${businessName} — Arbeitszeiten ${monthLabel}`;
-
-  worksheet.getCell("A1").font = {
-    bold: true,
-    size: 18,
-  };
-
-  worksheet.getCell("A1").alignment = {
-    horizontal: "center",
-  };
-
-  worksheet.mergeCells("A2:H2");
-
-  worksheet.getCell("A2").value =
-    `Export erstellt am ${new Date().toLocaleDateString("de-DE")}`;
-
-  worksheet.getCell("A2").font = {
-    italic: true,
-    size: 11,
-  };
-
-  worksheet.getCell("A2").alignment = {
-    horizontal: "center",
-  };
-
-  worksheet.addRow([]);
-
-  const headerRow = worksheet.addRow([
-    "Mitarbeiter",
-    "Datum",
-    "Arbeitsbeginn",
-    "Arbeitsende",
-    "Pause",
-    "Arbeitszeit",
-    "Status",
-    "Hinweis",
-  ]);
-
-  headerRow.font = { bold: true };
-
-  headerRow.eachCell((cell) => {
-    cell.fill = {
-      type: "pattern",
-      pattern: "solid",
-      fgColor: { argb: "FFE5E7EB" },
-    };
-  });
-
-  selectedSummaries.forEach((summary) => {
-    worksheet.addRow([
-      summary.employee_name,
-      summary.date,
-      summary.start,
-      summary.end,
-      summary.pauseDuration,
-      summary.workDuration,
-      summary.end === "Offen"
-        ? "Offen"
-        : "Abgeschlossen",
-
-      summary.end === "Offen"
-        ? "⚠ Ausstempeln fehlt"
-        : "",
-    ]);
-  });
-
-  worksheet.addRow([]);
-  worksheet.addRow([]);
-
-  const summaryTitle = worksheet.addRow([
-    "Mitarbeiter-Zusammenfassung",
-  ]);
-
-  summaryTitle.font = {
-    bold: true,
-    size: 14,
-  };
-
-  const summaryHeader = worksheet.addRow([
-  "Mitarbeiter",
-  "Arbeitstage",
-  "Monats-Soll",
-  "Ist-Arbeitszeit",
-  "Pause gesamt",
-  "Nachtstunden",
-  "Sonntagsstunden",
-  "Feiertagsstunden",
-  "Urlaubstage",
-  "Kranktage",
-  "Saldo",
-  "Status",
-]);
-
-  summaryHeader.font = {
-    bold: true,
-  };
-
-  const employeeGroups: Record<
-    string,
-    {
-      employeeId: string;
-      workMinutes: number;
-      pauseMinutes: number;
-      days: number;
-    }
-  > = {};
-
-  selectedSummaries.forEach((summary) => {
-    if (!employeeGroups[summary.employee_name]) {
-      employeeGroups[summary.employee_name] = {
-        employeeId: summary.employee_id,
-        workMinutes: 0,
-        pauseMinutes: 0,
-        days: 0,
-      };
+    if (!query) {
+      return rows;
     }
 
-    employeeGroups[summary.employee_name].workMinutes +=
-      summary.workMinutes;
+    return rows.filter((row) =>
+      row.employee_name.toLocaleLowerCase("de-DE").includes(query),
+    );
+  }, [rows, search]);
 
-    employeeGroups[summary.employee_name].pauseMinutes +=
-      summary.pauseMinutes;
+  const totals = useMemo(() => {
+    return rows.reduce(
+      (acc, row) => {
+        acc.workedMinutes += Number(row.worked_minutes ?? 0);
+        acc.baseGross += Number(row.base_gross ?? 0);
+        acc.overtimeGross += Number(row.overtime_gross ?? 0);
+        acc.surchargeGross += Number(row.total_surcharge_gross ?? 0);
+        acc.estimatedGross += Number(row.estimated_gross ?? 0);
 
-    employeeGroups[summary.employee_name].days += 1;
-  });
-
-  Object.entries(employeeGroups).forEach(
-    ([employeeName, data]) => {
-
-      const target = targetHours.find(
-        (targetHour) =>
-          targetHour.employee_id ===
-          data.employeeId
-      );
-
-      const monthlyHours =
-        target?.monthly_hours ?? 173;
-
-      const monthlyMinutes =
-        monthlyHours * 60;
-
-      const diff =
-        data.workMinutes -
-        monthlyMinutes;
-
-      let saldo = "Ausgeglichen";
-      let status = "Ausgeglichen";
-
-      if (diff > 0) {
-        saldo =
-          `${formatMinutes(diff)} im Plus`;
-
-        status = "Im Plus";
-      }
-
-      if (diff < 0) {
-        saldo =
-          `${formatMinutes(Math.abs(diff))} im Minus`;
-
-        status = "Im Minus";
-      }
-
-const employeeEntries = selectedSummaries
-  .filter((summary) => summary.employee_name === employeeName)
-  .flatMap((summary) => summary.entries);
-
-const sessions = buildWorkSessions(employeeEntries);
-
-const surchargeResults =
-  calculateSurcharges(
-    sessions,
-    payRules,
-    federalState
-  );
-const nightHours =
-  surchargeResults.find((result) => result.ruleType === "night")?.hours ?? 0;
-
-const sundayHours =
-  surchargeResults.find((result) => result.ruleType === "sunday")?.hours ?? 0;
-
-const holidayHours =
-  surchargeResults.find(
-    (result) => result.ruleType === "holiday"
-  )?.hours ?? 0;
-
-  const employee = employees.find(
-  (item) => item.id === data.employeeId
-);
-
-const vacationDays =
-  countAbsenceDaysForMonth(
-    data.employeeId,
-    "vacation",
-    exportMonth
-  );
-
-const sickDays =
-  countAbsenceDaysForMonth(
-    data.employeeId,
-    "sick",
-    exportMonth
-  );
-
-const overtimeHours =
-  Math.max(
-    0,
-    Math.round(
-      (
-        (data.workMinutes / 60) -
-        monthlyHours
-      ) * 100
-    ) / 100
-  );
-
-const payrollPreview =
-  calculatePayrollPreview({
-    employee,
-    workHours:
-      Math.round((data.workMinutes / 60) * 100) / 100,
-    monthlyTargetHours:
-      monthlyHours,
-      overtimeHours,
-    surchargeResults,
-  });
-
-payrollSheet.addRow([
-  employeeName,
-  employee?.wage_type === "salary"
-    ? "Monatsgehalt"
-    : employee?.wage_type === "fixed_hourly"
-    ? "Fixer Monatslohn auf Stundenbasis"
-    : "Stundenlohn",
-
-  vacationDays,
-  sickDays,
-
-  payrollPreview.calculatedHourlyRate,
-  payrollPreview.baseGross,
-  payrollPreview.overtimeGross,
-  payrollPreview.nightGross,
-  payrollPreview.sundayGross,
-  payrollPreview.holidayGross,
-  payrollPreview.surchargeGross,
-  payrollPreview.estimatedGross,
-]);
-
-if (
-  employee?.wage_type === "hourly" &&
-  data.workMinutes > 0 &&
-  datevRegularHoursWageType
-) {
-  addDatevRow([
-    employee?.datev_personnel_number || "",
-    employeeName,
-    employee?.cost_center || "",
-    datevRegularHoursWageType,
-    "Reguläre Arbeitsstunden",
-    Math.round((data.workMinutes / 60) * 100) / 100,
-    "Stunden",
-    "",
-    "",
-]);
-}
-
-if (
-  employee?.wage_type === "salary" &&
-  employee.monthly_salary &&
-  datevSalaryWageType
-) {
-  addDatevRow([
-    employee?.datev_personnel_number || "",
-    employeeName,
-    employee?.cost_center || "",
-    datevSalaryWageType,
-    "Monatsgehalt",
-    "",
-    "",
-    "",
-    employee.monthly_salary,
-  ]);
-}
-
-if (
-  overtimeHours > 0 &&
-  datevOvertimeWageType
-) {
-  addDatevRow([
-    employee?.datev_personnel_number || "",
-    employeeName,
-    employee?.cost_center || "",
-    datevOvertimeWageType,
-    "Überstunden",
-    overtimeHours,
-    "Stunden",
-    "",
-    "",
-]);
-}
-
-if (
-  vacationDays > 0 &&
-  datevVacationWageType
-) {
-  addDatevRow([
-    employee?.datev_personnel_number || "",
-    employeeName,
-    employee?.cost_center || "",
-    datevVacationWageType,
-    "Urlaub",
-    vacationDays,
-    "Tage",
-    "",
-    "",
-]);
-}
-
-if (
-  sickDays > 0 &&
-  datevSickWageType
-) {
-  addDatevRow([
-    employee?.datev_personnel_number || "",
-    employeeName,
-    employee?.cost_center || "",
-    datevSickWageType,
-    "Krankheit",
-    sickDays,
-    "Tage",
-    "",
-    "",
-]);
-}
-
-if (employee?.eligible_for_surcharges !== false) {
-  surchargeResults.forEach((result) => {
-    if (result.hours <= 0) return;
-    if (!result.datevWageType) return;
-
-    addDatevRow([
-      employee?.datev_personnel_number || "",
-      employeeName,
-      employee?.cost_center || "",
-      result.datevWageType,
-      result.name,
-      result.hours,
-      "Stunden",
-      result.percentage,
-      "",
-]);
-  });
-}
-
-worksheet.addRow([
-  employeeName,
-  data.days,
-  `${monthlyHours} Std.`,
-  formatMinutes(data.workMinutes),
-  formatMinutes(data.pauseMinutes),
-  `${nightHours} Std.`,
-  `${sundayHours} Std.`,
-  `${holidayHours} Std.`,
-  vacationDays,
-  sickDays,
-  saldo,
-  status,
-]);
-
-const lastRow = datevSheet.lastRow;
-
-if (lastRow) {
-  lastRow.eachCell((cell) => {
-    cell.border = {
-      ...cell.border,
-      bottom: {
-        style: "thick",
+        return acc;
       },
-    };
-  });
-}
+      {
+        workedMinutes: 0,
+        baseGross: 0,
+        overtimeGross: 0,
+        surchargeGross: 0,
+        estimatedGross: 0,
+      },
+    );
+  }, [rows]);
 
-    }
-  );
-
-worksheet.columns = [
-  { width: 25 },
-  { width: 15 },
-  { width: 18 },
-  { width: 18 },
-  { width: 18 },
-  { width: 18 },
-  { width: 18 },
-  { width: 18 },
-  { width: 15 },
-  { width: 15 },
-  { width: 18 },
-  { width: 28 },
-];
-
-datevSheet.columns = [
-  { width: 18 }, // Personalnummer
-  { width: 25 }, // Mitarbeiter
-  { width: 18 }, // Kostenstelle
-  { width: 15 }, // Lohnart
-  { width: 25 }, // Bezeichnung
-  { width: 12 }, // Menge
-  { width: 12 }, // Einheit
-  { width: 12 }, // Prozent
-  { width: 18 }, // Betrag
-];
-
-payrollSheet.columns = [
-  { width: 25 },
-  { width: 18 },
-  { width: 24 },
-  { width: 15 },
-  { width: 30 },
-  { width: 18 },
-  { width: 18 },
-  { width: 18 },
-  { width: 24 },
-  { width: 18 },
-  { width: 18 },
-  { width: 24 },
-];
-
-datevSheet.getColumn(6).numFmt = "0.00";
-datevSheet.getColumn(8).numFmt = "0.00";
-datevSheet.getColumn(9).numFmt = '#,##0.00 €';
-
-payrollSheet.getColumn(5).numFmt = '#,##0.00 €';
-payrollSheet.getColumn(6).numFmt = '#,##0.00 €';
-payrollSheet.getColumn(7).numFmt = '#,##0.00 €';
-payrollSheet.getColumn(8).numFmt = '#,##0.00 €';
-payrollSheet.getColumn(9).numFmt = '#,##0.00 €';
-payrollSheet.getColumn(10).numFmt = '#,##0.00 €';
-payrollSheet.getColumn(11).numFmt = '#,##0.00 €';
-payrollSheet.getColumn(12).numFmt = '#,##0.00 €';
-
-datevSheet.autoFilter = {
-  from: "A4",
-  to: "H4",
-};
-
-payrollSheet.autoFilter = {
-  from: "A4",
-  to: "I4",
-};
-
-const csvContent = [
-  datevCsvHeader.join(";"),
-  ...datevRows.map((row) =>
-    row
-      .map((value) => {
-        if (
-          value === null ||
-          value === undefined
-        ) {
-          return "";
-        }
-
-        if (typeof value === "number") {
-          return value
-            .toFixed(2)
-            .replace(".", ",");
-        }
-
-        return String(value);
-      })
-      .join(";")
-  ),
-].join("\n");
-
-console.log(csvContent);
-
-  const buffer =
-    await workbook.xlsx.writeBuffer();
-
-  const blob = new Blob(
-    [buffer],
-    {
-      type:
-        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    }
-  );
-
-  const url =
-    window.URL.createObjectURL(blob);
-
-  const link =
-    document.createElement("a");
-
-  const safeBusinessName =
-    businessName.replace(/\s+/g, "-");
-
-  link.href = url;
-
-  link.download =
-`${safeBusinessName}-arbeitszeiten-${exportMonth}.xlsx`;
-
-  link.click();
-
-  window.URL.revokeObjectURL(url);
-  const csvBlob = new Blob(
-  ["\uFEFF" + csvContent],
-  {
-    type: "text/csv;charset=utf-8;",
-  }
-);
-
-const csvUrl =
-  window.URL.createObjectURL(csvBlob);
-
-const csvLink =
-  document.createElement("a");
-
-csvLink.href = csvUrl;
-
-csvLink.download =
-  `${safeBusinessName}-datev-vorbereitung-${exportMonth}.csv`;
-
-csvLink.click();
-
-window.URL.revokeObjectURL(csvUrl);
-
-  showToast({
-    type: "success",
-    title: "Export erstellt",
-    description: "Excel-Datei und DATEV-CSV wurden heruntergeladen.",
-  });
-}
-  const dailySummaries = buildDailySummaries(timeEntries);
-  const monthSummaries = dailySummaries.filter(
-  (summary) =>
-    summary.rawDate.startsWith(viewMonth)
-);
-const employeeMonthGroups = monthSummaries.reduce(
-  (acc, summary) => {
-    if (!acc[summary.employee_id]) {
-      acc[summary.employee_id] = {
-        employeeName: summary.employee_name,
-        entries: [],
-        totalWorkMinutes: 0,
-        totalPauseMinutes: 0,
-      };
-    }
-
-    acc[summary.employee_id].entries.push(summary);
-
-    acc[summary.employee_id].totalWorkMinutes +=
-      summary.workMinutes;
-
-    acc[summary.employee_id].totalPauseMinutes +=
-      summary.pauseMinutes;
-
-    return acc;
-  },
-  {} as Record<
-    string,
-    {
-      employeeName: string;
-      entries: WorkSummary[];
-      totalWorkMinutes: number;
-      totalPauseMinutes: number;
-    }
-  >
-);
-  const weeklySummaries = buildPeriodSummaries(dailySummaries, "week");
-  const monthlySummaries = buildPeriodSummaries(dailySummaries, "month");
-  const todayRawDate = formatDateForDatabase(new Date());
-
-  const todaysDailySummaries = dailySummaries.filter(
-  (summary) => summary.rawDate === todayRawDate
-);
-
-  const monthEmployeeCount = Object.keys(employeeMonthGroups).length;
-  const monthWorkMinutes = monthSummaries.reduce(
-    (sum, summary) => sum + summary.workMinutes,
-    0
-  );
-  const todayWorkMinutes = todaysDailySummaries.reduce(
-    (sum, summary) => sum + summary.workMinutes,
-    0
-  );
+  const periodStatus = rows[0]?.period_status ?? "open";
 
   if (isLoading) {
     return (
       <div className="space-y-8">
         <PageHeader
-          title="Arbeitszeiten"
-          description="Prüfe Stempelungen, ergänze fehlende Zeiten und exportiere Monatsdaten."
+          title="Arbeitszeiten & Bruttovergütung"
+          description="Monatliche Übersicht über Arbeitszeiten, Stundenkonten und Bruttovergütung aller Mitarbeiter."
         />
 
         <StatsSkeleton />
 
         <Section
-          title="Monatsübersicht"
-          description="Arbeitszeiten pro Mitarbeiter im ausgewählten Monat."
+          title="Mitarbeiterübersicht"
+          description="Zeit- und Vergütungssalden pro Mitarbeiter."
         >
-          <TableSkeleton rows={7} columns={7} />
+          <TableSkeleton rows={8} columns={8} />
         </Section>
       </div>
     );
@@ -1687,362 +292,478 @@ const employeeMonthGroups = monthSummaries.reduce(
   return (
     <div className="space-y-8">
       <PageHeader
-        title="Arbeitszeiten"
-        description="Prüfe Stempelungen, ergänze fehlende Zeiten und exportiere Monatsdaten."
-        action={
-          <PageActions>
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={handleExportExcel}
-            >
-              Excel & CSV exportieren
-            </Button>
-          </PageActions>
-        }
+        title="Arbeitszeiten & Bruttovergütung"
+        description="Monatliche Übersicht über Arbeitszeiten, Stundenkonten und Bruttovergütung aller Mitarbeiter."
       />
 
-      <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-4">
-        <StatCard
-          title="Arbeitstage im Monat"
-          value={monthSummaries.length}
-        />
-
-        <StatCard
-          title="Mitarbeiter im Monat"
-          value={monthEmployeeCount}
-        />
-
-        <StatCard
-          title="Arbeitszeit heute"
-          value={formatMinutes(todayWorkMinutes)}
-          badge="Heute"
-          badgeVariant="primary"
-        />
-
-        <StatCard
-          title="Arbeitszeit Monat"
-          value={formatMinutes(monthWorkMinutes)}
-          badge={new Date(`${viewMonth}-01`).toLocaleDateString("de-DE", {
-            month: "short",
-          })}
-          badgeVariant="muted"
-        />
-      </div>
-
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-        <Section
-          title="Excel-Export"
-          description="Wähle einen Monat und exportiere Arbeitszeiten sowie DATEV-Vorbereitung."
-        >
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-[1fr_auto] md:items-end">
-            <Input
-              label="Exportmonat"
-              type="month"
-              value={exportMonth}
-              onChange={(event) => setExportMonth(event.target.value)}
-            />
-
-            <Button
-              type="button"
-              variant="primary"
-              onClick={handleExportExcel}
-            >
-              Excel & CSV exportieren
-            </Button>
-          </div>
-        </Section>
-
-        <Section
-          title="Stempel hinzufügen"
-          description="Nutze diese Funktion, wenn ein Mitarbeiter vergessen hat, sich ein- oder auszustempeln."
-        >
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            <Select
-              label="Mitarbeiter"
-              value={selectedEmployeeId}
-              onChange={(event) => setSelectedEmployeeId(event.target.value)}
-              options={[
-                { value: "", label: "Mitarbeiter auswählen" },
-                ...employees.map((employee) => ({
-                  value: employee.id,
-                  label: employee.name,
-                })),
-              ]}
-            />
-
-            <Select
-              label="Aktion"
-              value={selectedAction}
-              onChange={(event) => setSelectedAction(event.target.value)}
-              options={[
-                { value: "check_in", label: "Einstempeln" },
-                { value: "break_start", label: "Pausenbeginn" },
-                { value: "break_end", label: "Pausenende" },
-                { value: "check_out", label: "Ausstempeln" },
-              ]}
-            />
-
-            <Input
-              label="Datum"
-              type="date"
-              value={selectedDate}
-              onChange={(event) => setSelectedDate(event.target.value)}
-            />
-
-            <TimeInput
-              label="Uhrzeit"
-              value={selectedTime}
-              onChange={setSelectedTime}
-            />
-          </div>
-
-          <div className="mt-6">
-            <Button
-              type="button"
-              variant="primary"
-              onClick={() => handleAddTimeEntry()}
-            >
-              Stempel speichern
-            </Button>
-          </div>
-        </Section>
-      </div>
-
       <Section
-        title="Monatsübersicht"
-        description="Arbeitszeiten pro Mitarbeiter im ausgewählten Monat."
+        title={formatMonthLabel(year, month)}
+        description="Wechsle zwischen Monaten. Offene Monate werden laufend aus der zentralen Payroll-Logik aktualisiert; abgeschlossene Monate bleiben eingefroren."
         action={
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center justify-end gap-2">
             <Button
               type="button"
               variant="secondary"
               size="sm"
               onClick={() => changeMonth(-1)}
-              aria-label="Vorheriger Monat"
             >
-              ←
+              ← Vorheriger
             </Button>
 
-            <div className="min-w-[160px] text-center text-sm font-medium text-[#111827]">
-              {new Date(`${viewMonth}-01`).toLocaleDateString("de-DE", {
-                month: "long",
-                year: "numeric",
-              })}
-            </div>
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={goToCurrentMonth}
+            >
+              Aktueller Monat
+            </Button>
 
             <Button
               type="button"
               variant="secondary"
               size="sm"
               onClick={() => changeMonth(1)}
-              aria-label="Nächster Monat"
             >
-              →
+              Nächster →
             </Button>
+
+            <Badge variant={periodStatusVariant(periodStatus)}>
+              {periodStatusLabel(periodStatus)}
+            </Badge>
           </div>
         }
       >
-        {Object.keys(employeeMonthGroups).length === 0 ? (
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-5">
+          <StatCard
+            title="Mitarbeiter"
+            value={rows.length}
+          />
+
+          <StatCard
+            title="Arbeitszeit"
+            value={formatMinutes(totals.workedMinutes)}
+          />
+
+          <StatCard
+            title="Grundvergütung"
+            value={formatCurrency(totals.baseGross)}
+          />
+
+          <StatCard
+            title="Zuschläge"
+            value={formatCurrency(
+              totals.surchargeGross + totals.overtimeGross,
+            )}
+          />
+
+          <StatCard
+            title="Bruttovergütung"
+            value={formatCurrency(totals.estimatedGross)}
+            badge="Gesamt"
+            badgeVariant="primary"
+          />
+        </div>
+      </Section>
+
+      <Section
+        title="Mitarbeiterübersicht"
+        description="Öffne einen Mitarbeiter, um Zeitkonto und Vergütungsbestandteile im Detail zu sehen."
+        action={
+          <div className="w-full sm:w-[280px]">
+            <div className="relative">
+              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-[#64748B]">
+                ⌕
+              </span>
+
+              <input
+                type="search"
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Mitarbeiter suchen"
+                className="h-10 w-full rounded-xl border border-transparent bg-[#E9EEF4] pl-9 pr-3 text-sm text-[#0F172A] outline-none transition placeholder:text-[#64748B] hover:bg-[#E3E9F0] focus:border-[#60A5FA] focus:bg-white focus:ring-4 focus:ring-[#DBEAFE]"
+              />
+            </div>
+          </div>
+        }
+      >
+        {filteredRows.length === 0 ? (
           <EmptyState
-            title="Keine Arbeitszeiten im Monat"
-            description="Für den ausgewählten Monat wurden noch keine Arbeitszeiten erfasst."
+            title={
+              search
+                ? "Kein Mitarbeiter gefunden"
+                : "Keine Daten für diesen Monat"
+            }
+            description={
+              search
+                ? "Passe deine Suche an."
+                : "Für den ausgewählten Monat sind noch keine Mitarbeiter-Snapshots vorhanden."
+            }
           />
         ) : (
           <div className="space-y-4">
-            {Object.entries(employeeMonthGroups).map(
-              ([employeeId, group]) => (
-                <details
-                  key={employeeId}
-                  className="rounded-3xl border border-[#E2E8F0] bg-[#F8FAFC] p-4 transition hover:border-[#CBD5E1] open:bg-white open:shadow-sm"
-                >
-                  <summary className="cursor-pointer list-none">
-                    <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-                      <div>
-                        <h3 className="text-lg font-medium tracking-[-0.02em] text-[#111827]">
-                          {group.employeeName}
-                        </h3>
+            {filteredRows.map((row) => {
+              const hasTimeAccount =
+                row.time_account_period !== "none";
 
-                        <p className="mt-1 text-sm text-[#6B7280]">
-                          {group.entries.length} Arbeitstag(e)
+              const balance = Number(
+                row.current_balance_minutes ?? 0,
+              );
+
+              const balanceStyle = balanceTone(balance);
+
+              return (
+                <details
+                  key={row.employee_id}
+                  className="overflow-hidden rounded-3xl border border-[#D8E0E9] bg-white shadow-[0_5px_16px_rgba(15,23,42,0.10)] transition hover:border-[#C8D3E0] hover:shadow-[0_7px_20px_rgba(15,23,42,0.13)]"
+                >
+                  <summary className="cursor-pointer list-none px-5 py-5">
+                    <div className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(220px,1.3fr)_repeat(5,minmax(130px,1fr))_auto] xl:items-center">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-3">
+                          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-[#2563EB] text-sm font-semibold text-white shadow-[0_4px_10px_rgba(37,99,235,0.18)]">
+                            {row.employee_name
+                              .slice(0, 1)
+                              .toUpperCase()}
+                          </div>
+
+                          <div className="min-w-0">
+                            <h3 className="truncate text-base font-semibold text-[#0F172A]">
+                              {row.employee_name}
+                            </h3>
+
+                            <p className="mt-1 truncate text-xs text-[#64748B]">
+                              {wageTypeLabel(row.wage_type)} ·{" "}
+                              {employmentTypeLabel(row.employment_type)}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div>
+                        <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-[#64748B]">
+                          Soll
+                        </p>
+                        <p className="mt-1 text-sm font-semibold text-[#0F172A]">
+                          {hasTimeAccount
+                            ? formatMinutes(row.target_minutes)
+                            : "Kein Stundenkonto"}
                         </p>
                       </div>
 
-                      <div className="grid grid-cols-2 gap-3 text-sm">
-                        <div className="rounded-2xl border border-[#E5E7EB] bg-white px-4 py-3">
-                          <p className="text-xs text-[#6B7280]">
-                            Arbeitszeit
-                          </p>
-                          <p className="mt-1 font-medium text-[#111827]">
-                            {formatMinutes(group.totalWorkMinutes)}
-                          </p>
-                        </div>
-
-                        <div className="rounded-2xl border border-[#E5E7EB] bg-white px-4 py-3">
-                          <p className="text-xs text-[#6B7280]">Pause</p>
-                          <p className="mt-1 font-medium text-[#111827]">
-                            {formatMinutes(group.totalPauseMinutes)}
-                          </p>
-                        </div>
+                      <div>
+                        <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-[#64748B]">
+                          Ist
+                        </p>
+                        <p className="mt-1 text-sm font-semibold text-[#0F172A]">
+                          {formatMinutes(row.worked_minutes)}
+                        </p>
                       </div>
 
-                      <Badge variant="primary">Details anzeigen</Badge>
+                      <div>
+                        <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-[#64748B]">
+                          Monatsdifferenz
+                        </p>
+                        <p
+                          className={`mt-1 text-sm font-semibold ${
+                            !hasTimeAccount
+                              ? "text-[#64748B]"
+                              : row.raw_difference_minutes > 0
+                                ? "text-[#047857]"
+                                : row.raw_difference_minutes < 0
+                                  ? "text-[#B91C1C]"
+                                  : "text-[#475569]"
+                          }`}
+                        >
+                          {hasTimeAccount
+                            ? formatSignedMinutes(
+                                row.raw_difference_minutes,
+                              )
+                            : "—"}
+                        </p>
+                      </div>
+
+                      <div>
+                        <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-[#64748B]">
+                          Zuschläge
+                        </p>
+                        <p className="mt-1 text-sm font-semibold text-[#0F172A]">
+                          {formatCurrency(
+                            Number(row.total_surcharge_gross ?? 0) +
+                              Number(row.overtime_gross ?? 0),
+                          )}
+                        </p>
+                      </div>
+
+                      <div>
+                        <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-[#64748B]">
+                          Bruttovergütung
+                        </p>
+                        <p className="mt-1 text-base font-bold text-[#0F172A]">
+                          {formatCurrency(row.estimated_gross)}
+                        </p>
+                      </div>
+
+                      <div className="flex justify-start xl:justify-end">
+                        <Badge variant="primary">
+                          Details
+                        </Badge>
+                      </div>
                     </div>
                   </summary>
 
-                  <div className="mt-5 overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="border-b border-[#E5E7EB] text-left text-xs font-medium uppercase tracking-[0.08em] text-[#6B7280]">
-                          <th className="py-3 pr-4">Datum</th>
-                          <th className="py-3 pr-4">Beginn</th>
-                          <th className="py-3 pr-4">Ende</th>
-                          <th className="py-3 pr-4">Pause</th>
-                          <th className="py-3 pr-4">Arbeitszeit</th>
-                          <th className="py-3 pr-4">Status</th>
-                          <th className="py-3 pr-4 text-right">Aktion</th>
-                        </tr>
-                      </thead>
+                  <div className="border-t border-[#DCE3EC] bg-[#F8FAFC] px-5 py-5">
+                    <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
+                      <div className="rounded-2xl border border-[#DCE3EC] bg-white p-5 shadow-[0_3px_10px_rgba(15,23,42,0.06)]">
+                        <div className="flex items-start justify-between gap-4">
+                          <div>
+                            <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[#2563EB]">
+                              Zeit
+                            </p>
 
-                      <tbody>
-                        {group.entries.map((summary) => (
-                          <tr
-                            key={summary.key}
-                            className="border-b border-[#E5E7EB] last:border-b-0"
-                          >
-                            <td className="py-4 pr-4 font-medium text-[#111827]">
-                              {summary.date}
-                            </td>
+                            <h4 className="mt-1 text-lg font-semibold text-[#0F172A]">
+                              Arbeitszeit & Stundenkonto
+                            </h4>
+                          </div>
 
-                            <td className="py-4 pr-4 text-[#6B7280]">
-                              {summary.start || "-"}
-                            </td>
+                          {row.target_minutes_requires_review && (
+                            <Badge variant="warning">
+                              Sollzeit prüfen
+                            </Badge>
+                          )}
+                        </div>
 
-                            <td className="py-4 pr-4 text-[#6B7280]">
-                              {summary.end || "-"}
-                            </td>
+                        <div className="mt-5 grid grid-cols-2 gap-x-5 gap-y-4">
+                          <Metric
+                            label="Sollzeit"
+                            value={
+                              hasTimeAccount
+                                ? formatMinutes(row.target_minutes)
+                                : "Kein Stundenkonto"
+                            }
+                          />
 
-                            <td className="py-4 pr-4 text-[#6B7280]">
-                              {formatMinutes(summary.pauseMinutes)}
-                            </td>
+                          <Metric
+                            label="Gearbeitet"
+                            value={formatMinutes(row.worked_minutes)}
+                          />
 
-                            <td className="py-4 pr-4 font-medium text-[#111827]">
-                              {formatMinutes(summary.workMinutes)}
-                            </td>
+                          <Metric
+                            label="Abwesenheit gutgeschrieben"
+                            value={formatMinutes(row.credited_minutes)}
+                          />
 
-                            <td className="py-4 pr-4">
-                              <Badge variant="muted">Erfasst</Badge>
-                            </td>
+                          <Metric
+                            label="Anrechenbar"
+                            value={formatMinutes(row.accountable_minutes)}
+                          />
 
-                            <td className="py-4 pr-4 text-right">
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleOpenEditSummary(summary)}
+                          <Metric
+                            label="Monatsdifferenz"
+                            value={
+                              hasTimeAccount
+                                ? formatSignedMinutes(
+                                    row.raw_difference_minutes,
+                                  )
+                                : "—"
+                            }
+                            valueClassName={
+                              !hasTimeAccount
+                                ? "text-[#64748B]"
+                                : row.raw_difference_minutes > 0
+                                  ? "text-[#047857]"
+                                  : row.raw_difference_minutes < 0
+                                    ? "text-[#B91C1C]"
+                                    : "text-[#0F172A]"
+                            }
+                          />
+
+                          <Metric
+                            label="Ausgezahlte Überstunden"
+                            value={
+                              hasTimeAccount
+                                ? formatMinutes(
+                                    row.payout_overtime_minutes,
+                                  )
+                                : "—"
+                            }
+                          />
+                        </div>
+
+                        <div className="mt-5 border-t border-[#E2E8F0] pt-5">
+                          {hasTimeAccount ? (
+                            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                              <div className="rounded-xl border border-[#DCE3EC] bg-[#F8FAFC] px-4 py-3">
+                                <p className="text-xs text-[#64748B]">
+                                  Startsaldo
+                                </p>
+
+                                <p className="mt-1 text-sm font-semibold text-[#0F172A]">
+                                  {formatSignedMinutes(
+                                    row.opening_balance_minutes,
+                                  )}
+                                </p>
+                              </div>
+
+                              <div className="rounded-xl border border-[#DCE3EC] bg-[#F8FAFC] px-4 py-3">
+                                <p className="text-xs text-[#64748B]">
+                                  Übertrag
+                                </p>
+
+                                <p className="mt-1 text-sm font-semibold text-[#0F172A]">
+                                  {formatSignedMinutes(
+                                    row.carried_balance_minutes,
+                                  )}
+                                </p>
+                              </div>
+
+                              <div
+                                className={`rounded-xl border px-4 py-3 ${balanceStyle.bg} ${balanceStyle.border}`}
                               >
-                                Bearbeiten
-                              </Button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                                <p className="text-xs text-[#64748B]">
+                                  Aktueller Stand
+                                </p>
+
+                                <p
+                                  className={`mt-1 text-base font-bold ${balanceStyle.text}`}
+                                >
+                                  {formatSignedMinutes(balance)}
+                                </p>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] px-4 py-4">
+                              <p className="text-sm font-medium text-[#475569]">
+                                Kein Stundenkonto aktiviert
+                              </p>
+
+                              <p className="mt-1 text-xs leading-5 text-[#64748B]">
+                                Für diesen Mitarbeiter wird kein laufender
+                                Stundenkontostand geführt.
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="rounded-2xl border border-[#DCE3EC] bg-white p-5 shadow-[0_3px_10px_rgba(15,23,42,0.06)]">
+                        <div>
+                          <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[#7C3AED]">
+                            Vergütung
+                          </p>
+
+                          <h4 className="mt-1 text-lg font-semibold text-[#0F172A]">
+                            Bruttovergütung
+                          </h4>
+
+                          <p className="mt-1 text-xs leading-5 text-[#64748B]">
+                            Ohne Arbeitgeberanteile und sonstige
+                            Lohnnebenkosten.
+                          </p>
+                        </div>
+
+                        <div className="mt-5 grid grid-cols-2 gap-x-5 gap-y-4">
+                          <Metric
+                            label="Grundvergütung"
+                            value={formatCurrency(row.base_gross)}
+                          />
+
+                          <Metric
+                            label="Stundenzulagen"
+                            value={formatCurrency(
+                              row.hourly_allowance_gross,
+                            )}
+                          />
+
+                          <Metric
+                            label="Überstunden"
+                            value={formatCurrency(row.overtime_gross)}
+                          />
+
+                          <Metric
+                            label="Nachtzuschläge"
+                            value={formatCurrency(
+                              row.night_surcharge_gross,
+                            )}
+                          />
+
+                          <Metric
+                            label="Sonntagszuschläge"
+                            value={formatCurrency(
+                              row.sunday_surcharge_gross,
+                            )}
+                          />
+
+                          <Metric
+                            label="Feiertagszuschläge"
+                            value={formatCurrency(
+                              row.holiday_surcharge_gross,
+                            )}
+                          />
+
+                          <Metric
+                            label="Sonstige Zuschläge"
+                            value={formatCurrency(
+                              row.other_surcharge_gross,
+                            )}
+                          />
+
+                          <Metric
+                            label="Zuschläge gesamt"
+                            value={formatCurrency(
+                              row.total_surcharge_gross,
+                            )}
+                          />
+                        </div>
+
+                        <div className="mt-5 border-t border-[#E2E8F0] pt-5">
+                          <div className="flex items-end justify-between gap-4 rounded-2xl border border-[#DDD6FE] bg-[#F5F3FF] px-4 py-4">
+                            <div>
+                              <p className="text-xs font-medium text-[#6D28D9]">
+                                Bruttovergütung gesamt
+                              </p>
+
+                              <p className="mt-1 text-xs text-[#7C3AED]">
+                                Voraussichtlicher Monatswert
+                              </p>
+                            </div>
+
+                            <p className="text-xl font-bold tracking-[-0.02em] text-[#5B21B6]">
+                              {formatCurrency(row.estimated_gross)}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </details>
-              )
-            )}
+              );
+            })}
           </div>
         )}
       </Section>
+    </div>
+  );
+}
 
-      {editingSummary && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#111827]/35 p-6 backdrop-blur-sm">
-          <div className="w-full max-w-lg rounded-[28px] border border-[#E2E8F0] bg-white p-6 shadow-[0_24px_70px_rgba(15,23,42,0.18)]">
-            <h2 className="text-2xl font-light tracking-[-0.03em] text-[#111827]">
-              Arbeitszeit bearbeiten
-            </h2>
+function Metric({
+  label,
+  value,
+  valueClassName = "text-[#0F172A]",
+}: {
+  label: string;
+  value: string;
+  valueClassName?: string;
+}) {
+  return (
+    <div className="min-w-0">
+      <p className="text-xs text-[#64748B]">
+        {label}
+      </p>
 
-            <p className="mt-2 text-sm text-[#6B7280]">
-              {editingSummary.employee_name} · {editingSummary.date}
-            </p>
-
-            <div className="mt-6 grid grid-cols-1 gap-4">
-              <TimeInput
-                label="Arbeitsbeginn"
-                value={editStartTime === "Offen" ? "" : editStartTime}
-                onChange={setEditStartTime}
-              />
-
-              <TimeInput
-                label="Arbeitsende"
-                value={editEndTime === "Offen" ? "" : editEndTime}
-                onChange={setEditEndTime}
-              />
-            </div>
-
-            <div className="mt-6 flex flex-col gap-3 sm:flex-row">
-              <Button
-                type="button"
-                variant="primary"
-                fullWidth
-                onClick={handleSaveEditedSummary}
-              >
-                Speichern
-              </Button>
-
-              <Button
-                type="button"
-                variant="danger"
-                fullWidth
-                onClick={handleAskDeleteEditedSummary}
-              >
-                Löschen
-              </Button>
-
-              <Button
-                type="button"
-                variant="secondary"
-                fullWidth
-                onClick={() => setEditingSummary(null)}
-              >
-                Abbrechen
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      <DiperaPopup
-        open={Boolean(pendingDeleteSummary)}
-        message={
-          pendingDeleteSummary
-            ? `Möchtest du die Arbeitszeit von ${pendingDeleteSummary.employee_name} am ${pendingDeleteSummary.date} wirklich löschen?`
-            : ""
-        }
-        onClose={() => setPendingDeleteSummary(null)}
-        onConfirm={handleConfirmDeleteSummary}
-        confirmText="Ja, löschen"
-        cancelText="Abbrechen"
-      />
-
-      <DiperaPopup
-        open={showPopup}
-        message={popupMessage}
-        onClose={() => setShowPopup(false)}
-      />
-
-      <DiperaPopup
-        open={showConfirmPopup}
-        message={confirmMessage}
-        onClose={() => setShowConfirmPopup(false)}
-        onConfirm={() => {
-          confirmAction?.();
-          setShowConfirmPopup(false);
-        }}
-        confirmText="Bestätigen"
-        cancelText="Abbrechen"
-      />
+      <p className={`mt-1 truncate text-sm font-semibold ${valueClassName}`}>
+        {value}
+      </p>
     </div>
   );
 }

@@ -5,7 +5,8 @@ import type { ReactNode } from "react";
 import Badge from "@/components/ui/Badge";
 import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
-import EmployeeDocumentsCard from "@/components/employees/EmployeeDocumentsCard";
+
+type TimeAccountPeriod = "none" | "weekly" | "monthly";
 
 export type EmployeeCardEmployee = {
   id: string;
@@ -13,6 +14,8 @@ export type EmployeeCardEmployee = {
   role: string;
   pin: string;
   account_status: string;
+
+  weekly_target_hours?: number;
   monthly_target_hours: number;
 
   wage_type?: "hourly" | "fixed_hourly" | "salary";
@@ -21,6 +24,10 @@ export type EmployeeCardEmployee = {
 
   datev_personnel_number?: string | null;
   cost_center?: string | null;
+
+  time_account_settings?: {
+    time_account_period?: TimeAccountPeriod | string;
+  } | null;
 };
 
 type EmployeeCardProps = {
@@ -85,6 +92,44 @@ function getInitials(name: string) {
   return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
 }
 
+function getTimeAccountPeriod(employee: EmployeeCardEmployee): TimeAccountPeriod {
+  const period = employee.time_account_settings?.time_account_period;
+
+  if (period === "weekly" || period === "monthly") {
+    return period;
+  }
+
+  return "none";
+}
+
+function formatTargetHours(employee: EmployeeCardEmployee) {
+  const period = getTimeAccountPeriod(employee);
+
+  if (period === "none") {
+    return "Kein Stundenkonto";
+  }
+
+  if (period === "weekly") {
+    return `${employee.weekly_target_hours ?? 0} Std. / Woche`;
+  }
+
+  return `${employee.monthly_target_hours} Std. / Monat`;
+}
+
+function formatTargetHoursCompact(employee: EmployeeCardEmployee) {
+  const period = getTimeAccountPeriod(employee);
+
+  if (period === "none") {
+    return "Kein Stundenkonto";
+  }
+
+  if (period === "weekly") {
+    return `${employee.weekly_target_hours ?? 0} Std. / Woche`;
+  }
+
+  return `${employee.monthly_target_hours} Std.`;
+}
+
 export default function EmployeeCard({
   employee,
   canEditPayroll,
@@ -102,14 +147,16 @@ export default function EmployeeCard({
   onToggleExpanded,
 }: EmployeeCardProps) {
   const isActive = employee.account_status === "active";
+  const timeAccountPeriod = getTimeAccountPeriod(employee);
+  const hasTimeAccount = timeAccountPeriod !== "none";
 
   return (
     <article
       className={[
-        "overflow-hidden rounded-3xl border bg-white shadow-sm",
+        "overflow-hidden rounded-3xl border bg-white shadow-[0_6px_18px_rgba(15,23,42,0.11)]",
         "transition-[box-shadow,border-color] duration-300",
         "hover:border-[#93C5FD]",
-        "hover:shadow-[0_14px_35px_rgba(15,23,42,0.08)]",
+        "hover:shadow-[0_12px_28px_rgba(15,23,42,0.16)]",
         isExpanded
           ? "col-span-full border-[#93C5FD]"
           : "border-[#E2E8F0]",
@@ -151,8 +198,13 @@ export default function EmployeeCard({
                 Sollstunden
               </p>
 
-              <p className="mt-0.5 text-sm font-semibold text-[#0F172A]">
-                {employee.monthly_target_hours} Std. / Monat
+              <p
+                className={[
+                  "mt-0.5 text-sm font-semibold",
+                  hasTimeAccount ? "text-[#0F172A]" : "text-[#64748B]",
+                ].join(" ")}
+              >
+                {formatTargetHours(employee)}
               </p>
             </div>
 
@@ -244,11 +296,20 @@ export default function EmployeeCard({
 
                   <div className="rounded-2xl border border-[#E2E8F0] bg-white p-3.5">
                     <p className="text-xs font-medium uppercase tracking-[0.06em] text-[#64748B]">
-                      Soll/Monat
+                      {timeAccountPeriod === "weekly"
+                        ? "Soll/Woche"
+                        : timeAccountPeriod === "monthly"
+                          ? "Soll/Monat"
+                          : "Arbeitszeitkonto"}
                     </p>
 
-                    <p className="mt-1 text-sm font-semibold text-[#0F172A]">
-                      {employee.monthly_target_hours} Std.
+                    <p
+                      className={[
+                        "mt-1 text-sm font-semibold",
+                        hasTimeAccount ? "text-[#0F172A]" : "text-[#64748B]",
+                      ].join(" ")}
+                    >
+                      {formatTargetHoursCompact(employee)}
                     </p>
                   </div>
 
@@ -283,7 +344,7 @@ export default function EmployeeCard({
                   </p>
                 </div>
 
-                {canEditPayroll && (
+                {canEditPayroll && timeAccountPeriod === "monthly" && (
                   <div className="rounded-2xl border border-[#E2E8F0] bg-white p-4">
                     <label className="mb-2 block text-sm font-semibold text-[#334155]">
                       Monats-Sollstunden
@@ -310,6 +371,33 @@ export default function EmployeeCard({
                         </Button>
                       )}
                     </div>
+                  </div>
+                )}
+
+                {canEditPayroll && !hasTimeAccount && (
+                  <div className="rounded-2xl border border-[#E2E8F0] bg-white p-4">
+                    <p className="text-sm font-semibold text-[#475569]">
+                      Kein Stundenkonto
+                    </p>
+
+                    <p className="mt-1 text-xs leading-5 text-[#64748B]">
+                      Für diesen Mitarbeiter werden keine Sollstunden und kein
+                      laufender Stundenkontosaldo geführt. Die Einstellung kann
+                      über „Lohndaten“ geändert werden.
+                    </p>
+                  </div>
+                )}
+
+                {canEditPayroll && timeAccountPeriod === "weekly" && (
+                  <div className="rounded-2xl border border-[#E2E8F0] bg-white p-4">
+                    <p className="text-sm font-semibold text-[#475569]">
+                      Wochenkonto aktiv
+                    </p>
+
+                    <p className="mt-1 text-xs leading-5 text-[#64748B]">
+                      Die Wochen-Sollstunden werden zentral über „Lohndaten“
+                      verwaltet.
+                    </p>
                   </div>
                 )}
 
@@ -345,7 +433,6 @@ export default function EmployeeCard({
                     {isActive ? "Deaktivieren" : "Reaktivieren"}
                   </Button>
                 </div>
-                <EmployeeDocumentsCard employeeId={employee.id} />
               </div>
 
               {/* Rechter Bereich */}

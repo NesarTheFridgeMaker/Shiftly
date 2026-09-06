@@ -194,7 +194,7 @@ function AbsenceList({
         {items.map((absence) => (
           <div
             key={absence.id}
-            className="rounded-3xl border border-[#E2E8F0] bg-[#F8FAFC] p-4 transition hover:-translate-y-0.5 hover:border-[#CBD5E1] hover:shadow-[0_16px_40px_rgba(15,23,42,0.08)]"
+            className="rounded-3xl border border-[#CBD5E1] bg-[#EEF2F6] p-4 shadow-[0_8px_22px_rgba(15,23,42,0.10)] transition hover:-translate-y-0.5 hover:border-[#B8C4D1] hover:shadow-[0_14px_34px_rgba(15,23,42,0.14)]"
           >
             <div className="flex items-start justify-between gap-4">
               <div>
@@ -217,7 +217,7 @@ function AbsenceList({
             </div>
 
             {absence.note?.trim() && (
-              <div className="mt-4 rounded-2xl border border-[#E2E8F0] bg-white p-3">
+              <div className="mt-4 rounded-2xl border border-[#D7DEE8] bg-white p-3 shadow-[0_3px_10px_rgba(15,23,42,0.06)]">
                 <p className="text-xs font-semibold uppercase tracking-wide text-[#94A3B8]">
                   Kommentar
                 </p>
@@ -228,7 +228,7 @@ function AbsenceList({
             )}
 
             <div className="mt-4 grid grid-cols-2 gap-3">
-              <div className="rounded-2xl bg-white p-3">
+              <div className="rounded-2xl border border-[#D7DEE8] bg-white p-3 shadow-[0_3px_10px_rgba(15,23,42,0.05)]">
                 <p className="text-xs text-[#64748B]">
                   Status
                 </p>
@@ -247,7 +247,7 @@ function AbsenceList({
                 </div>
               </div>
 
-              <div className="rounded-2xl bg-white p-3">
+              <div className="rounded-2xl border border-[#D7DEE8] bg-white p-3 shadow-[0_3px_10px_rgba(15,23,42,0.05)]">
                 <p className="text-xs text-[#64748B]">
                   Zeitraum
                 </p>
@@ -1104,40 +1104,43 @@ export default function AbsencesPage() {
         description="Verwalte Urlaub, Krankheit, Freistellungen und weitere Abwesenheiten."
       />
 
-      <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-4">
-        <StatCard
-          title="Offene Anträge"
-          value={pendingAbsences.length}
-          badge="Prüfen"
-          badgeVariant="warning"
-        />
+      <div className="rounded-3xl border border-[#D7DEE8] bg-[#EEF2F6] p-4 shadow-[0_6px_18px_rgba(15,23,42,0.08)] md:p-5">
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-4">
+          <StatCard
+            title="Offene Anträge"
+            value={pendingAbsences.length}
+            badge="Prüfen"
+            badgeVariant="warning"
+          />
 
-        <StatCard
-          title="Genehmigt"
-          value={approvedAbsences.length}
-          badge="Aktiv"
-          badgeVariant="success"
-        />
+          <StatCard
+            title="Genehmigt"
+            value={approvedAbsences.length}
+            badge="Aktiv"
+            badgeVariant="success"
+          />
 
-        <StatCard
-          title="Abgelehnt"
-          value={rejectedAbsences.length}
-          badge="Archiv"
-          badgeVariant="muted"
-        />
+          <StatCard
+            title="Abgelehnt"
+            value={rejectedAbsences.length}
+            badge="Archiv"
+            badgeVariant="muted"
+          />
 
-        <StatCard
-          title="Krankmeldungen"
-          value={sickAbsences.length}
-          badge="Info"
-          badgeVariant="danger"
-        />
+          <StatCard
+            title="Krankmeldungen"
+            value={sickAbsences.length}
+            badge="Info"
+            badgeVariant="danger"
+          />
+        </div>
       </div>
 
       <Section
         title="Abwesenheit eintragen"
         description="Trage eine Abwesenheit direkt für einen Mitarbeiter ein."
       >
+        <div className="rounded-3xl border border-[#D7DEE8] bg-[#EEF2F6] p-4 shadow-[0_6px_18px_rgba(15,23,42,0.07)] md:p-5">
         {absenceTypes.length === 0 ? (
           <EmptyState
             compact
@@ -1193,7 +1196,7 @@ export default function AbsencesPage() {
             </div>
 
             {type && (
-              <div className="mt-4 rounded-2xl border border-[#E2E8F0] bg-[#F8FAFC] px-4 py-3">
+              <div className="mt-4 rounded-2xl border border-[#CBD5E1] bg-[#E9EEF4] px-4 py-3 shadow-[0_4px_12px_rgba(15,23,42,0.06)]">
                 {(() => {
                   const selectedType =
                     getAbsenceTypeByCode(type);
@@ -1252,12 +1255,14 @@ export default function AbsencesPage() {
             </div>
           </>
         )}
+        </div>
       </Section>
 
       <Section
         title="Offene Anträge"
         description="Anträge, die noch genehmigt oder abgelehnt werden müssen."
       >
+        <div className="rounded-3xl border border-[#D7DEE8] bg-[#EEF2F6] p-4 shadow-[0_6px_18px_rgba(15,23,42,0.07)] md:p-5">
         {pendingAbsences.length > 0 ? (
           <>
             <div className="grid grid-cols-1 gap-4 xl:hidden">
@@ -1265,7 +1270,7 @@ export default function AbsencesPage() {
                 (absence) => (
                   <div
                     key={absence.id}
-                    className="rounded-3xl border border-[#E2E8F0] bg-[#F8FAFC] p-4 transition hover:-translate-y-0.5 hover:border-[#CBD5E1] hover:shadow-[0_16px_40px_rgba(15,23,42,0.08)]"
+                    className="rounded-3xl border border-[#CBD5E1] bg-[#EEF2F6] p-4 shadow-[0_8px_22px_rgba(15,23,42,0.10)] transition hover:-translate-y-0.5 hover:border-[#B8C4D1] hover:shadow-[0_14px_34px_rgba(15,23,42,0.14)]"
                   >
                     <div className="flex items-start justify-between gap-4">
                       <div>
@@ -1299,7 +1304,7 @@ export default function AbsencesPage() {
                     </div>
 
                     {absence.note?.trim() && (
-                      <div className="mt-4 rounded-2xl border border-[#E2E8F0] bg-white p-3">
+                      <div className="mt-4 rounded-2xl border border-[#D7DEE8] bg-white p-3 shadow-[0_3px_10px_rgba(15,23,42,0.06)]">
                         <p className="text-xs font-semibold uppercase tracking-wide text-[#94A3B8]">
                           Kommentar des Mitarbeiters
                         </p>
@@ -1466,12 +1471,14 @@ export default function AbsencesPage() {
             description="Sobald Mitarbeiter Abwesenheiten beantragen, erscheinen sie hier."
           />
         )}
+        </div>
       </Section>
 
       <Section
         title="Aktuelle Abwesenheiten"
         description="Genehmigte Abwesenheiten, die aktuell laufen oder noch bevorstehen."
       >
+        <div className="rounded-3xl border border-[#D7DEE8] bg-[#EEF2F6] p-4 shadow-[0_6px_18px_rgba(15,23,42,0.07)] md:p-5">
         <AbsenceList
           items={currentAbsences}
           formatType={formatType}
@@ -1479,12 +1486,14 @@ export default function AbsencesPage() {
           emptyTitle="Keine aktuellen Abwesenheiten"
           emptyDescription="Aktuell laufende oder bevorstehende genehmigte Abwesenheiten erscheinen hier."
         />
+        </div>
       </Section>
 
       <Section
         title="Verlauf"
         description="Vergangene und abgelehnte Abwesenheiten. Standardmäßig werden die neuesten acht Einträge angezeigt."
       >
+        <div className="rounded-3xl border border-[#D7DEE8] bg-[#EEF2F6] p-4 shadow-[0_6px_18px_rgba(15,23,42,0.07)] md:p-5">
         <AbsenceList
           items={visibleHistoryAbsences}
           formatType={formatType}
@@ -1509,6 +1518,7 @@ export default function AbsencesPage() {
             </Button>
           </div>
         )}
+        </div>
       </Section>
 
       <DiperaPopup

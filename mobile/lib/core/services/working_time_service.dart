@@ -62,34 +62,111 @@ class WorkingTimeMonth {
   final int totalBreakMinutes;
 }
 
-class TimeAccountOpeningBalance {
-  const TimeAccountOpeningBalance({
+class TimeAccountDashboard {
+  const TimeAccountDashboard({
     required this.employeeId,
-    required this.payrollPeriodId,
-    required this.snapshotId,
     required this.periodYear,
     required this.periodMonth,
+    required this.accountEnabled,
+    required this.accountStatus,
     required this.openingBalanceMinutes,
+    required this.fullTargetMinutes,
+    required this.currentTargetMinutes,
+    required this.futureTargetMinutes,
+    required this.workedMinutes,
+    required this.creditedMinutes,
+    required this.accountableMinutes,
+    required this.currentPeriodBalanceMinutes,
+    required this.currentBalanceMinutes,
+    required this.targetAchievedMinutes,
+    required this.targetDueMinutes,
+    required this.targetFutureMinutes,
+    required this.futurePlannedMinutes,
+    required this.projectionAvailable,
+    required this.projectedBalanceMinutes,
   });
 
   final String employeeId;
-  final String payrollPeriodId;
-  final String snapshotId;
   final int periodYear;
   final int periodMonth;
+
+  final bool accountEnabled;
+  final String accountStatus;
+
   final int openingBalanceMinutes;
 
-  factory TimeAccountOpeningBalance.fromJson(
+  final int fullTargetMinutes;
+  final int currentTargetMinutes;
+  final int futureTargetMinutes;
+
+  final int workedMinutes;
+  final int creditedMinutes;
+  final int accountableMinutes;
+
+  final int currentPeriodBalanceMinutes;
+  final int currentBalanceMinutes;
+
+  final int targetAchievedMinutes;
+  final int targetDueMinutes;
+  final int targetFutureMinutes;
+
+  final int futurePlannedMinutes;
+
+  final bool projectionAvailable;
+  final int? projectedBalanceMinutes;
+
+  factory TimeAccountDashboard.fromJson(
     Map<String, dynamic> json,
   ) {
-    return TimeAccountOpeningBalance(
-      employeeId: json['employee_id'] as String,
-      payrollPeriodId: json['payroll_period_id'] as String,
-      snapshotId: json['snapshot_id'] as String,
-      periodYear: (json['period_year'] as num).toInt(),
-      periodMonth: (json['period_month'] as num).toInt(),
+    int readInt(String key) {
+      final value = json[key];
+
+      if (value is num) {
+        return value.toInt();
+      }
+
+      return int.tryParse(value?.toString() ?? '') ?? 0;
+    }
+
+    return TimeAccountDashboard(
+      employeeId: json['employee_id']?.toString() ?? '',
+      periodYear: readInt('period_year'),
+      periodMonth: readInt('period_month'),
+      accountEnabled: json['account_enabled'] == true,
+      accountStatus:
+          json['account_status']?.toString() ?? 'unknown',
       openingBalanceMinutes:
-          (json['opening_balance_minutes'] as num).toInt(),
+          readInt('opening_balance_minutes'),
+      fullTargetMinutes:
+          readInt('full_target_minutes'),
+      currentTargetMinutes:
+          readInt('current_target_minutes'),
+      futureTargetMinutes:
+          readInt('future_target_minutes'),
+      workedMinutes:
+          readInt('worked_minutes'),
+      creditedMinutes:
+          readInt('credited_minutes'),
+      accountableMinutes:
+          readInt('accountable_minutes'),
+      currentPeriodBalanceMinutes:
+          readInt('current_period_balance_minutes'),
+      currentBalanceMinutes:
+          readInt('current_balance_minutes'),
+      targetAchievedMinutes:
+          readInt('target_achieved_minutes'),
+      targetDueMinutes:
+          readInt('target_due_minutes'),
+      targetFutureMinutes:
+          readInt('target_future_minutes'),
+      futurePlannedMinutes:
+          readInt('future_planned_minutes'),
+      projectionAvailable:
+          json['projection_available'] == true,
+      projectedBalanceMinutes:
+          json['projected_balance_minutes'] == null
+              ? null
+              : readInt('projected_balance_minutes'),
     );
   }
 }
@@ -99,10 +176,10 @@ class WorkingTimeService {
 
   final SupabaseClient _client;
 
-  Future<TimeAccountOpeningBalance>
-      getCurrentTimeAccountOpeningBalance() async {
+  Future<TimeAccountDashboard>
+      getCurrentTimeAccountDashboard() async {
     final data = await _client.rpc(
-      'get_my_current_time_account_opening_balance',
+      'get_my_current_time_account_dashboard',
     );
 
     if (data is! List || data.isEmpty) {
@@ -115,7 +192,7 @@ class WorkingTimeService {
       data.first as Map,
     );
 
-    return TimeAccountOpeningBalance.fromJson(row);
+    return TimeAccountDashboard.fromJson(row);
   }
 
   Future<WorkingTimeMonth> getMonth({
@@ -146,7 +223,9 @@ class WorkingTimeService {
         id: map['id'] as String,
         employeeId: map['employee_id'] as String,
         action: map['action'] as String,
-        createdAt: DateTime.parse(map['created_at'] as String).toLocal(),
+        createdAt: DateTime.parse(
+          map['created_at'] as String,
+        ).toLocal(),
       );
     }).toList();
 
@@ -160,7 +239,10 @@ class WorkingTimeService {
           '${local.month.toString().padLeft(2, '0')}-'
           '${local.day.toString().padLeft(2, '0')}';
 
-      grouped.putIfAbsent(key, () => <WorkingTimeEntry>[]);
+      grouped.putIfAbsent(
+        key,
+        () => <WorkingTimeEntry>[],
+      );
 
       grouped[key]!.add(entry);
     }
@@ -169,8 +251,11 @@ class WorkingTimeService {
 
     for (final group in grouped.entries) {
       final date = DateTime.parse(group.key);
+
       final dayEntries = [...group.value]
-        ..sort((a, b) => a.createdAt.compareTo(b.createdAt));
+        ..sort(
+          (a, b) => a.createdAt.compareTo(b.createdAt),
+        );
 
       final calculation = _calculateDay(dayEntries);
 
@@ -185,7 +270,9 @@ class WorkingTimeService {
       );
     }
 
-    days.sort((a, b) => b.date.compareTo(a.date));
+    days.sort(
+      (a, b) => b.date.compareTo(a.date),
+    );
 
     final totalWorkedMinutes = days.fold<int>(
       0,
@@ -204,7 +291,9 @@ class WorkingTimeService {
     );
   }
 
-  _DayCalculation _calculateDay(List<WorkingTimeEntry> entries) {
+  _DayCalculation _calculateDay(
+    List<WorkingTimeEntry> entries,
+  ) {
     var workedMinutes = 0;
     var breakMinutes = 0;
 
@@ -230,7 +319,8 @@ class WorkingTimeService {
             break;
           }
 
-          workedMinutes += entry.createdAt.difference(workStart).inMinutes;
+          workedMinutes +=
+              entry.createdAt.difference(workStart).inMinutes;
 
           workStart = null;
           breakStart = entry.createdAt;
@@ -242,7 +332,8 @@ class WorkingTimeService {
             break;
           }
 
-          breakMinutes += entry.createdAt.difference(breakStart).inMinutes;
+          breakMinutes +=
+              entry.createdAt.difference(breakStart).inMinutes;
 
           breakStart = null;
           workStart = entry.createdAt;
@@ -254,7 +345,8 @@ class WorkingTimeService {
             break;
           }
 
-          workedMinutes += entry.createdAt.difference(workStart).inMinutes;
+          workedMinutes +=
+              entry.createdAt.difference(workStart).inMinutes;
 
           workStart = null;
           breakStart = null;
@@ -263,11 +355,15 @@ class WorkingTimeService {
     }
 
     final isComplete =
-        !invalidSequence && workStart == null && breakStart == null;
+        !invalidSequence &&
+        workStart == null &&
+        breakStart == null;
 
     return _DayCalculation(
-      workedMinutes: workedMinutes < 0 ? 0 : workedMinutes,
-      breakMinutes: breakMinutes < 0 ? 0 : breakMinutes,
+      workedMinutes:
+          workedMinutes < 0 ? 0 : workedMinutes,
+      breakMinutes:
+          breakMinutes < 0 ? 0 : breakMinutes,
       isComplete: isComplete,
     );
   }

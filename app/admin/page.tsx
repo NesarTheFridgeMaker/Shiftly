@@ -1,32 +1,33 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
+  AlertTriangle,
   ArrowRight,
   BookOpen,
   CalendarDays,
   CheckCircle2,
+  CirclePause,
   Clock3,
+  Euro,
   Headphones,
   Mail,
   MessageSquare,
   PlayCircle,
   Users,
-  Video,
 } from "lucide-react";
+
 import { supabase } from "@/lib/supabaseClient";
 import { getBusinessId } from "@/lib/getBusinessId";
+
 import Card from "@/components/ui/Card";
 import CardHeader from "@/components/ui/CardHeader";
 import CardBody from "@/components/ui/CardBody";
 import Badge from "@/components/ui/Badge";
 import Button from "@/components/ui/Button";
 import Skeleton from "@/components/ui/Skeleton";
-import StatsSkeleton from "@/components/skeletons/StatsSkeleton";
 import { useToast } from "@/components/ui/ToastProvider";
 
-// Dashboard data is intentionally lightweight: it gives the admin a fast daily overview
-// without turning the dashboard into a reporting module.
 type Employee = {
   id: string;
   name: string;
@@ -41,208 +42,286 @@ type Shift = {
   shift_date: string;
   start_time: string;
   end_time: string;
+  planned_break_minutes?: number | null;
+  is_published?: boolean;
 };
+
+type PayrollOverviewRow = {
+  employee_id: string;
+  employee_name: string;
+  period_status: string;
+  worked_minutes: number;
+  total_surcharge_gross: number;
+  overtime_gross: number;
+  base_gross: number;
+  estimated_gross: number;
+};
+
+type PendingAbsence = {
+  id: string;
+};
+
+type OpenConflict = {
+  conflict_id: string;
+};
+
+type OpenComplianceWarning = {
+  id: string;
+};
+
+function getMonthRange() {
+  const now = new Date();
+
+  const year = now.getFullYear();
+  const month = now.getMonth() + 1;
+
+  const start = `${year}-${String(month).padStart(2, "0")}-01`;
+
+  const nextMonthDate = new Date(year, month, 1);
+  const nextYear = nextMonthDate.getFullYear();
+  const nextMonth = nextMonthDate.getMonth() + 1;
+
+  const endExclusive = `${nextYear}-${String(nextMonth).padStart(2, "0")}-01`;
+
+  return {
+    year,
+    month,
+    start,
+    endExclusive,
+  };
+}
+
+function formatCurrency(value: number) {
+  return new Intl.NumberFormat("de-DE", {
+    style: "currency",
+    currency: "EUR",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(value);
+}
+
+function formatHoursFromMinutes(minutes: number) {
+  const hours = minutes / 60;
+
+  return new Intl.NumberFormat("de-DE", {
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 1,
+  }).format(hours);
+}
+
+function timeToMinutes(time: string) {
+  const [hours, minutes] = time.slice(0, 5).split(":").map(Number);
+  return hours * 60 + minutes;
+}
+
+function getPlannedNetMinutes(shift: Shift) {
+  let start = timeToMinutes(shift.start_time);
+  let end = timeToMinutes(shift.end_time);
+
+  if (end <= start) {
+    end += 24 * 60;
+  }
+
+  return Math.max(
+    0,
+    end - start - Math.max(0, Number(shift.planned_break_minutes ?? 0)),
+  );
+}
 
 export default function AdminPage() {
   const { showToast } = useToast();
 
   const [isLoading, setIsLoading] = useState(true);
+
   const [businessName, setBusinessName] = useState("");
-  const [employees, setEmployees] = useState<Employee[]>([]);
-  const [shifts, setShifts] = useState<Shift[]>([]);
-  const [myShifts, setMyShifts] = useState<Shift[]>([]);
-  const [adminEmployeeId, setAdminEmployeeId] = useState("");
   const [adminName, setAdminName] = useState("");
+
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [todayShifts, setTodayShifts] = useState<Shift[]>([]);
+  const [monthShifts, setMonthShifts] = useState<Shift[]>([]);
+  const [payrollRows, setPayrollRows] = useState<PayrollOverviewRow[]>([]);
+
+  const [pendingAbsenceCount, setPendingAbsenceCount] = useState(0);
+  const [openConflictCount, setOpenConflictCount] = useState(0);
+  const [openComplianceCount, setOpenComplianceCount] = useState(0);
+
   const [workTypesCount, setWorkTypesCount] = useState(0);
   const [shiftTemplatesCount, setShiftTemplatesCount] = useState(0);
   const [payRulesCount, setPayRulesCount] = useState(0);
   const [timeEntriesCount, setTimeEntriesCount] = useState(0);
 
-  async function loadAdminProfile() {
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) return;
-
-    const { data, error } = await supabase
-      .from("profiles")
-      .select("employee_id")
-      .eq("id", user.id)
-      .single();
-
-    if (error) {
-      console.error(error);
-      return;
-    }
-
-    if (data?.employee_id) {
-      setAdminEmployeeId(data.employee_id);
-      await loadMyShifts(data.employee_id);
-
-      const { data: employeeData, error: employeeError } = await supabase
-        .from("employees")
-        .select("name")
-        .eq("id", data.employee_id)
-        .single();
-
-      if (employeeError) {
-        console.error(employeeError);
-        return;
-      }
-
-      if (employeeData?.name) {
-        setAdminName(employeeData.name);
-      }
-    }
-  }
-
-  async function loadEmployees() {
-    const businessId = await getBusinessId();
-
-    if (!businessId) return;
-
-    const { data, error } = await supabase
-      .from("employees")
-      .select("id, name, status, account_status")
-      .eq("business_id", businessId)
-      .eq("account_status", "active");
-
-    if (error) {
-      console.error(error);
-      return;
-    }
-
-    setEmployees(data || []);
-  }
-
-  async function loadShifts() {
-    const businessId = await getBusinessId();
-
-    if (!businessId) return;
-
-    const today = new Date().toLocaleDateString("en-CA");
-
-    const { data, error } = await supabase
-      .from("shifts")
-      .select("*")
-      .eq("business_id", businessId)
-      .eq("shift_date", today)
-      .order("start_time", { ascending: true });
-
-    if (error) {
-      console.error(error);
-      return;
-    }
-
-    setShifts(data || []);
-  }
-
-  async function loadMyShifts(employeeId: string) {
-    const businessId = await getBusinessId();
-
-    if (!businessId) return;
-
-    const today = new Date().toLocaleDateString("en-CA");
-
-    const { data, error } = await supabase
-      .from("shifts")
-      .select("*")
-      .eq("business_id", businessId)
-      .eq("employee_id", employeeId)
-      .gte("shift_date", today)
-      .order("shift_date", { ascending: true })
-      .order("start_time", { ascending: true })
-      .limit(5);
-
-    if (error) {
-      console.error(error);
-      return;
-    }
-
-    setMyShifts(data || []);
-  }
-
-  async function loadBusinessName() {
-    const businessId = await getBusinessId();
-
-    if (!businessId) return;
-
-    const { data, error } = await supabase
-      .from("businesses")
-      .select("name")
-      .eq("id", businessId)
-      .single();
-
-    if (error) {
-      console.error(error);
-      return;
-    }
-
-    if (data) {
-      setBusinessName(data.name);
-    }
-  }
-
-  async function loadOnboardingStatus() {
-    const businessId = await getBusinessId();
-
-    if (!businessId) return;
-
-    const [
-      workTypesResult,
-      shiftTemplatesResult,
-      payRulesResult,
-      timeEntriesResult,
-    ] = await Promise.all([
-      supabase
-        .from("work_types")
-        .select("id", { count: "exact", head: true })
-        .eq("business_id", businessId),
-      supabase
-        .from("shift_templates")
-        .select("id", { count: "exact", head: true })
-        .eq("business_id", businessId),
-      supabase
-        .from("pay_rules")
-        .select("id", { count: "exact", head: true })
-        .eq("business_id", businessId),
-      supabase
-        .from("time_entries")
-        .select("id", { count: "exact", head: true })
-        .eq("business_id", businessId),
-    ]);
-
-    if (!workTypesResult.error) {
-      setWorkTypesCount(workTypesResult.count ?? 0);
-    }
-
-    if (!shiftTemplatesResult.error) {
-      setShiftTemplatesCount(shiftTemplatesResult.count ?? 0);
-    }
-
-    if (!payRulesResult.error) {
-      setPayRulesCount(payRulesResult.count ?? 0);
-    }
-
-    if (!timeEntriesResult.error) {
-      setTimeEntriesCount(timeEntriesResult.count ?? 0);
-    }
-  }
-
   async function loadDashboard() {
     setIsLoading(true);
 
     try {
-      await Promise.all([
-        loadEmployees(),
-        loadShifts(),
-        loadAdminProfile(),
-        loadBusinessName(),
-        loadOnboardingStatus(),
+      const businessId = await getBusinessId();
+
+      if (!businessId) {
+        throw new Error("Kein Betrieb gefunden.");
+      }
+
+      const today = new Date().toLocaleDateString("en-CA");
+      const monthRange = getMonthRange();
+
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      const [
+        businessResult,
+        employeeResult,
+        todayShiftResult,
+        monthShiftResult,
+        payrollResult,
+        pendingAbsenceResult,
+        conflictResult,
+        complianceResult,
+        workTypesResult,
+        shiftTemplatesResult,
+        payRulesResult,
+        timeEntriesResult,
+        profileResult,
+      ] = await Promise.all([
+        supabase
+          .from("businesses")
+          .select("name")
+          .eq("id", businessId)
+          .single(),
+
+        supabase
+          .from("employees")
+          .select("id, name, status, account_status")
+          .eq("business_id", businessId)
+          .eq("account_status", "active")
+          .order("name", { ascending: true }),
+
+        supabase
+          .from("shifts")
+          .select(
+            "id, employee_id, employee_name, shift_date, start_time, end_time, planned_break_minutes, is_published",
+          )
+          .eq("business_id", businessId)
+          .eq("shift_date", today)
+          .order("start_time", { ascending: true }),
+
+        supabase
+          .from("shifts")
+          .select(
+            "id, employee_id, employee_name, shift_date, start_time, end_time, planned_break_minutes, is_published",
+          )
+          .eq("business_id", businessId)
+          .gte("shift_date", monthRange.start)
+          .lt("shift_date", monthRange.endExclusive),
+
+        supabase.rpc("get_business_month_work_pay_overview", {
+          p_year: monthRange.year,
+          p_month: monthRange.month,
+        }),
+
+        supabase
+          .from("absences")
+          .select("id", { count: "exact", head: true })
+          .eq("business_id", businessId)
+          .eq("request_status", "pending"),
+
+        supabase
+          .from("admin_time_conflicts")
+          .select("conflict_id", { count: "exact", head: true })
+          .eq("business_id", businessId)
+          .eq("status", "open"),
+
+        supabase
+          .from("time_compliance_warnings")
+          .select("id", { count: "exact", head: true })
+          .eq("business_id", businessId)
+          .eq("status", "open"),
+
+        supabase
+          .from("work_types")
+          .select("id", { count: "exact", head: true })
+          .eq("business_id", businessId),
+
+        supabase
+          .from("shift_templates")
+          .select("id", { count: "exact", head: true })
+          .eq("business_id", businessId),
+
+        supabase
+          .from("pay_rules")
+          .select("id", { count: "exact", head: true })
+          .eq("business_id", businessId),
+
+        supabase
+          .from("time_entries")
+          .select("id", { count: "exact", head: true })
+          .eq("business_id", businessId),
+
+        user
+          ? supabase
+              .from("profiles")
+              .select("employee_id")
+              .eq("id", user.id)
+              .single()
+          : Promise.resolve({ data: null, error: null }),
       ]);
+
+      if (businessResult.error) {
+        console.error("DASHBOARD BUSINESS ERROR:", businessResult.error);
+      } else {
+        setBusinessName(businessResult.data?.name || "");
+      }
+
+      if (employeeResult.error) {
+        console.error("DASHBOARD EMPLOYEES ERROR:", employeeResult.error);
+      } else {
+        setEmployees((employeeResult.data || []) as Employee[]);
+      }
+
+      if (todayShiftResult.error) {
+        console.error("DASHBOARD TODAY SHIFTS ERROR:", todayShiftResult.error);
+      } else {
+        setTodayShifts((todayShiftResult.data || []) as Shift[]);
+      }
+
+      if (monthShiftResult.error) {
+        console.error("DASHBOARD MONTH SHIFTS ERROR:", monthShiftResult.error);
+      } else {
+        setMonthShifts((monthShiftResult.data || []) as Shift[]);
+      }
+
+      if (payrollResult.error) {
+        console.error("DASHBOARD PAYROLL ERROR:", payrollResult.error);
+        setPayrollRows([]);
+      } else {
+        setPayrollRows((payrollResult.data || []) as PayrollOverviewRow[]);
+      }
+
+      setPendingAbsenceCount(pendingAbsenceResult.count ?? 0);
+      setOpenConflictCount(conflictResult.count ?? 0);
+      setOpenComplianceCount(complianceResult.count ?? 0);
+
+      setWorkTypesCount(workTypesResult.count ?? 0);
+      setShiftTemplatesCount(shiftTemplatesResult.count ?? 0);
+      setPayRulesCount(payRulesResult.count ?? 0);
+      setTimeEntriesCount(timeEntriesResult.count ?? 0);
+
+      if (profileResult.data?.employee_id) {
+        const { data: adminEmployee, error: adminEmployeeError } =
+          await supabase
+            .from("employees")
+            .select("name")
+            .eq("id", profileResult.data.employee_id)
+            .maybeSingle();
+
+        if (adminEmployeeError) {
+          console.error("DASHBOARD ADMIN NAME ERROR:", adminEmployeeError);
+        } else {
+          setAdminName(adminEmployee?.name || "");
+        }
+      }
     } catch (error) {
-      console.error(error);
+      console.error("DASHBOARD LOAD ERROR:", error);
+
       showToast({
         type: "error",
         title: "Dashboard konnte nicht geladen werden",
@@ -254,23 +333,15 @@ export default function AdminPage() {
   }
 
   useEffect(() => {
-    loadDashboard();
+    void loadDashboard();
   }, []);
-
-  function formatShiftDate(dateString: string) {
-    return new Date(dateString).toLocaleDateString("de-DE", {
-      weekday: "short",
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-    });
-  }
 
   function getGreeting() {
     const hour = new Date().getHours();
 
     if (hour < 11) return "Guten Morgen";
     if (hour < 18) return "Guten Tag";
+
     return "Guten Abend";
   }
 
@@ -291,15 +362,53 @@ export default function AdminPage() {
     });
   }
 
-  const activeEmployees = employees.filter(
-    (employee) => employee.status === "checked_in"
+  const checkedInEmployees = useMemo(
+    () => employees.filter((employee) => employee.status === "checked_in"),
+    [employees],
   );
 
-  const employeesOnBreak = employees.filter(
-    (employee) => employee.status === "on_break"
+  const employeesOnBreak = useMemo(
+    () => employees.filter((employee) => employee.status === "on_break"),
+    [employees],
   );
 
-  const todayShiftCount = shifts.length;
+  const payrollTotals = useMemo(() => {
+    return payrollRows.reduce(
+      (totals, row) => {
+        totals.gross += Number(row.estimated_gross ?? 0);
+        totals.workedMinutes += Number(row.worked_minutes ?? 0);
+        totals.surcharges +=
+          Number(row.total_surcharge_gross ?? 0) +
+          Number(row.overtime_gross ?? 0);
+
+        return totals;
+      },
+      {
+        gross: 0,
+        workedMinutes: 0,
+        surcharges: 0,
+      },
+    );
+  }, [payrollRows]);
+
+  const plannedMonthMinutes = useMemo(
+    () =>
+      monthShifts.reduce(
+        (total, shift) => total + getPlannedNetMinutes(shift),
+        0,
+      ),
+    [monthShifts],
+  );
+
+  const unpublishedMonthShifts = useMemo(
+    () => monthShifts.filter((shift) => !shift.is_published).length,
+    [monthShifts],
+  );
+
+  const openTasks =
+    pendingAbsenceCount +
+    openConflictCount +
+    openComplianceCount;
 
   const checklistItems = [
     {
@@ -317,7 +426,7 @@ export default function AdminPage() {
     {
       title: "Schichtplanung erstellen",
       description: "Plane die ersten Schichten und veröffentliche sie.",
-      done: shifts.length > 0,
+      done: monthShifts.length > 0,
       href: "/admin/schedule",
     },
     {
@@ -327,16 +436,17 @@ export default function AdminPage() {
       href: "/kiosk",
     },
     {
-      title: "Ersten Export durchführen",
-      description: "Exportiere Arbeitszeiten für deine Lohnabrechnung.",
-      done: false,
-      href: "/admin/time-entries",
+      title: "Abrechnung prüfen",
+      description: "Prüfe Arbeitszeiten und Monatsabrechnung.",
+      done: payrollRows.length > 0,
+      href: "/admin/payroll",
     },
   ];
 
   const completedChecklistItems = checklistItems.filter((item) => item.done).length;
+
   const onboardingProgress = Math.round(
-    (completedChecklistItems / checklistItems.length) * 100
+    (completedChecklistItems / checklistItems.length) * 100,
   );
 
   if (isLoading) {
@@ -352,215 +462,237 @@ export default function AdminPage() {
           </p>
 
           <h1 className="text-[2.4rem] font-light leading-tight tracking-[-0.04em] text-[#0F172A]">
-            {getGreeting()}{adminName ? `, ${adminName.split(" ")[0]}` : ""}! 👋
+            {getGreeting()}
+            {adminName ? `, ${adminName.split(" ")[0]}` : ""}! 👋
           </h1>
 
           <p className="mt-3 max-w-2xl text-sm leading-7 text-[#64748B]">
             {businessName
-              ? `Hier ist die Übersicht für ${businessName}.`
-              : "Hier ist alles im Überblick."}
+              ? `Hier ist der aktuelle Überblick für ${businessName}.`
+              : "Hier siehst du die wichtigsten Betriebsdaten auf einen Blick."}
           </p>
         </div>
 
-        <div className="inline-flex w-fit items-center gap-2 rounded-2xl border border-[#E2E8F0] bg-white px-4 py-3 text-sm text-[#64748B] shadow-sm">
+        <div className="inline-flex w-fit items-center gap-2 rounded-2xl border border-[#CBD5E1] bg-[#EEF2F6] px-4 py-3 text-sm text-[#64748B] shadow-[0_4px_12px_rgba(15,23,42,0.07)]">
           <CalendarDays className="h-4 w-4 text-[#2563EB]" />
           {getTodayLabel()}
         </div>
       </div>
 
-      <section className="relative overflow-hidden rounded-[32px] border border-[#BFDBFE] bg-white shadow-[0_20px_60px_rgba(37,99,235,0.10)] transition hover:shadow-[0_24px_70px_rgba(37,99,235,0.14)]">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_70%_20%,rgba(37,99,235,0.18),transparent_35%),linear-gradient(120deg,#FFFFFF_0%,#EFF6FF_100%)]" />
-        <div className="relative grid grid-cols-1 gap-8 p-8 lg:grid-cols-[1.1fr_0.9fr] lg:p-10">
-          <div className="flex flex-col justify-center">
-            <Badge variant="primary" className="w-fit" dot>
-              Willkommen bei Dipera
-            </Badge>
+      <div className="rounded-3xl border border-[#D7DEE8] bg-[#EEF2F6] p-4 shadow-[0_6px_18px_rgba(15,23,42,0.08)] md:p-5">
+        <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-[1fr_1fr_1fr_1.35fr_1fr_1fr]">
+          <KpiCard
+            icon={<Users className="h-5 w-5" />}
+            title="Aktive Mitarbeiter"
+            value={employees.length}
+            subtitle="Aktive Konten"
+            iconClassName="bg-[#E8F2FB] text-[#2563EB]"
+          />
 
-            <h2 className="mt-5 max-w-2xl text-4xl font-light leading-tight tracking-[-0.04em] text-[#0F172A] lg:text-5xl">
-              Vereinfache deine Personalplanung & Zeiterfassung
-            </h2>
+          <KpiCard
+            icon={<Clock3 className="h-5 w-5" />}
+            title="Eingestempelt"
+            value={checkedInEmployees.length}
+            subtitle="Aktuell im Dienst"
+            iconClassName="bg-[#ECFDF5] text-[#047857]"
+          />
 
-            <p className="mt-5 max-w-xl text-base leading-7 text-[#475569]">
-              Verwalte Mitarbeiter, Schichten und Arbeitszeiten effizient an einem
-              Ort – ruhig, übersichtlich und startklar für deinen Betrieb.
-            </p>
+          <KpiCard
+            icon={<CirclePause className="h-5 w-5" />}
+            title="In Pause"
+            value={employeesOnBreak.length}
+            subtitle="Aktuell pausierend"
+            iconClassName="bg-[#FFF8E8] text-[#B45309]"
+          />
 
-            <div className="mt-7 flex flex-col gap-3 sm:flex-row">
+          <KpiCard
+            icon={<Euro className="h-5 w-5" />}
+            title="Bruttolohn bisher"
+            value={formatCurrency(payrollTotals.gross)}
+            subtitle="Aktueller Monat"
+            iconClassName="bg-[#F5F3FF] text-[#7C3AED]"
+            compact
+          />
+
+          <KpiCard
+            icon={<CalendarDays className="h-5 w-5" />}
+            title="Schichten im Monat"
+            value={monthShifts.length}
+            subtitle={`${formatHoursFromMinutes(plannedMonthMinutes)} Std. geplant`}
+            iconClassName="bg-[#EFF6FF] text-[#2563EB]"
+          />
+
+          <KpiCard
+            icon={<AlertTriangle className="h-5 w-5" />}
+            title="Offene Aufgaben"
+            value={openTasks}
+            subtitle="Anträge & Prüfungen"
+            iconClassName="bg-[#FEF2F2] text-[#B91C1C]"
+          />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1.15fr_0.85fr]">
+        <Card>
+          <CardHeader
+            title="Aktueller Personalstatus"
+            description="Wer arbeitet gerade und wer befindet sich in Pause?"
+          />
+
+          <CardBody>
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <DashboardStatusPanel
+                title="Eingestempelt"
+                count={checkedInEmployees.length}
+                badgeVariant="success"
+                items={checkedInEmployees.map((employee) => employee.name)}
+                emptyText="Aktuell ist niemand eingestempelt."
+              />
+
+              <DashboardStatusPanel
+                title="In Pause"
+                count={employeesOnBreak.length}
+                badgeVariant="warning"
+                items={employeesOnBreak.map((employee) => employee.name)}
+                emptyText="Aktuell befindet sich niemand in Pause."
+              />
+            </div>
+          </CardBody>
+        </Card>
+
+        <Card>
+          <CardHeader
+            title="Offene Vorgänge"
+            description="Dinge, die deine Aufmerksamkeit benötigen."
+          />
+
+          <CardBody>
+            <div className="space-y-3">
+              <QuickTaskRow
+                label="Abwesenheitsanträge"
+                value={pendingAbsenceCount}
+                href="/admin/absences"
+              />
+
+              <QuickTaskRow
+                label="Zeitkonflikte"
+                value={openConflictCount}
+                href="/admin/corrections"
+              />
+
+              <QuickTaskRow
+                label="Arbeitszeit-Warnungen"
+                value={openComplianceCount}
+                href="/admin/corrections"
+              />
+
+              <QuickTaskRow
+                label="Unveröffentlichte Monatsschichten"
+                value={unpublishedMonthShifts}
+                href="/admin/schedule"
+              />
+            </div>
+          </CardBody>
+        </Card>
+      </div>
+
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+        <Card>
+          <CardHeader
+            title="Monat auf einen Blick"
+            description="Aktueller Planungs- und Kostenstand."
+          />
+
+          <CardBody>
+            <div className="grid grid-cols-2 gap-4">
+              <MiniMetric
+                label="Bruttolohn bisher"
+                value={formatCurrency(payrollTotals.gross)}
+              />
+
+              <MiniMetric
+                label="Zuschläge & Überstunden"
+                value={formatCurrency(payrollTotals.surcharges)}
+              />
+
+              <MiniMetric
+                label="Arbeitszeit bisher"
+                value={`${formatHoursFromMinutes(payrollTotals.workedMinutes)} Std.`}
+              />
+
+              <MiniMetric
+                label="Geplante Nettozeit"
+                value={`${formatHoursFromMinutes(plannedMonthMinutes)} Std.`}
+              />
+            </div>
+
+            <div className="mt-5 flex flex-wrap gap-2">
               <Button
                 type="button"
-                variant="primary"
-                onClick={() => showPlaceholderToast("Anleitungen & Video-Tutorials")}
-                className="h-12 rounded-2xl px-6"
+                variant="secondary"
+                size="sm"
+                onClick={() => {
+                  window.location.href = "/admin/time-entries";
+                }}
               >
-                <Video className="h-5 w-5" />
-                Anleitungen & Video-Tutorials
-                <ArrowRight className="h-4 w-4" />
+                Arbeitszeiten
               </Button>
 
               <Button
                 type="button"
                 variant="secondary"
-                onClick={() => showPlaceholderToast("Kontakt & Support")}
-                className="h-12 rounded-2xl px-6"
+                size="sm"
+                onClick={() => {
+                  window.location.href = "/admin/payroll";
+                }}
               >
-                <Headphones className="h-5 w-5 text-[#2563EB]" />
-                Kontakt & Support
-                <ArrowRight className="h-4 w-4" />
+                Abrechnung
               </Button>
             </div>
-          </div>
+          </CardBody>
+        </Card>
 
-          <div className="relative hidden min-h-[260px] items-end justify-center lg:flex">
-            <div className="absolute right-0 top-0 h-28 w-28 rounded-full bg-[#DBEAFE] blur-2xl" />
-            <div className="absolute bottom-0 right-6 h-36 w-20 rounded-t-full bg-[#DCFCE7] opacity-70" />
-
-            <div className="relative w-full max-w-md rounded-[28px] border border-[#CBD5E1] bg-[#0F172A] p-3 shadow-[0_30px_70px_rgba(15,23,42,0.28)]">
-              <div className="rounded-[20px] bg-white p-4">
-                <div className="mb-4 flex items-center justify-between">
-                  <div>
-                    <div className="h-3 w-20 rounded-full bg-[#2563EB]" />
-                    <div className="mt-2 h-2 w-32 rounded-full bg-[#E2E8F0]" />
-                  </div>
-                  <div className="flex gap-1">
-                    <span className="h-2 w-2 rounded-full bg-[#CBD5E1]" />
-                    <span className="h-2 w-2 rounded-full bg-[#CBD5E1]" />
-                    <span className="h-2 w-2 rounded-full bg-[#CBD5E1]" />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-3 gap-2">
-                  <div className="rounded-2xl bg-[#EFF6FF] p-3">
-                    <div className="h-8 w-8 rounded-xl bg-[#2563EB]" />
-                    <div className="mt-3 h-2 w-14 rounded-full bg-[#BFDBFE]" />
-                  </div>
-                  <div className="rounded-2xl bg-[#F0FDF4] p-3">
-                    <div className="h-8 w-8 rounded-xl bg-[#16A34A]" />
-                    <div className="mt-3 h-2 w-14 rounded-full bg-[#BBF7D0]" />
-                  </div>
-                  <div className="rounded-2xl bg-[#FFF7ED] p-3">
-                    <div className="h-8 w-8 rounded-xl bg-[#F59E0B]" />
-                    <div className="mt-3 h-2 w-14 rounded-full bg-[#FED7AA]" />
-                  </div>
-                </div>
-
-                <div className="mt-4 rounded-2xl border border-[#E2E8F0] p-3">
-                  <div className="mb-3 flex items-end gap-2">
-                    {[36, 54, 42, 68, 58, 82, 74].map((height, index) => (
-                      <div
-                        key={index}
-                        className="w-full rounded-t-lg bg-[#2563EB]/80"
-                        style={{ height }}
-                      />
-                    ))}
-                  </div>
-                  <div className="h-2 w-full rounded-full bg-[#E2E8F0]" />
-                </div>
-              </div>
-            </div>
-
-            <div className="absolute bottom-6 right-0 w-28 rounded-[24px] border border-[#DBEAFE] bg-white p-3 shadow-[0_20px_45px_rgba(37,99,235,0.18)]">
-              <div className="mx-auto h-9 w-9 rounded-2xl bg-[#2563EB]" />
-              <div className="mt-3 h-2 rounded-full bg-[#E2E8F0]" />
-              <div className="mt-2 h-2 w-16 rounded-full bg-[#E2E8F0]" />
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-4">
-        <KpiCard
-          icon={<Users className="h-6 w-6" />}
-          title="Mitarbeiter"
-          value={employees.length}
-          subtitle="Aktive Konten"
-          iconClassName="bg-[#EFF6FF] text-[#2563EB]"
-        />
-
-        <KpiCard
-          icon={<Clock3 className="h-6 w-6" />}
-          title="Heute eingestempelt"
-          value={activeEmployees.length}
-          subtitle={`${employeesOnBreak.length} aktuell in Pause`}
-          iconClassName="bg-[#F0FDF4] text-[#16A34A]"
-        />
-
-        <KpiCard
-          icon={<CalendarDays className="h-6 w-6" />}
-          title="Geplante Schichten"
-          value={todayShiftCount}
-          subtitle="Heute"
-          iconClassName="bg-[#F5F3FF] text-[#7C3AED]"
-        />
-
-        <KpiCard
-          icon={<MessageSquare className="h-6 w-6" />}
-          title="Offene Aufgaben"
-          value={checklistItems.filter((item) => !item.done).length}
-          subtitle="Einrichtung & Prüfung"
-          iconClassName="bg-[#FFF7ED] text-[#F97316]"
-        />
-      </div>
-
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-        {adminEmployeeId && (
-          <Card hover>
-            <CardHeader
-              title="Meine Schichten"
-              description="Deine nächsten geplanten Einsätze."
-            />
-
-            <CardBody>
-              {myShifts.length > 0 ? (
-                <div className="divide-y divide-[#E2E8F0]">
-                  {myShifts.map((shift) => (
-                    <div
-                      key={shift.id}
-                      className="flex flex-col gap-1 py-4 first:pt-0 last:pb-0 xl:flex-row xl:items-center xl:justify-between"
-                    >
-                      <span className="text-sm font-medium text-[#0F172A]">
-                        {formatShiftDate(shift.shift_date)}
-                      </span>
-
-                      <span className="text-sm text-[#64748B]">
-                        {shift.start_time.slice(0, 5)} – {" "}
-                        {shift.end_time.slice(0, 5)}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <EmptyDashboardText>
-                  Für dich sind keine kommenden Schichten eingetragen.
-                </EmptyDashboardText>
-              )}
-            </CardBody>
-          </Card>
-        )}
-
-        <Card hover>
+        <Card>
           <CardHeader
-            title="Wer arbeitet heute?"
-            description="Alle für heute geplanten Schichten."
+            title="Heute geplant"
+            description="Schichten für den heutigen Tag."
           />
 
           <CardBody>
-            {shifts.length > 0 ? (
-              <div className="divide-y divide-[#E2E8F0]">
-                {shifts.map((shift) => (
+            {todayShifts.length > 0 ? (
+              <div className="space-y-2">
+                {todayShifts.slice(0, 6).map((shift) => (
                   <div
                     key={shift.id}
-                    className="flex flex-col gap-1 py-4 first:pt-0 last:pb-0 xl:flex-row xl:items-center xl:justify-between"
+                    className="flex items-center justify-between gap-4 rounded-2xl border border-[#CBD5E1] bg-[#EEF2F6] px-4 py-3 shadow-[0_3px_10px_rgba(15,23,42,0.05)]"
                   >
-                    <span className="text-sm font-medium text-[#0F172A]">
-                      {shift.employee_name}
-                    </span>
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold text-[#0F172A]">
+                        {shift.employee_name}
+                      </p>
+                      <p className="mt-1 text-xs text-[#64748B]">
+                        {shift.is_published ? "Veröffentlicht" : "Entwurf"}
+                      </p>
+                    </div>
 
-                    <span className="text-sm text-[#64748B]">
-                      {shift.start_time.slice(0, 5)} – {" "}
-                      {shift.end_time.slice(0, 5)}
-                    </span>
+                    <p className="shrink-0 text-sm font-semibold text-[#334155]">
+                      {shift.start_time.slice(0, 5)} – {shift.end_time.slice(0, 5)}
+                    </p>
                   </div>
                 ))}
+
+                {todayShifts.length > 6 && (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => {
+                      window.location.href = "/admin/schedule";
+                    }}
+                  >
+                    Alle {todayShifts.length} Schichten ansehen
+                  </Button>
+                )}
               </div>
             ) : (
               <EmptyDashboardText>
@@ -572,21 +704,23 @@ export default function AdminPage() {
       </div>
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-        <Card hover>
+        <Card>
           <CardHeader
             title="Anleitungen & Video-Tutorials"
             description="Lerne Dipera Schritt für Schritt kennen."
           />
 
           <CardBody>
-            <div className="mb-5 rounded-2xl bg-[#F8FAFC] p-4">
+            <div className="mb-5 rounded-2xl border border-[#CBD5E1] bg-[#EEF2F6] p-4 shadow-[0_4px_12px_rgba(15,23,42,0.06)]">
               <div className="flex items-center justify-between gap-4">
                 <div>
                   <p className="text-sm font-semibold text-[#0F172A]">
-                    Einrichtung: {completedChecklistItems} von {checklistItems.length} Schritten erledigt
+                    Einrichtung: {completedChecklistItems} von{" "}
+                    {checklistItems.length} Schritten erledigt
                   </p>
                   <p className="mt-1 text-xs leading-5 text-[#64748B]">
-                    Die Liste aktualisiert sich automatisch anhand deiner echten Betriebsdaten.
+                    Die Liste aktualisiert sich automatisch anhand deiner echten
+                    Betriebsdaten.
                   </p>
                 </div>
 
@@ -598,7 +732,7 @@ export default function AdminPage() {
                 </Badge>
               </div>
 
-              <div className="mt-4 h-2 overflow-hidden rounded-full bg-[#E2E8F0]">
+              <div className="mt-4 h-2 overflow-hidden rounded-full bg-[#CBD5E1]">
                 <div
                   className="h-full rounded-full bg-[#2563EB] transition-all duration-500 ease-out"
                   style={{ width: `${onboardingProgress}%` }}
@@ -614,7 +748,7 @@ export default function AdminPage() {
                   onClick={() => {
                     window.location.href = item.href;
                   }}
-                  className="flex w-full items-center gap-4 rounded-2xl border border-[#E2E8F0] bg-white px-4 py-3 text-left transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#F8FAFC] hover:shadow-sm"
+                  className="flex w-full items-center gap-4 rounded-2xl border border-[#CBD5E1] bg-[#F8FAFC] px-4 py-3 text-left shadow-[0_3px_10px_rgba(15,23,42,0.05)] transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#EEF2F6] hover:shadow-[0_6px_16px_rgba(15,23,42,0.09)]"
                 >
                   <span
                     className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full border text-sm font-semibold ${
@@ -623,7 +757,11 @@ export default function AdminPage() {
                         : "border-[#CBD5E1] bg-white text-[#94A3B8]"
                     }`}
                   >
-                    {item.done ? <CheckCircle2 className="h-5 w-5" /> : index + 1}
+                    {item.done ? (
+                      <CheckCircle2 className="h-5 w-5" />
+                    ) : (
+                      index + 1
+                    )}
                   </span>
 
                   <span className="min-w-0 flex-1">
@@ -655,7 +793,7 @@ export default function AdminPage() {
           </CardBody>
         </Card>
 
-        <Card hover>
+        <Card>
           <CardHeader
             title="Kontakt & Support"
             description="Wir sind für dich da."
@@ -669,27 +807,34 @@ export default function AdminPage() {
                 description="Detaillierte Anleitungen und häufige Fragen."
                 onClick={() => showPlaceholderToast("Dokumentation")}
               />
+
               <SupportAction
                 icon={<PlayCircle className="h-5 w-5" />}
                 title="Video-Tutorials"
                 description="Kurze Videos zu allen wichtigen Funktionen."
                 onClick={() => showPlaceholderToast("Video-Tutorials")}
               />
+
               <SupportAction
                 icon={<Mail className="h-5 w-5" />}
                 title="E-Mail Support"
                 description="support@dipera.de"
-                onClick={() => showPlaceholderToast("E-Mail Support")}
+                onClick={() => {
+                  window.location.href = "/admin/contact";
+                }}
               />
+
               <SupportAction
                 icon={<MessageSquare className="h-5 w-5" />}
                 title="Feedback senden"
                 description="Deine Meinung hilft uns, Dipera zu verbessern."
-                onClick={() => showPlaceholderToast("Feedback senden")}
+                onClick={() => {
+                  window.location.href = "/admin/feedback";
+                }}
               />
             </div>
 
-            <div className="mt-5 rounded-2xl bg-[#EFF6FF] px-4 py-3 text-sm leading-6 text-[#1E40AF]">
+            <div className="mt-5 rounded-2xl border border-[#BFDBFE] bg-[#E8F2FB] px-4 py-3 text-sm leading-6 text-[#1E40AF]">
               Support-Zeiten: Mo – Fr, 09:00 – 18:00 Uhr
             </div>
           </CardBody>
@@ -705,33 +850,128 @@ type KpiCardProps = {
   value: ReactNode;
   subtitle: string;
   iconClassName: string;
+  compact?: boolean;
 };
 
-function KpiCard({ icon, title, value, subtitle, iconClassName }: KpiCardProps) {
+function KpiCard({
+  icon,
+  title,
+  value,
+  subtitle,
+  iconClassName,
+  compact = false,
+}: KpiCardProps) {
   return (
-    <Card hover>
-      <CardBody>
-        <div className="flex items-center justify-between gap-4">
-          <div className="flex items-center gap-4">
-            <div
-              className={`flex h-14 w-14 items-center justify-center rounded-2xl ${iconClassName}`}
-            >
-              {icon}
-            </div>
-
-            <div>
-              <p className="text-sm font-semibold text-[#334155]">{title}</p>
-              <p className="mt-1 text-3xl font-light tracking-[-0.04em] text-[#0F172A]">
-                {value}
-              </p>
-              <p className="mt-1 text-xs text-[#64748B]">{subtitle}</p>
-            </div>
-          </div>
-
-          <ArrowRight className="hidden h-5 w-5 text-[#94A3B8] transition group-hover:translate-x-0.5 sm:block" />
+    <div className="rounded-3xl border border-[#CBD5E1] bg-white p-5 shadow-[0_6px_18px_rgba(15,23,42,0.10)]">
+      <div className="flex items-start gap-3">
+        <div
+          className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl ${iconClassName}`}
+        >
+          {icon}
         </div>
-      </CardBody>
-    </Card>
+
+        <div className="min-w-0">
+          <p className="text-xs font-semibold uppercase tracking-[0.06em] text-[#64748B]">
+            {title}
+          </p>
+
+          <p
+            className={[
+              "mt-2 min-w-0 max-w-full whitespace-nowrap font-light leading-none tracking-[-0.035em] text-[#0F172A]",
+              compact
+                ? "text-[clamp(1.05rem,1.15vw,1.4rem)] tracking-[-0.045em]"
+                : "text-3xl",
+            ].join(" ")}
+          >
+            {value}
+          </p>
+
+          <p className="mt-2 text-xs text-[#64748B]">{subtitle}</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DashboardStatusPanel({
+  title,
+  count,
+  badgeVariant,
+  items,
+  emptyText,
+}: {
+  title: string;
+  count: number;
+  badgeVariant: "success" | "warning";
+  items: string[];
+  emptyText: string;
+}) {
+  return (
+    <div className="rounded-3xl border border-[#CBD5E1] bg-[#EEF2F6] p-4 shadow-[0_5px_14px_rgba(15,23,42,0.07)]">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-sm font-semibold text-[#0F172A]">{title}</p>
+        <Badge variant={badgeVariant}>{count}</Badge>
+      </div>
+
+      {items.length > 0 ? (
+        <div className="mt-4 space-y-2">
+          {items.slice(0, 5).map((name) => (
+            <div
+              key={name}
+              className="rounded-xl border border-[#D7DEE8] bg-white px-3 py-2 text-sm font-medium text-[#334155]"
+            >
+              {name}
+            </div>
+          ))}
+
+          {items.length > 5 && (
+            <p className="pt-1 text-xs text-[#64748B]">
+              + {items.length - 5} weitere
+            </p>
+          )}
+        </div>
+      ) : (
+        <p className="mt-4 text-sm leading-6 text-[#64748B]">{emptyText}</p>
+      )}
+    </div>
+  );
+}
+
+function QuickTaskRow({
+  label,
+  value,
+  href,
+}: {
+  label: string;
+  value: number;
+  href: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        window.location.href = href;
+      }}
+      className="flex w-full items-center justify-between gap-4 rounded-2xl border border-[#CBD5E1] bg-[#EEF2F6] px-4 py-3 text-left shadow-[0_3px_10px_rgba(15,23,42,0.05)] transition hover:bg-[#E3E9F0] hover:shadow-[0_5px_14px_rgba(15,23,42,0.08)]"
+    >
+      <span className="text-sm font-medium text-[#334155]">{label}</span>
+
+      <div className="flex items-center gap-3">
+        <Badge variant={value > 0 ? "warning" : "muted"}>{value}</Badge>
+        <ArrowRight className="h-4 w-4 text-[#94A3B8]" />
+      </div>
+    </button>
+  );
+}
+
+function MiniMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-2xl border border-[#CBD5E1] bg-[#EEF2F6] p-4 shadow-[0_3px_10px_rgba(15,23,42,0.05)]">
+      <p className="text-xs font-medium uppercase tracking-[0.06em] text-[#64748B]">
+        {label}
+      </p>
+      <p className="mt-2 text-lg font-semibold text-[#0F172A]">{value}</p>
+    </div>
   );
 }
 
@@ -742,14 +982,19 @@ type SupportActionProps = {
   onClick: () => void;
 };
 
-function SupportAction({ icon, title, description, onClick }: SupportActionProps) {
+function SupportAction({
+  icon,
+  title,
+  description,
+  onClick,
+}: SupportActionProps) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className="flex w-full items-center gap-4 rounded-2xl border border-[#E2E8F0] bg-white px-4 py-3 text-left transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#F8FAFC] hover:shadow-sm"
+      className="flex w-full items-center gap-4 rounded-2xl border border-[#CBD5E1] bg-[#F8FAFC] px-4 py-3 text-left shadow-[0_3px_10px_rgba(15,23,42,0.05)] transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#EEF2F6] hover:shadow-[0_6px_16px_rgba(15,23,42,0.09)]"
     >
-      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-[#EFF6FF] text-[#2563EB]">
+      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-[#E8F2FB] text-[#2563EB]">
         {icon}
       </span>
 
@@ -769,7 +1014,7 @@ function SupportAction({ icon, title, description, onClick }: SupportActionProps
 
 function EmptyDashboardText({ children }: { children: ReactNode }) {
   return (
-    <div className="rounded-2xl border border-dashed border-[#CBD5E1] bg-[#F8FAFC] px-4 py-8 text-center text-sm leading-6 text-[#64748B]">
+    <div className="rounded-2xl border border-dashed border-[#B8C4D1] bg-[#EEF2F6] px-4 py-8 text-center text-sm leading-6 text-[#64748B]">
       {children}
     </div>
   );
@@ -788,46 +1033,29 @@ function DashboardSkeleton() {
         <Skeleton className="h-12 w-56 rounded-2xl" />
       </div>
 
-      <Card>
-        <CardBody>
-          <div className="grid grid-cols-1 gap-8 lg:grid-cols-[1.1fr_0.9fr]">
-            <div>
-              <Skeleton className="h-7 w-44 rounded-full" />
-              <Skeleton className="mt-6 h-12 w-full" />
-              <Skeleton className="mt-3 h-12 w-3/4" />
-              <Skeleton className="mt-6 h-5 w-full" />
-              <Skeleton className="mt-3 h-5 w-2/3" />
-              <div className="mt-8 flex gap-3">
-                <Skeleton className="h-12 w-56 rounded-2xl" />
-                <Skeleton className="h-12 w-44 rounded-2xl" />
-              </div>
-            </div>
-
-            <div className="hidden lg:block">
-              <Skeleton className="h-64 w-full rounded-[28px]" />
-            </div>
-          </div>
-        </CardBody>
-      </Card>
-
-      <StatsSkeleton />
+      <div className="rounded-3xl border border-[#D7DEE8] bg-[#EEF2F6] p-5">
+        <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
+          {Array.from({ length: 6 }).map((_, index) => (
+            <Skeleton key={index} className="h-32 rounded-3xl" />
+          ))}
+        </div>
+      </div>
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
         <Card>
           <CardBody>
             <Skeleton className="h-8 w-48" />
-            <Skeleton className="mt-4 h-5 w-full" />
-            <Skeleton className="mt-3 h-5 w-full" />
-            <Skeleton className="mt-3 h-5 w-2/3" />
+            <Skeleton className="mt-4 h-24 w-full rounded-2xl" />
+            <Skeleton className="mt-3 h-24 w-full rounded-2xl" />
           </CardBody>
         </Card>
 
         <Card>
           <CardBody>
             <Skeleton className="h-8 w-48" />
-            <Skeleton className="mt-4 h-5 w-full" />
-            <Skeleton className="mt-3 h-5 w-full" />
-            <Skeleton className="mt-3 h-5 w-2/3" />
+            <Skeleton className="mt-4 h-12 w-full rounded-2xl" />
+            <Skeleton className="mt-3 h-12 w-full rounded-2xl" />
+            <Skeleton className="mt-3 h-12 w-full rounded-2xl" />
           </CardBody>
         </Card>
       </div>
