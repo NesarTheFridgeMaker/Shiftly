@@ -86,6 +86,16 @@ jobs:
           echo "::add-mask::$DB_URL"
           echo "SUPABASE_DB_URL=$DB_URL" >> "$GITHUB_ENV"
 
+      - name: Test database connection
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          docker run --rm \
+            ghcr.io/supabase/postgres:17.6.1.167 \
+            psql "$SUPABASE_DB_URL" \
+            -c "select current_user, current_database();"
+
       - name: Backup database roles
         shell: bash
         run: |
