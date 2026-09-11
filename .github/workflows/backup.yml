@@ -1,0 +1,342 @@
+name: Dipera Backup
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    env:
+      SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+      SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
+
+      R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+
+      BACKUP_ENCRYPTION_PASSPHRASE: ${{ secrets.BACKUP_ENCRYPTION_PASSPHRASE }}
+
+      R2_BUCKET: dipera-backups
+      STORAGE_BUCKET: Employee-documents
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Check required secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          required=(
+            SUPABASE_PROJECT_REF
+            SUPABASE_DB_PASSWORD
+            SUPABASE_SECRET_KEY
+            R2_ACCESS_KEY_ID
+            R2_SECRET_ACCESS_KEY
+            R2_ENDPOINT
+            BACKUP_ENCRYPTION_PASSPHRASE
+          )
+
+          for name in "${required[@]}"; do
+            if [ -z "${!name:-}" ]; then
+              echo "::error::Required secret $name is missing."
+              exit 1
+            fi
+          done
+
+          echo "All required secrets are present."
+
+      - name: Prepare backup directories
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          BACKUP_TIMESTAMP="$(date -u +'%Y-%m-%dT%H-%M-%SZ')"
+          BACKUP_NAME="dipera-backup-${BACKUP_TIMESTAMP}"
+
+          echo "BACKUP_TIMESTAMP=$BACKUP_TIMESTAMP" >> "$GITHUB_ENV"
+          echo "BACKUP_NAME=$BACKUP_NAME" >> "$GITHUB_ENV"
+
+          mkdir -p backup/database
+          mkdir -p backup/storage/Employee-documents
+
+      - name: Build secure Supabase database URL
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          ENCODED_PASSWORD="$(
+            python3 -c 'import os, urllib.parse; print(urllib.parse.quote(os.environ["SUPABASE_DB_PASSWORD"], safe=""))'
+          )"
+
+          DB_URL="postgresql://postgres.${SUPABASE_PROJECT_REF}:${ENCODED_PASSWORD}@aws-0-eu-west-1.pooler.supabase.com:5432/postgres"
+
+          echo "::add-mask::$DB_URL"
+          echo "SUPABASE_DB_URL=$DB_URL" >> "$GITHUB_ENV"
+
+      - name: Backup database roles
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          supabase db dump \
+            --db-url "$SUPABASE_DB_URL" \
+            -f backup/database/roles.sql \
+            --role-only
+
+      - name: Backup database schema
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          supabase db dump \
+            --db-url "$SUPABASE_DB_URL" \
+            -f backup/database/schema.sql
+
+      - name: Backup database data
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          supabase db dump \
+            --db-url "$SUPABASE_DB_URL" \
+            -f backup/database/data.sql \
+            --data-only \
+            --use-copy
+
+      - name: Install Supabase Storage client
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          mkdir -p /tmp/dipera-backup-tools
+          cd /tmp/dipera-backup-tools
+
+          npm init -y >/dev/null 2>&1
+          npm install --no-save @supabase/supabase-js
+
+      - name: Backup Supabase Storage
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          cd /tmp/dipera-backup-tools
+
+          node <<'NODE'
+          const { createClient } = require('@supabase/supabase-js');
+          const fs = require('fs');
+          const path = require('path');
+
+          const projectRef = process.env.SUPABASE_PROJECT_REF;
+          const secretKey = process.env.SUPABASE_SECRET_KEY;
+          const bucket = process.env.STORAGE_BUCKET;
+
+          if (!projectRef || !secretKey || !bucket) {
+            throw new Error('Missing Supabase Storage configuration.');
+          }
+
+          const supabase = createClient(
+            `https://${projectRef}.supabase.co`,
+            secretKey,
+            {
+              auth: {
+                persistSession: false,
+                autoRefreshToken: false
+              }
+            }
+          );
+
+          const outputRoot = path.join(
+            process.env.GITHUB_WORKSPACE,
+            'backup',
+            'storage',
+            bucket
+          );
+
+          fs.mkdirSync(outputRoot, { recursive: true });
+
+          let downloadedFiles = 0;
+
+          async function downloadPrefix(prefix = '') {
+            let offset = 0;
+            const limit = 1000;
+
+            while (true) {
+              const { data, error } = await supabase.storage
+                .from(bucket)
+                .list(prefix, {
+                  limit,
+                  offset,
+                  sortBy: {
+                    column: 'name',
+                    order: 'asc'
+                  }
+                });
+
+              if (error) {
+                throw new Error(
+                  `Could not list bucket "${bucket}" prefix "${prefix}": ${error.message}`
+                );
+              }
+
+              if (!data || data.length === 0) {
+                break;
+              }
+
+              for (const item of data) {
+                const objectPath = prefix
+                  ? `${prefix}/${item.name}`
+                  : item.name;
+
+                // Supabase folder placeholders returned by list() do not
+                // contain an object id.
+                if (!item.id) {
+                  await downloadPrefix(objectPath);
+                  continue;
+                }
+
+                const { data: fileData, error: downloadError } =
+                  await supabase.storage
+                    .from(bucket)
+                    .download(objectPath);
+
+                if (downloadError) {
+                  throw new Error(
+                    `Could not download "${objectPath}": ${downloadError.message}`
+                  );
+                }
+
+                const localPath = path.join(outputRoot, ...objectPath.split('/'));
+
+                fs.mkdirSync(path.dirname(localPath), {
+                  recursive: true
+                });
+
+                const buffer = Buffer.from(
+                  await fileData.arrayBuffer()
+                );
+
+                fs.writeFileSync(localPath, buffer);
+
+                downloadedFiles++;
+                console.log(`Backed up: ${objectPath}`);
+              }
+
+              if (data.length < limit) {
+                break;
+              }
+
+              offset += limit;
+            }
+          }
+
+          downloadPrefix()
+            .then(() => {
+              console.log(
+                `Storage backup complete. Files downloaded: ${downloadedFiles}`
+              );
+            })
+            .catch((error) => {
+              console.error(error);
+              process.exit(1);
+            });
+          NODE
+
+      - name: Create backup manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          {
+            echo "Dipera Backup"
+            echo "Created UTC: $BACKUP_TIMESTAMP"
+            echo "Supabase project: $SUPABASE_PROJECT_REF"
+            echo "Storage bucket: $STORAGE_BUCKET"
+            echo
+            echo "Files:"
+            find backup -type f -printf '%P\n' | sort
+          } > backup/MANIFEST.txt
+
+          find backup -type f \
+            ! -name SHA256SUMS.txt \
+            -exec sha256sum {} \; \
+            > backup/SHA256SUMS.txt
+
+          echo "Backup contents:"
+          du -sh backup
+          find backup -type f | sort
+
+      - name: Create archive
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          tar -czf "${BACKUP_NAME}.tar.gz" backup
+
+      - name: Encrypt archive
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          openssl enc \
+            -aes-256-cbc \
+            -salt \
+            -pbkdf2 \
+            -iter 200000 \
+            -in "${BACKUP_NAME}.tar.gz" \
+            -out "${BACKUP_NAME}.tar.gz.enc" \
+            -pass env:BACKUP_ENCRYPTION_PASSPHRASE
+
+          test -s "${BACKUP_NAME}.tar.gz.enc"
+
+          echo "Encrypted backup created:"
+          ls -lh "${BACKUP_NAME}.tar.gz.enc"
+
+      - name: Remove plaintext backup archive
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          rm -f "${BACKUP_NAME}.tar.gz"
+          rm -rf backup
+
+      - name: Upload encrypted backup to Cloudflare R2
+        shell: bash
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+        run: |
+          set -euo pipefail
+
+          aws s3 cp \
+            "${BACKUP_NAME}.tar.gz.enc" \
+            "s3://${R2_BUCKET}/weekly/${BACKUP_NAME}.tar.gz.enc" \
+            --endpoint-url "$R2_ENDPOINT"
+
+      - name: Verify backup exists in R2
+        shell: bash
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+        run: |
+          set -euo pipefail
+
+          aws s3 ls \
+            "s3://${R2_BUCKET}/weekly/${BACKUP_NAME}.tar.gz.enc" \
+            --endpoint-url "$R2_ENDPOINT"
+
+          echo "Backup upload verified."
