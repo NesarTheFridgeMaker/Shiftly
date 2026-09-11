@@ -25,6 +25,10 @@ jobs:
       R2_BUCKET: dipera-backups
       STORAGE_BUCKET: Employee-documents
 
+      DB_HOST: aws-0-eu-west-1.pooler.supabase.com
+      DB_PORT: "5432"
+      DB_NAME: postgres
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -72,6 +76,21 @@ jobs:
           mkdir -p backup/database
           mkdir -p backup/storage/Employee-documents
 
+      - name: Test database connection
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          docker run --rm \
+            -e PGPASSWORD="$SUPABASE_DB_PASSWORD" \
+            ghcr.io/supabase/postgres:17.6.1.167 \
+            psql \
+              -h "$DB_HOST" \
+              -p "$DB_PORT" \
+              -U "postgres.${SUPABASE_PROJECT_REF}" \
+              -d "$DB_NAME" \
+              -c "select current_user, current_database();"
+
       - name: Build secure Supabase database URL
         shell: bash
         run: |
@@ -81,25 +100,10 @@ jobs:
             python3 -c 'import os, urllib.parse; print(urllib.parse.quote(os.environ["SUPABASE_DB_PASSWORD"], safe=""))'
           )"
 
-          DB_URL="postgresql://postgres.${SUPABASE_PROJECT_REF}:${ENCODED_PASSWORD}@aws-0-eu-west-1.pooler.supabase.com:5432/postgres"
+          DB_URL="postgresql://postgres.${SUPABASE_PROJECT_REF}:${ENCODED_PASSWORD}@${DB_HOST}:${DB_PORT}/${DB_NAME}"
 
           echo "::add-mask::$DB_URL"
           echo "SUPABASE_DB_URL=$DB_URL" >> "$GITHUB_ENV"
-
-            - name: Test database connection
-            shell: bash
-            run: |
-            set -euo pipefail
-
-            docker run --rm \
-            -e PGPASSWORD="$SUPABASE_DB_PASSWORD" \
-            ghcr.io/supabase/postgres:17.6.1.167 \
-            psql \
-              -h aws-0-eu-west-1.pooler.supabase.com \
-              -p 5432 \
-              -U "postgres.${SUPABASE_PROJECT_REF}" \
-              -d postgres \
-              -c "select current_user, current_database();"
 
       - name: Backup database roles
         shell: bash
@@ -215,8 +219,6 @@ jobs:
                   ? `${prefix}/${item.name}`
                   : item.name;
 
-                // Supabase folder placeholders returned by list() do not
-                // contain an object id.
                 if (!item.id) {
                   await downloadPrefix(objectPath);
                   continue;
@@ -233,7 +235,10 @@ jobs:
                   );
                 }
 
-                const localPath = path.join(outputRoot, ...objectPath.split('/'));
+                const localPath = path.join(
+                  outputRoot,
+                  ...objectPath.split('/')
+                );
 
                 fs.mkdirSync(path.dirname(localPath), {
                   recursive: true
