@@ -6,6 +6,7 @@ import EmployeeCard, {
   type EmployeeCardEmployee,
 } from "@/components/employees/EmployeeCard";
 import EmployeeInviteCard from "@/components/employees/EmployeeInviteCard";
+import EmployeeDocumentsCard from "@/components/employees/EmployeeDocumentsCard";
 
 type EmployeeInvite = {
   id: string;
@@ -52,7 +53,6 @@ type ActiveEmployeesSectionProps = {
   onOpenInvite: (employee: ActiveEmployee) => void;
   onDelete: (employeeId: string) => void;
 
-  // NEU
   expandedEmployeeId: string | null;
   onToggleExpanded: (employeeId: string) => void;
 };
@@ -70,8 +70,6 @@ export default function ActiveEmployeesSection({
   onOpenPayroll,
   onOpenInvite,
   onDelete,
-
-  // NEU
   expandedEmployeeId,
   onToggleExpanded,
 }: ActiveEmployeesSectionProps) {
@@ -110,9 +108,10 @@ export default function ActiveEmployeesSection({
               onOpenInvite={() => onOpenInvite(employee)}
             />
           }
+          documentsContent={
+            <EmployeeDocumentsCard employeeId={employee.id} />
+          }
           notesContent={renderNotes(employee)}
-
-          // NEU
           isExpanded={expandedEmployeeId === employee.id}
           onToggleExpanded={() =>
             onToggleExpanded(employee.id)

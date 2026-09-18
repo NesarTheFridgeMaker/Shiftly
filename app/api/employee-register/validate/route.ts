@@ -21,7 +21,11 @@ export async function POST(request: Request) {
     }
 
     /*
-     * 1. Offene Einladung samt vorbereitetem Mitarbeiter laden
+     * 1. Offene Einladung samt vorbereitetem Mitarbeiter laden.
+     *
+     * account_status wird mitgeladen, damit Einladungen
+     * deaktivierter Mitarbeiter bereits bei der Validierung
+     * abgewiesen werden.
      */
     const { data: invitation, error: invitationError } =
       await supabaseAdmin
@@ -32,7 +36,8 @@ export async function POST(request: Request) {
           used_at,
           employees (
             id,
-            role
+            role,
+            account_status
           )
         `)
         .eq("invite_code", inviteCode)
@@ -82,8 +87,28 @@ export async function POST(request: Request) {
     }
 
     /*
+     * Deaktivierte Mitarbeiter dürfen keine Einladung
+     * mehr zur Registrierung verwenden.
+     *
+     * Die abschließende RPC
+     * complete_employee_invite_from_metadata()
+     * prüft diesen Status zusätzlich noch einmal
+     * serverseitig in der Datenbank.
+     */
+    if (employee.account_status !== "active") {
+      return NextResponse.json(
+        {
+          success: false,
+          message:
+            "Diese Mitarbeitereinladung ist derzeit nicht verfügbar.",
+        },
+        { status: 403 }
+      );
+    }
+
+    /*
      * 2. Prüfen, ob bereits ein Dipera-Profil für diesen
-     * vorbereiteten Mitarbeiter existiert
+     * vorbereiteten Mitarbeiter existiert.
      */
     const { data: existingProfile, error: profileError } =
       await supabaseAdmin
@@ -120,7 +145,7 @@ export async function POST(request: Request) {
     }
 
     /*
-     * 3. Die vorbereitete Rolle bestimmen
+     * 3. Die vorbereitete Rolle bestimmen.
      */
     const assignedRole =
       employee.role === "Admin"
@@ -130,7 +155,8 @@ export async function POST(request: Request) {
           : "employee";
 
     /*
-     * Keine internen IDs oder Geschäftsdaten an den Browser senden.
+     * Keine internen IDs oder Geschäftsdaten
+     * an den Browser senden.
      */
     return NextResponse.json({
       success: true,

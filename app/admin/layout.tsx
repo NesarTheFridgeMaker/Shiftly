@@ -434,7 +434,7 @@ export default function AdminLayout({
       icon: Users,
     },
     {
-      label: "Arbeitszeiten",
+      label: "Zeiten & Löhne",
       href: "/admin/times",
       icon: Clock3,
     },

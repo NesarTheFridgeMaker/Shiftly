@@ -18,6 +18,7 @@ type Employee = {
   name: string;
   role: string;
   business_id: string;
+  account_status: string;
 };
 
 type EmployeeInvite = {
@@ -210,10 +211,13 @@ export async function POST(request: NextRequest) {
      *
      * Hier verwenden wir den Admin-Client, aber begrenzen die Abfrage
      * ausdrücklich auf den Betrieb des angemeldeten Benutzers.
+     *
+     * account_status wird zusätzlich geladen, damit für deaktivierte
+     * Mitarbeiter keine neue Einladung erzeugt werden kann.
      */
     const { data: employeeData, error: employeeError } = await supabaseAdmin
       .from("employees")
-      .select("id, name, role, business_id")
+      .select("id, name, role, business_id, account_status")
       .eq("id", employeeId)
       .eq("business_id", profile.business_id)
       .single();
@@ -229,6 +233,26 @@ export async function POST(request: NextRequest) {
         },
         {
           status: 404,
+        },
+      );
+    }
+
+    /*
+     * Deaktivierte Mitarbeiter dürfen keine neue Einladung erhalten.
+     *
+     * Die abschließende Datenbankfunktion
+     * complete_employee_invite_from_metadata()
+     * prüft account_status zusätzlich noch einmal beim tatsächlichen
+     * Abschluss der Registrierung.
+     */
+    if (employee.account_status !== "active") {
+      return NextResponse.json(
+        {
+          error:
+            "Für einen deaktivierten Mitarbeiter kann keine Einladung versendet werden.",
+        },
+        {
+          status: 403,
         },
       );
     }

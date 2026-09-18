@@ -252,20 +252,6 @@ export default function EmployeeAbsencesPage() {
         return;
       }
 
-      const { error: notificationError } = await supabase.rpc(
-        "create_admin_notification_for_business",
-        {
-          p_business_id: businessId,
-          p_title: "Neuer Urlaubsantrag",
-          p_message: `${employee.name} hat Urlaub vom ${startDate} bis ${endDate} beantragt.`,
-          p_type: "vacation_request",
-        }
-      );
-
-      if (notificationError) {
-        console.error(notificationError);
-      }
-
       setStartDate("");
       setEndDate("");
 

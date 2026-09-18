@@ -39,6 +39,7 @@ type EmployeeCardProps = {
 
   inviteContent: ReactNode;
   notesContent: ReactNode;
+  documentsContent: ReactNode;
 
   onMonthlyHoursChange: (value: number) => void;
   onSaveMonthlyHours: () => void;
@@ -137,6 +138,7 @@ export default function EmployeeCard({
   hasUnsavedMonthlyHours,
   inviteContent,
   notesContent,
+  documentsContent,
   onMonthlyHoursChange,
   onSaveMonthlyHours,
   onToggleAccountStatus,
@@ -433,6 +435,8 @@ export default function EmployeeCard({
                     {isActive ? "Deaktivieren" : "Reaktivieren"}
                   </Button>
                 </div>
+
+                {documentsContent}
               </div>
 
               {/* Rechter Bereich */}

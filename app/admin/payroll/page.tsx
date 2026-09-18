@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import ExcelJS from "exceljs";
 import { supabase } from "@/lib/supabaseClient";
 import { getBusinessId } from "@/lib/getBusinessId";
 
@@ -109,6 +110,39 @@ type LedgerTransaction = {
   note: string | null;
   created_at?: string | null;
   employee_name?: string | null;
+};
+
+
+type ExcelTimeEntry = {
+  id: string;
+  employee_id: string | null;
+  employee_name: string;
+  action: string;
+  created_at: string;
+  source: string | null;
+  location_verified: boolean | null;
+  location_check_status: string | null;
+  location_exception_reason: string | null;
+};
+
+type ExcelAbsenceDetail = {
+  snapshot_id: string;
+  employee_id: string;
+  absence_id: string;
+  absence_type_name: string | null;
+  absence_type_code: string | null;
+  absence_category: string | null;
+  request_status: string | null;
+  local_date: string;
+  evaluation_source: string | null;
+  scheduled_minutes: number | null;
+  calculated_minutes: number | null;
+  override_minutes: number | null;
+  credited_minutes: number | null;
+  paid_minutes: number | null;
+  affects_time_account: boolean | null;
+  affects_payroll: boolean | null;
+  override_reason: string | null;
 };
 
 type DatevPreflightRow = {
@@ -237,27 +271,193 @@ function formatMoney(value: number | null | undefined) {
 }
 
 
-function escapeXml(value: string) {
-  return value
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&apos;");
+
+const EXCEL_NAVY = "0F172A";
+const EXCEL_BLUE = "2563EB";
+const EXCEL_LIGHT_BLUE = "DBEAFE";
+const EXCEL_LIGHT_GRAY = "EEF2F6";
+const EXCEL_BORDER = "CBD5E1";
+const EXCEL_GREEN = "047857";
+const EXCEL_RED = "B91C1C";
+
+function excelWageTypeLabel(value: string | null) {
+  if (value === "salary") return "Monatsgehalt";
+  if (value === "fixed_hourly") return "Fixer Monatslohn auf Stundenbasis";
+  if (value === "hourly") return "Stundenlohn";
+  return value || "—";
 }
 
-function excelTextCell(value: string) {
-  return `<Cell><Data ss:Type="String">${escapeXml(value)}</Data></Cell>`;
+function excelActionLabel(value: string) {
+  if (value === "check_in") return "Einstempeln";
+  if (value === "break_start") return "Pausenbeginn";
+  if (value === "break_end") return "Pausenende";
+  if (value === "check_out") return "Ausstempeln";
+  return value;
 }
 
-function excelNumberCell(value: number) {
-  return `<Cell><Data ss:Type="Number">${Number.isFinite(value) ? value : 0}</Data></Cell>`;
+function excelSourceLabel(value: string | null) {
+  if (value === "terminal") return "Terminal";
+  if (value === "employee_app") return "Mitarbeiter-App";
+  if (value === "admin") return "Admin";
+  if (value === "kiosk") return "Kiosk";
+  return value || "—";
 }
 
-function getTimeAccountLabel(snapshot: PayrollSnapshot) {
-  return snapshot.time_account_period === "none"
-    ? "Kein Stundenkonto"
-    : formatMinutes(snapshot.target_minutes);
+function excelStatusLabel(status: PayrollPeriodStatus) {
+  return status === "closed" ? "Abgeschlossen" : "Offen";
+}
+
+function formatExcelLocalDateTime(
+  value: string,
+  timezone: string,
+) {
+  const date = new Date(value);
+
+  return {
+    date: new Intl.DateTimeFormat("de-DE", {
+      timeZone: timezone,
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+    }).format(date),
+    time: new Intl.DateTimeFormat("de-DE", {
+      timeZone: timezone,
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    }).format(date),
+    monthKey: new Intl.DateTimeFormat("en-CA", {
+      timeZone: timezone,
+      year: "numeric",
+      month: "2-digit",
+    }).format(date),
+  };
+}
+
+function addExcelTitle(
+  sheet: ExcelJS.Worksheet,
+  title: string,
+  subtitle: string,
+  lastColumn: number,
+) {
+  sheet.mergeCells(1, 1, 1, lastColumn);
+  const titleCell = sheet.getCell(1, 1);
+  titleCell.value = title;
+  titleCell.font = {
+    bold: true,
+    size: 20,
+    color: { argb: EXCEL_NAVY },
+  };
+  titleCell.alignment = {
+    vertical: "middle",
+    horizontal: "left",
+  };
+  sheet.getRow(1).height = 30;
+
+  sheet.mergeCells(2, 1, 2, lastColumn);
+  const subtitleCell = sheet.getCell(2, 1);
+  subtitleCell.value = subtitle;
+  subtitleCell.font = {
+    size: 10,
+    color: { argb: "64748B" },
+  };
+  subtitleCell.alignment = {
+    vertical: "middle",
+    horizontal: "left",
+  };
+  sheet.getRow(2).height = 20;
+}
+
+function styleExcelHeader(
+  row: ExcelJS.Row,
+) {
+  row.height = 23;
+
+  row.eachCell((cell) => {
+    cell.font = {
+      bold: true,
+      color: { argb: "FFFFFF" },
+      size: 10,
+    };
+    cell.fill = {
+      type: "pattern",
+      pattern: "solid",
+      fgColor: { argb: EXCEL_NAVY },
+    };
+    cell.alignment = {
+      vertical: "middle",
+      horizontal: "left",
+      wrapText: true,
+    };
+    cell.border = {
+      bottom: {
+        style: "thin",
+        color: { argb: EXCEL_BORDER },
+      },
+    };
+  });
+}
+
+function styleExcelTable(
+  sheet: ExcelJS.Worksheet,
+  firstDataRow: number,
+  lastDataRow: number,
+  lastColumn: number,
+) {
+  for (let rowNumber = firstDataRow; rowNumber <= lastDataRow; rowNumber += 1) {
+    const row = sheet.getRow(rowNumber);
+
+    if (rowNumber % 2 === 0) {
+      row.eachCell({ includeEmpty: true }, (cell) => {
+        cell.fill = {
+          type: "pattern",
+          pattern: "solid",
+          fgColor: { argb: "F8FAFC" },
+        };
+      });
+    }
+
+    for (let column = 1; column <= lastColumn; column += 1) {
+      const cell = row.getCell(column);
+      cell.alignment = {
+        vertical: "top",
+        horizontal: "left",
+        wrapText: true,
+      };
+      cell.border = {
+        bottom: {
+          style: "hair",
+          color: { argb: "E2E8F0" },
+        },
+      };
+    }
+  }
+}
+
+function setMoneyFormat(
+  sheet: ExcelJS.Worksheet,
+  columns: number[],
+  firstRow: number,
+  lastRow: number,
+) {
+  for (const column of columns) {
+    for (let row = firstRow; row <= lastRow; row += 1) {
+      sheet.getCell(row, column).numFmt = '#,##0.00 [$€-407]';
+    }
+  }
+}
+
+function setHoursFormat(
+  sheet: ExcelJS.Worksheet,
+  columns: number[],
+  firstRow: number,
+  lastRow: number,
+) {
+  for (const column of columns) {
+    for (let row = firstRow; row <= lastRow; row += 1) {
+      sheet.getCell(row, column).numFmt = '0.00';
+    }
+  }
 }
 
 function getValidationLabel(code: string | null) {
@@ -913,117 +1113,936 @@ export default function PayrollPage() {
     );
   }
 
-  function handleExcelExport() {
+  async function handleExcelExport() {
     if (!selectedPeriod || snapshots.length === 0) {
       showToast({
         type: "warning",
         title: "Kein Export möglich",
-        description: "Für diese Abrechnungsperiode sind keine Payroll-Snapshots vorhanden.",
+        description:
+          "Für diese Abrechnungsperiode sind keine Payroll-Snapshots vorhanden.",
       });
       return;
     }
 
-    const rows = snapshots.map((snapshot) => {
-      const hasTimeAccount = snapshot.time_account_period !== "none";
+    const businessId = await getBusinessId();
 
-      return [
-        snapshot.employee_name || snapshot.employee_id,
-        snapshot.wage_type || "—",
-        hasTimeAccount ? formatMinutes(snapshot.target_minutes) : "Kein Stundenkonto",
-        formatMinutes(snapshot.worked_minutes),
-        formatMinutes(snapshot.credited_minutes),
-        formatMinutes(snapshot.accountable_minutes),
-        hasTimeAccount ? formatMinutes(snapshot.balance_minutes) : "Kein Stundenkonto",
-        hasTimeAccount ? formatMinutes(snapshot.payout_overtime_minutes) : "—",
-        hasTimeAccount ? formatMinutes(snapshot.carried_balance_minutes) : "—",
-        Number(snapshot.base_gross ?? 0),
-        Number(snapshot.hourly_allowance_gross ?? 0),
-        Number(snapshot.total_surcharge_gross ?? 0),
-        Number(snapshot.estimated_gross ?? 0),
-      ];
-    });
-
-    const headers = [
-      "Mitarbeiter",
-      "Lohnmodell",
-      "Soll",
-      "Ist",
-      "Abwesenheit",
-      "Abrechenbar",
-      "Saldo",
-      "Auszahlung",
-      "Übertrag",
-      "Grundbrutto",
-      "Stundenzulage",
-      "Zuschläge",
-      "Brutto gesamt",
-    ];
-
-    const headerXml = headers.map(excelTextCell).join("");
-    const rowXml = rows
-      .map((row) => {
-        const cells = row
-          .map((value, index) =>
-            index >= 9
-              ? excelNumberCell(Number(value))
-              : excelTextCell(String(value)),
-          )
-          .join("");
-
-        return `<Row>${cells}</Row>`;
-      })
-      .join("");
-
-    const workbook = `<?xml version="1.0"?>
-<?mso-application progid="Excel.Sheet"?>
-<Workbook
-  xmlns="urn:schemas-microsoft-com:office:spreadsheet"
-  xmlns:o="urn:schemas-microsoft-com:office:office"
-  xmlns:x="urn:schemas-microsoft-com:office:excel"
-  xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
-  <Styles>
-    <Style ss:ID="Header">
-      <Font ss:Bold="1"/>
-      <Interior ss:Color="#E2E8F0" ss:Pattern="Solid"/>
-    </Style>
-    <Style ss:ID="Money">
-      <NumberFormat ss:Format="#,##0.00 [$€-407]"/>
-    </Style>
-  </Styles>
-  <Worksheet ss:Name="Abrechnung">
-    <Table>
-      <Row ss:StyleID="Header">${headerXml}</Row>
-      ${rowXml}
-    </Table>
-  </Worksheet>
-</Workbook>`;
-
-    const blob = new Blob([workbook], {
-      type: "application/vnd.ms-excel;charset=utf-8",
-    });
-    const objectUrl = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    const month = String(selectedPeriod.period_month).padStart(2, "0");
-
-    anchor.href = objectUrl;
-    anchor.download = `Dipera_Abrechnung_${selectedPeriod.period_year}-${month}.xls`;
-    anchor.style.display = "none";
-    document.body.appendChild(anchor);
-    anchor.click();
-    anchor.remove();
-    URL.revokeObjectURL(objectUrl);
+    if (!businessId) {
+      showToast({
+        type: "error",
+        title: "Betrieb nicht gefunden",
+        description: "Der Excel-Export konnte nicht erstellt werden.",
+      });
+      return;
+    }
 
     showToast({
-      type: "success",
-      title: "Excel-Export erstellt",
-      description: `${formatMonth(selectedPeriod)} wurde als Excel-Datei exportiert.`,
+      type: "info",
+      title: "Excel-Export wird erstellt",
+      description:
+        "Arbeitszeiten, Abwesenheiten und Abrechnungsdaten werden zusammengestellt.",
     });
+
+    try {
+      const periodStart = new Date(
+        Date.UTC(
+          selectedPeriod.period_year,
+          selectedPeriod.period_month - 1,
+          1,
+        ),
+      );
+      const periodEndExclusive = new Date(
+        Date.UTC(
+          selectedPeriod.period_year,
+          selectedPeriod.period_month,
+          1,
+        ),
+      );
+
+      const bufferedStart = new Date(periodStart);
+      bufferedStart.setUTCDate(bufferedStart.getUTCDate() - 2);
+
+      const bufferedEnd = new Date(periodEndExclusive);
+      bufferedEnd.setUTCDate(bufferedEnd.getUTCDate() + 2);
+
+      const [
+        businessResult,
+        timeEntriesResult,
+        absenceDetailsResult,
+      ] = await Promise.all([
+        supabase
+          .from("businesses")
+          .select("name, timezone")
+          .eq("id", businessId)
+          .single(),
+
+        supabase
+          .from("time_entries")
+          .select(`
+            id,
+            employee_id,
+            employee_name,
+            action,
+            created_at,
+            source,
+            location_verified,
+            location_check_status,
+            location_exception_reason
+          `)
+          .eq("business_id", businessId)
+          .gte("created_at", bufferedStart.toISOString())
+          .lt("created_at", bufferedEnd.toISOString())
+          .order("created_at", { ascending: true }),
+
+        supabase
+          .from("payroll_snapshot_absence_details")
+          .select(`
+            snapshot_id,
+            employee_id,
+            absence_id,
+            absence_type_name,
+            absence_type_code,
+            absence_category,
+            request_status,
+            local_date,
+            evaluation_source,
+            scheduled_minutes,
+            calculated_minutes,
+            override_minutes,
+            credited_minutes,
+            paid_minutes,
+            affects_time_account,
+            affects_payroll,
+            override_reason
+          `)
+          .eq("payroll_period_id", selectedPeriod.id)
+          .order("local_date", { ascending: true }),
+      ]);
+
+      if (businessResult.error) {
+        throw businessResult.error;
+      }
+
+      if (timeEntriesResult.error) {
+        throw timeEntriesResult.error;
+      }
+
+      if (absenceDetailsResult.error) {
+        console.warn(
+          "EXCEL ABSENCE DETAILS LOAD ERROR:",
+          absenceDetailsResult.error,
+        );
+      }
+
+      const businessName =
+        businessResult.data?.name || "Dipera Betrieb";
+      const businessTimezone =
+        businessResult.data?.timezone || "Europe/Berlin";
+
+      const selectedMonthKey =
+        `${selectedPeriod.period_year}-${String(
+          selectedPeriod.period_month,
+        ).padStart(2, "0")}`;
+
+      const timeEntries = (
+        (timeEntriesResult.data || []) as ExcelTimeEntry[]
+      ).filter((entry) => {
+        const local = formatExcelLocalDateTime(
+          entry.created_at,
+          businessTimezone,
+        );
+
+        return local.monthKey === selectedMonthKey;
+      });
+
+      const absenceDetails =
+        (absenceDetailsResult.data || []) as ExcelAbsenceDetail[];
+
+      const workbook = new ExcelJS.Workbook();
+      workbook.creator = "Dipera";
+      workbook.company = "Dipera";
+      workbook.created = new Date();
+      workbook.modified = new Date();
+
+      const periodLabel = formatMonth(selectedPeriod);
+      const generatedAt = new Date().toLocaleString("de-DE");
+
+      /*
+       * ==================================================
+       * BLATT 1: ÜBERSICHT
+       * ==================================================
+       */
+      const overviewSheet = workbook.addWorksheet("Übersicht", {
+        views: [{ showGridLines: false }],
+      });
+
+      overviewSheet.columns = [
+        { width: 31 },
+        { width: 25 },
+        { width: 25 },
+        { width: 25 },
+      ];
+
+      addExcelTitle(
+        overviewSheet,
+        "DIPERA – Monatsabrechnung",
+        `${businessName} · ${periodLabel}`,
+        4,
+      );
+
+      overviewSheet.getCell("A4").value = "Abrechnungsperiode";
+      overviewSheet.getCell("B4").value = periodLabel;
+      overviewSheet.getCell("A5").value = "Status";
+      overviewSheet.getCell("B5").value =
+        excelStatusLabel(selectedPeriod.status);
+      overviewSheet.getCell("A6").value = "Erstellt am";
+      overviewSheet.getCell("B6").value = generatedAt;
+      overviewSheet.getCell("A7").value = "Zeitzone";
+      overviewSheet.getCell("B7").value = businessTimezone;
+
+      for (let row = 4; row <= 7; row += 1) {
+        overviewSheet.getCell(row, 1).font = {
+          bold: true,
+          color: { argb: "475569" },
+        };
+      }
+
+      overviewSheet.mergeCells("A9:D9");
+      overviewSheet.getCell("A9").value = "Monatskennzahlen";
+      overviewSheet.getCell("A9").font = {
+        bold: true,
+        size: 13,
+        color: { argb: EXCEL_NAVY },
+      };
+
+      const summaryHeader = overviewSheet.getRow(10);
+      summaryHeader.values = [
+        "Kennzahl",
+        "Wert",
+        "Kennzahl",
+        "Wert",
+      ];
+      styleExcelHeader(summaryHeader);
+
+      const totalTargetMinutes = snapshots.reduce(
+        (sum, snapshot) =>
+          sum + Number(snapshot.target_minutes ?? 0),
+        0,
+      );
+      const totalWorkedMinutes = snapshots.reduce(
+        (sum, snapshot) =>
+          sum + Number(snapshot.worked_minutes ?? 0),
+        0,
+      );
+      const totalVacationMinutes = snapshots.reduce(
+        (sum, snapshot) =>
+          sum + Number(snapshot.vacation_minutes ?? 0),
+        0,
+      );
+      const totalSickMinutes = snapshots.reduce(
+        (sum, snapshot) =>
+          sum + Number(snapshot.sick_minutes ?? 0),
+        0,
+      );
+      const totalOtherAbsenceMinutes = snapshots.reduce(
+        (sum, snapshot) =>
+          sum + Number(snapshot.other_absence_minutes ?? 0),
+        0,
+      );
+      const totalCreditedMinutes = snapshots.reduce(
+        (sum, snapshot) =>
+          sum + Number(snapshot.credited_minutes ?? 0),
+        0,
+      );
+      const totalBaseGross = snapshots.reduce(
+        (sum, snapshot) =>
+          sum + Number(snapshot.base_gross ?? 0),
+        0,
+      );
+      const totalHourlyAllowanceGross = snapshots.reduce(
+        (sum, snapshot) =>
+          sum + Number(snapshot.hourly_allowance_gross ?? 0),
+        0,
+      );
+      const totalOvertimeGross = snapshots.reduce(
+        (sum, snapshot) =>
+          sum + Number(snapshot.overtime_gross ?? 0),
+        0,
+      );
+      const totalSurchargeGross = snapshots.reduce(
+        (sum, snapshot) =>
+          sum + Number(snapshot.total_surcharge_gross ?? 0),
+        0,
+      );
+
+      const summaryRows: Array<
+        [string, string | number, string, string | number]
+      > = [
+        [
+          "Mitarbeiter",
+          snapshots.length,
+          "Stempelereignisse",
+          timeEntries.length,
+        ],
+        [
+          "Sollzeit gesamt",
+          formatMinutes(totalTargetMinutes),
+          "Arbeitszeit gesamt",
+          formatMinutes(totalWorkedMinutes),
+        ],
+        [
+          "Urlaub",
+          formatMinutes(totalVacationMinutes),
+          "Krankheit",
+          formatMinutes(totalSickMinutes),
+        ],
+        [
+          "Sonstige Abwesenheit",
+          formatMinutes(totalOtherAbsenceMinutes),
+          "Gutgeschriebene Abwesenheit",
+          formatMinutes(totalCreditedMinutes),
+        ],
+        [
+          "Abrechenbare Zeit",
+          formatMinutes(totalAccountableMinutes),
+          "Abwesenheitstage",
+          absenceDetails.length,
+        ],
+        [
+          "Grundvergütung",
+          totalBaseGross,
+          "Stundenzulagen",
+          totalHourlyAllowanceGross,
+        ],
+        [
+          "Überstundenvergütung",
+          totalOvertimeGross,
+          "Zuschläge",
+          totalSurchargeGross,
+        ],
+        [
+          "Bruttovergütung gesamt",
+          estimatedGrossTotal,
+          "Abschlussblocker",
+          blockers.length,
+        ],
+      ];
+
+      summaryRows.forEach((values) => {
+        overviewSheet.addRow(values);
+      });
+
+      for (let row = 11; row <= 18; row += 1) {
+        overviewSheet.getCell(row, 1).font = { bold: true };
+        overviewSheet.getCell(row, 3).font = { bold: true };
+      }
+
+      for (const row of [16, 17, 18]) {
+        overviewSheet.getCell(row, 2).numFmt =
+          '#,##0.00 [$€-407]';
+      }
+      for (const row of [16, 17]) {
+        overviewSheet.getCell(row, 4).numFmt =
+          '#,##0.00 [$€-407]';
+      }
+
+      overviewSheet.getCell("B18").font = {
+        bold: true,
+        color: { argb: EXCEL_BLUE },
+        size: 12,
+      };
+
+      overviewSheet.mergeCells("A20:D20");
+      overviewSheet.getCell("A20").value =
+        "Hinweis: Die ausgewiesenen Beträge sind Bruttolohn-/Bruttovergütungswerte ohne Arbeitgeberanteile und sonstige Lohnnebenkosten.";
+      overviewSheet.getCell("A20").font = {
+        italic: true,
+        size: 10,
+        color: { argb: "64748B" },
+      };
+      overviewSheet.getCell("A20").alignment = {
+        wrapText: true,
+      };
+      overviewSheet.getRow(20).height = 34;
+
+      /*
+       * ==================================================
+       * BLATT 2: MITARBEITER
+       * ==================================================
+       */
+      const employeeSheet = workbook.addWorksheet("Mitarbeiter", {
+        views: [
+          {
+            state: "frozen",
+            ySplit: 4,
+            showGridLines: false,
+          },
+        ],
+      });
+
+      const employeeHeaders = [
+        "Mitarbeiter",
+        "Personalnummer",
+        "Kostenstelle",
+        "Lohnmodell",
+        "Stundenkonto",
+        "Soll (h)",
+        "Ist (h)",
+        "Urlaub (h)",
+        "Krankheit (h)",
+        "Sonstige Abwesenheit (h)",
+        "Gutgeschrieben (h)",
+        "Bezahlt abwesend (h)",
+        "Abrechenbar (h)",
+        "Monatsdifferenz (h)",
+        "Saldo (h)",
+        "Überstunden (h)",
+        "Auszahlung Überstunden (h)",
+        "Übertrag (h)",
+        "Stundenlohn",
+        "Monatsgehalt",
+        "Überstundensatz",
+        "Zuschlagsbasis",
+        "Grundvergütung",
+        "Stundenzulage",
+        "Überstundenvergütung",
+        "Nachtzuschlag",
+        "Sonntagszuschlag",
+        "Feiertagszuschlag",
+        "Sonstige Zuschläge",
+        "Zuschläge gesamt",
+        "Brutto gesamt",
+        "Sollzeit geprüft?",
+        "Sollzeit-Begründung",
+      ];
+
+      employeeSheet.columns = employeeHeaders.map((header, index) => ({
+        header,
+        key: `c${index + 1}`,
+        width:
+          index === 0
+            ? 24
+            : index === 32
+              ? 34
+              : index >= 22 && index <= 30
+                ? 18
+                : 16,
+      }));
+
+      addExcelTitle(
+        employeeSheet,
+        "DIPERA – Mitarbeiterabrechnung",
+        `${businessName} · ${periodLabel}`,
+        employeeHeaders.length,
+      );
+
+      const employeeHeaderRow = employeeSheet.getRow(4);
+      employeeHeaderRow.values = employeeHeaders;
+      styleExcelHeader(employeeHeaderRow);
+
+      for (const snapshot of snapshots) {
+        const hasTimeAccount =
+          snapshot.time_account_period !== "none";
+
+        employeeSheet.addRow([
+          snapshot.employee_name || snapshot.employee_id,
+          snapshot.datev_personnel_number || "—",
+          snapshot.cost_center || "—",
+          excelWageTypeLabel(snapshot.wage_type),
+          hasTimeAccount
+            ? snapshot.time_account_period || "Aktiv"
+            : "Kein Stundenkonto",
+          hasTimeAccount
+            ? Number(snapshot.target_minutes ?? 0) / 60
+            : null,
+          Number(snapshot.worked_minutes ?? 0) / 60,
+          Number(snapshot.vacation_minutes ?? 0) / 60,
+          Number(snapshot.sick_minutes ?? 0) / 60,
+          Number(snapshot.other_absence_minutes ?? 0) / 60,
+          Number(snapshot.credited_minutes ?? 0) / 60,
+          Number(snapshot.paid_absence_minutes ?? 0) / 60,
+          Number(snapshot.accountable_minutes ?? 0) / 60,
+          hasTimeAccount
+            ? Number(snapshot.raw_difference_minutes ?? 0) / 60
+            : null,
+          hasTimeAccount
+            ? Number(snapshot.balance_minutes ?? 0) / 60
+            : null,
+          hasTimeAccount
+            ? Number(snapshot.overtime_minutes ?? 0) / 60
+            : null,
+          hasTimeAccount
+            ? Number(snapshot.payout_overtime_minutes ?? 0) / 60
+            : null,
+          hasTimeAccount
+            ? Number(snapshot.carried_balance_minutes ?? 0) / 60
+            : null,
+          Number(snapshot.hourly_rate ?? 0),
+          Number(snapshot.monthly_salary ?? 0),
+          Number(snapshot.overtime_hourly_rate ?? 0),
+          Number(snapshot.surcharge_hourly_rate ?? 0),
+          Number(snapshot.base_gross ?? 0),
+          Number(snapshot.hourly_allowance_gross ?? 0),
+          Number(snapshot.overtime_gross ?? 0),
+          Number(snapshot.night_surcharge_gross ?? 0),
+          Number(snapshot.sunday_surcharge_gross ?? 0),
+          Number(snapshot.holiday_surcharge_gross ?? 0),
+          Number(snapshot.other_surcharge_gross ?? 0),
+          Number(snapshot.total_surcharge_gross ?? 0),
+          Number(snapshot.estimated_gross ?? 0),
+          snapshot.target_minutes_requires_review
+            ? "Prüfung erforderlich"
+            : "Nein",
+          snapshot.target_minutes_override_reason || "—",
+        ]);
+      }
+
+      const employeeLastRow =
+        Math.max(4, employeeSheet.rowCount);
+
+      styleExcelTable(
+        employeeSheet,
+        5,
+        employeeLastRow,
+        employeeHeaders.length,
+      );
+      setHoursFormat(
+        employeeSheet,
+        [
+          6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18,
+        ],
+        5,
+        employeeLastRow,
+      );
+      setMoneyFormat(
+        employeeSheet,
+        [
+          19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30,
+          31,
+        ],
+        5,
+        employeeLastRow,
+      );
+
+      employeeSheet.autoFilter = {
+        from: { row: 4, column: 1 },
+        to: {
+          row: employeeLastRow,
+          column: employeeHeaders.length,
+        },
+      };
+
+      /*
+       * ==================================================
+       * BLATT 3: STEMPELUNGEN
+       * ==================================================
+       */
+      const timeSheet = workbook.addWorksheet("Stempelungen", {
+        views: [
+          {
+            state: "frozen",
+            ySplit: 4,
+            showGridLines: false,
+          },
+        ],
+      });
+
+      const timeHeaders = [
+        "Datum",
+        "Uhrzeit",
+        "Mitarbeiter",
+        "Aktion",
+        "Quelle",
+        "Standort geprüft",
+        "Standortstatus",
+        "Ausnahme / Hinweis",
+      ];
+
+      timeSheet.columns = [
+        { width: 15 },
+        { width: 11 },
+        { width: 25 },
+        { width: 19 },
+        { width: 18 },
+        { width: 17 },
+        { width: 22 },
+        { width: 38 },
+      ];
+
+      addExcelTitle(
+        timeSheet,
+        "DIPERA – Stempelungen",
+        `${businessName} · ${periodLabel}`,
+        timeHeaders.length,
+      );
+
+      const timeHeaderRow = timeSheet.getRow(4);
+      timeHeaderRow.values = timeHeaders;
+      styleExcelHeader(timeHeaderRow);
+
+      for (const entry of timeEntries) {
+        const local = formatExcelLocalDateTime(
+          entry.created_at,
+          businessTimezone,
+        );
+
+        timeSheet.addRow([
+          local.date,
+          local.time,
+          entry.employee_name,
+          excelActionLabel(entry.action),
+          excelSourceLabel(entry.source),
+          entry.location_verified ? "Ja" : "Nein",
+          entry.location_check_status || "—",
+          entry.location_exception_reason || "—",
+        ]);
+      }
+
+      const timeLastRow = Math.max(4, timeSheet.rowCount);
+      styleExcelTable(
+        timeSheet,
+        5,
+        timeLastRow,
+        timeHeaders.length,
+      );
+      timeSheet.autoFilter = {
+        from: { row: 4, column: 1 },
+        to: { row: timeLastRow, column: timeHeaders.length },
+      };
+
+      /*
+       * ==================================================
+       * BLATT 4: ABWESENHEITEN
+       * ==================================================
+       */
+      const absenceSheet = workbook.addWorksheet("Abwesenheiten", {
+        views: [
+          {
+            state: "frozen",
+            ySplit: 4,
+            showGridLines: false,
+          },
+        ],
+      });
+
+      const absenceHeaders = [
+        "Datum",
+        "Mitarbeiter",
+        "Abwesenheitsart",
+        "Code",
+        "Kategorie",
+        "Status",
+        "Geplant (h)",
+        "Berechnet (h)",
+        "Override (h)",
+        "Gutgeschrieben (h)",
+        "Bezahlt (h)",
+        "Zeitkonto relevant",
+        "Payroll relevant",
+        "Berechnungsquelle",
+        "Override-Begründung",
+      ];
+
+      absenceSheet.columns = absenceHeaders.map(
+        (header, index) => ({
+          header,
+          key: `a${index + 1}`,
+          width:
+            index === 1
+              ? 25
+              : index === 2
+                ? 24
+                : index === 14
+                  ? 38
+                  : 18,
+        }),
+      );
+
+      addExcelTitle(
+        absenceSheet,
+        "DIPERA – Abwesenheiten",
+        `${businessName} · ${periodLabel} · eingefrorene Payroll-Daten`,
+        absenceHeaders.length,
+      );
+
+      const absenceHeaderRow = absenceSheet.getRow(4);
+      absenceHeaderRow.values = absenceHeaders;
+      styleExcelHeader(absenceHeaderRow);
+
+      const employeeNamesById = new Map(
+        snapshots.map((snapshot) => [
+          snapshot.employee_id,
+          snapshot.employee_name || snapshot.employee_id,
+        ]),
+      );
+
+      for (const detail of absenceDetails) {
+        absenceSheet.addRow([
+          new Date(
+            `${detail.local_date}T12:00:00`,
+          ).toLocaleDateString("de-DE"),
+          employeeNamesById.get(detail.employee_id) ||
+            detail.employee_id,
+          detail.absence_type_name ||
+            detail.absence_type_code ||
+            "—",
+          detail.absence_type_code || "—",
+          detail.absence_category || "—",
+          detail.request_status || "—",
+          Number(detail.scheduled_minutes ?? 0) / 60,
+          Number(detail.calculated_minutes ?? 0) / 60,
+          detail.override_minutes === null
+            ? null
+            : Number(detail.override_minutes) / 60,
+          Number(detail.credited_minutes ?? 0) / 60,
+          Number(detail.paid_minutes ?? 0) / 60,
+          detail.affects_time_account ? "Ja" : "Nein",
+          detail.affects_payroll ? "Ja" : "Nein",
+          detail.evaluation_source || "—",
+          detail.override_reason || "—",
+        ]);
+      }
+
+      const absenceLastRow =
+        Math.max(4, absenceSheet.rowCount);
+
+      styleExcelTable(
+        absenceSheet,
+        5,
+        absenceLastRow,
+        absenceHeaders.length,
+      );
+      setHoursFormat(
+        absenceSheet,
+        [7, 8, 9, 10, 11],
+        5,
+        absenceLastRow,
+      );
+      absenceSheet.autoFilter = {
+        from: { row: 4, column: 1 },
+        to: {
+          row: absenceLastRow,
+          column: absenceHeaders.length,
+        },
+      };
+
+      /*
+       * ==================================================
+       * BLATT 5: ZEITKONTO
+       * ==================================================
+       */
+      const ledgerSheet = workbook.addWorksheet("Zeitkonto", {
+        views: [
+          {
+            state: "frozen",
+            ySplit: 4,
+            showGridLines: false,
+          },
+        ],
+      });
+
+      const ledgerHeaders = [
+        "Datum",
+        "Mitarbeiter",
+        "Buchung",
+        "Stunden",
+        "Quelle",
+        "Hinweis",
+      ];
+
+      ledgerSheet.columns = [
+        { width: 15 },
+        { width: 25 },
+        { width: 28 },
+        { width: 14 },
+        { width: 20 },
+        { width: 48 },
+      ];
+
+      addExcelTitle(
+        ledgerSheet,
+        "DIPERA – Zeitkonto-Buchungen",
+        `${businessName} · ${periodLabel}`,
+        ledgerHeaders.length,
+      );
+
+      const ledgerHeaderRow = ledgerSheet.getRow(4);
+      ledgerHeaderRow.values = ledgerHeaders;
+      styleExcelHeader(ledgerHeaderRow);
+
+      for (const transaction of ledgerTransactions) {
+        ledgerSheet.addRow([
+          new Date(
+            `${transaction.transaction_date}T12:00:00`,
+          ).toLocaleDateString("de-DE"),
+          transaction.employee_name ||
+            transaction.employee_id,
+          transaction.transaction_type,
+          Number(transaction.minutes ?? 0) / 60,
+          transaction.source_type || "—",
+          transaction.note || "—",
+        ]);
+      }
+
+      const ledgerLastRow =
+        Math.max(4, ledgerSheet.rowCount);
+
+      styleExcelTable(
+        ledgerSheet,
+        5,
+        ledgerLastRow,
+        ledgerHeaders.length,
+      );
+      setHoursFormat(
+        ledgerSheet,
+        [4],
+        5,
+        ledgerLastRow,
+      );
+      ledgerSheet.autoFilter = {
+        from: { row: 4, column: 1 },
+        to: {
+          row: ledgerLastRow,
+          column: ledgerHeaders.length,
+        },
+      };
+
+      /*
+       * ==================================================
+       * BLATT 6: ABRECHNUNGSPRÜFUNG
+       * ==================================================
+       */
+      const validationSheet = workbook.addWorksheet(
+        "Abrechnungsprüfung",
+        {
+          views: [
+            {
+              state: "frozen",
+              ySplit: 4,
+              showGridLines: false,
+            },
+          ],
+        },
+      );
+
+      const validationHeaders = [
+        "Mitarbeiter",
+        "Ergebnis",
+        "Prüfung",
+        "Beschreibung",
+      ];
+
+      validationSheet.columns = [
+        { width: 25 },
+        { width: 16 },
+        { width: 30 },
+        { width: 70 },
+      ];
+
+      addExcelTitle(
+        validationSheet,
+        "DIPERA – Abrechnungsprüfung",
+        `${businessName} · ${periodLabel}`,
+        validationHeaders.length,
+      );
+
+      const validationHeaderRow =
+        validationSheet.getRow(4);
+      validationHeaderRow.values = validationHeaders;
+      styleExcelHeader(validationHeaderRow);
+
+      for (const row of validationRows) {
+        validationSheet.addRow([
+          row.employee_name || "Abrechnungsperiode",
+          row.is_valid ? "OK" : "Blockiert",
+          row.error_code
+            ? getValidationLabel(row.error_code)
+            : "Keine Beanstandung",
+          row.error_message || "—",
+        ]);
+      }
+
+      const validationLastRow =
+        Math.max(4, validationSheet.rowCount);
+
+      styleExcelTable(
+        validationSheet,
+        5,
+        validationLastRow,
+        validationHeaders.length,
+      );
+
+      for (
+        let rowNumber = 5;
+        rowNumber <= validationLastRow;
+        rowNumber += 1
+      ) {
+        const resultCell =
+          validationSheet.getCell(rowNumber, 2);
+
+        if (resultCell.value === "Blockiert") {
+          resultCell.font = {
+            bold: true,
+            color: { argb: EXCEL_RED },
+          };
+        } else {
+          resultCell.font = {
+            bold: true,
+            color: { argb: EXCEL_GREEN },
+          };
+        }
+      }
+
+      /*
+       * Dateiname + Download
+       */
+      const buffer =
+        await workbook.xlsx.writeBuffer();
+
+      const blob = new Blob([buffer], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      });
+
+      const objectUrl = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      const month = String(
+        selectedPeriod.period_month,
+      ).padStart(2, "0");
+
+      anchor.href = objectUrl;
+      anchor.download =
+        `Dipera_Abrechnung_${selectedPeriod.period_year}-${month}.xlsx`;
+      anchor.style.display = "none";
+
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+
+      URL.revokeObjectURL(objectUrl);
+
+      showToast({
+        type: "success",
+        title: "Excel-Export erstellt",
+        description:
+          `${periodLabel} wurde als ausführliche Excel-Arbeitsmappe mit 6 Tabellenblättern exportiert.`,
+      });
+    } catch (error) {
+      console.error("EXCEL EXPORT ERROR:", error);
+
+      showToast({
+        type: "error",
+        title: "Excel-Export fehlgeschlagen",
+        description:
+          error instanceof Error
+            ? error.message
+            : "Die Excel-Datei konnte nicht erstellt werden.",
+      });
+    }
   }
 
   async function loadPeriodDetails(periodId: string) {
     const [validationResult, snapshotResult, auditResult, ledgerResult, settingsResult] =
       await Promise.all([
-        supabase.rpc("validate_payroll_period_close", {
+        supabase.rpc("validate_my_payroll_period_close", {
           p_payroll_period_id: periodId,
         }),
 
@@ -1439,7 +2458,7 @@ export default function PayrollPage() {
 
     try {
       const { data: latestValidation, error: validationError } =
-        await supabase.rpc("validate_payroll_period_close", {
+        await supabase.rpc("validate_my_payroll_period_close", {
           p_payroll_period_id: selectedPeriod.id,
         });
 
@@ -1945,9 +2964,9 @@ export default function PayrollPage() {
                         <Badge variant="muted">{formatMonth(selectedPeriod)}</Badge>
                       </div>
                       <p className="mt-2 max-w-2xl text-sm leading-6 text-[#475569]">
-                        Enthält die zentralen Monatswerte je Mitarbeiter: Arbeitszeit,
-                        Abwesenheiten, Zeitkonto – sofern vorhanden – sowie Grundvergütung,
-                        Zuschläge und Gesamtbrutto.
+                        Ausführliche Excel-Arbeitsmappe mit mehreren Tabellenblättern:
+                        Übersicht, Mitarbeiterabrechnung, Stempelungen, Abwesenheiten,
+                        Zeitkonto-Buchungen und Abrechnungsprüfung.
                       </p>
                     </div>
 

@@ -23,7 +23,6 @@ type ClockRequestBody = {
   longitude?: unknown;
   accuracy?: unknown;
   capturedAt?: unknown;
-  exceptionReason?: unknown;
 };
 
 type Profile = {
@@ -281,10 +280,10 @@ export async function POST(request: NextRequest) {
   }
 
   const { data: employeeData, error: employeeError } =
-  await supabaseAdmin
-    .from("employees")
-    .select(
-      `
+    await supabaseAdmin
+      .from("employees")
+      .select(
+        `
         id,
         business_id,
         name,
@@ -293,32 +292,32 @@ export async function POST(request: NextRequest) {
         location_tracking_mode,
         location_tracking_note
       `
-    )
-    .eq("id", profile.employee_id)
-    .eq("business_id", profile.business_id)
-    .single();
+      )
+      .eq("id", profile.employee_id)
+      .eq("business_id", profile.business_id)
+      .single();
 
-if (employeeError || !employeeData) {
-  console.error("CLOCK EMPLOYEE ERROR:", employeeError);
+  if (employeeError || !employeeData) {
+    console.error("CLOCK EMPLOYEE ERROR:", employeeError);
 
-  return jsonError(
-    403,
-    "EMPLOYEE_NOT_FOUND",
-    "Dein Mitarbeiterkonto konnte nicht geladen werden."
-  );
-}
+    return jsonError(
+      403,
+      "EMPLOYEE_NOT_FOUND",
+      "Dein Mitarbeiterkonto konnte nicht geladen werden."
+    );
+  }
 
-const employee: Employee = {
-  id: employeeData.id,
-  business_id: employeeData.business_id,
-  name: employeeData.name,
-  status: employeeData.status,
-  account_status: employeeData.account_status,
-  location_tracking_mode:
-    employeeData.location_tracking_mode as LocationTrackingMode | null,
-  location_tracking_note:
-    employeeData.location_tracking_note,
-};
+  const employee: Employee = {
+    id: employeeData.id,
+    business_id: employeeData.business_id,
+    name: employeeData.name,
+    status: employeeData.status,
+    account_status: employeeData.account_status,
+    location_tracking_mode:
+      employeeData.location_tracking_mode as LocationTrackingMode | null,
+    location_tracking_note:
+      employeeData.location_tracking_note,
+  };
 
   const expectedNextStatus = getNextEmployeeStatus(
     employee.status,
@@ -527,13 +526,13 @@ const employee: Employee = {
     } else {
       locationCheckStatus = "outside_allowed";
 
-      const suppliedReason =
-        typeof body.exceptionReason === "string"
-          ? body.exceptionReason.trim()
-          : "";
-
+      /*
+       * Der Ausnahmegrund stammt ausschließlich aus der
+       * serverseitig geladenen Mitarbeiterkonfiguration.
+       * Clientseitiger Freitext wird hier bewusst nicht
+       * als vertrauenswürdiger Systemgrund übernommen.
+       */
       locationExceptionReason =
-        suppliedReason ||
         employee.location_tracking_note ||
         "Mobiles Arbeiten erlaubt";
     }

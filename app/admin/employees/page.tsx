@@ -22,6 +22,7 @@ import StatsSkeleton from "@/components/skeletons/StatsSkeleton";
 import { FaWhatsapp } from "react-icons/fa";
 import EmployeeInviteCard from "@/components/employees/EmployeeInviteCard";
 import EmployeeCard from "@/components/employees/EmployeeCard";
+import EmployeeDocumentsCard from "@/components/employees/EmployeeDocumentsCard";
 
 type LocationTrackingMode = "required" | "remote_allowed" | "disabled";
 type EmploymentScope = "full_time" | "part_time";
@@ -1834,6 +1835,35 @@ async function handleOpenWhatsAppInvite() {
     }
 
     const isReactivating = currentStatus === "inactive";
+    if (!isReactivating) {
+  const { data: currentEmployeeStatus, error: statusError } = await supabase
+    .from("employees")
+    .select("status")
+    .eq("id", id)
+    .eq("business_id", businessId)
+    .single();
+
+  if (statusError || !currentEmployeeStatus) {
+    console.error("EMPLOYEE STATUS CHECK ERROR:", statusError);
+
+    showToast({
+      type: "error",
+      title: "Status konnte nicht geprüft werden",
+      description: "Bitte versuche es erneut.",
+    });
+    return;
+  }
+
+  if (currentEmployeeStatus.status !== "not_checked_in") {
+    showToast({
+      type: "warning",
+      title: "Mitarbeiter noch eingestempelt",
+      description:
+        "Der Mitarbeiter kann erst deaktiviert werden, nachdem die laufende Zeiterfassung beendet oder korrigiert wurde.",
+    });
+    return;
+  }
+}
 
     /*
      * Beim Deaktivieren wird ein Platz frei.
@@ -3968,6 +3998,9 @@ const inactiveEmployees = employees
               </div>
             </div>
           )
+        }
+        documentsContent={
+          <EmployeeDocumentsCard employeeId={employee.id} />
         }
         notesContent={renderNotes(employee)}
       />

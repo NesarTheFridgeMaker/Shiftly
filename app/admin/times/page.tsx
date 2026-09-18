@@ -56,6 +56,150 @@ type MonthOverviewRow = {
   estimated_gross: number;
 };
 
+
+type TimeEntryInspection = {
+  entry_id: string;
+  action: string;
+  created_at: string;
+  local_time: string;
+  state_before: string;
+  state_after: string;
+  is_valid: boolean;
+  issue: string | null;
+};
+
+type WorkDaySummary = {
+  local_work_date: string;
+  gross_minutes: number;
+  break_minutes: number;
+  net_minutes: number;
+  session_count: number;
+  has_conflict: boolean;
+};
+
+type TimesTab = "overview" | "entries";
+
+function actionLabel(action: string) {
+  if (action === "check_in") return "Eingestempelt";
+  if (action === "check_out") return "Ausgestempelt";
+  if (action === "break_start") return "Pause begonnen";
+  if (action === "break_end") return "Pause beendet";
+  if (action === "open_session") return "Offene Arbeitszeit";
+  if (action === "open_break") return "Offene Pause";
+  return action;
+}
+
+function stateLabel(state: string) {
+  if (state === "off") return "Nicht eingestempelt";
+  if (state === "working") return "Arbeitet";
+  if (state === "break") return "In Pause";
+
+  return state;
+}
+
+function actionBadgeVariant(
+  action: string,
+): "success" | "warning" | "primary" | "muted" {
+  if (action === "check_in" || action === "break_end") return "success";
+  if (action === "break_start") return "warning";
+  if (action === "check_out") return "muted";
+  return "warning";
+}
+
+function formatLocalTime(value: string | null | undefined) {
+  if (!value) return "—";
+  const timePart = value.split(/[ T]/)[1];
+  return timePart ? timePart.slice(0, 5) : value;
+}
+
+function formatLocalDate(value: string) {
+  const normalized = value.includes("T") ? value : `${value}T12:00:00`;
+  return new Date(normalized).toLocaleDateString("de-DE", {
+    weekday: "long",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
+}
+
+function getLocalDatePart(value: string) {
+  return value.split(/[ T]/)[0];
+}
+
+function isDateInSelectedMonth(dateValue: string, year: number, month: number) {
+  return dateValue.startsWith(
+    `${year}-${String(month).padStart(2, "0")}-`,
+  );
+}
+
+function getBufferedMonthRange(year: number, month: number) {
+  const from = new Date(Date.UTC(year, month - 1, 1));
+  const to = new Date(Date.UTC(year, month, 1));
+  from.setUTCDate(from.getUTCDate() - 1);
+  to.setUTCDate(to.getUTCDate() + 1);
+
+  return {
+    from: from.toISOString(),
+    to: to.toISOString(),
+  };
+}
+
+function getIssueLabel(issue: string | null) {
+  if (!issue) return null;
+  if (issue.includes("missing check_out")) return "Ausstempeln fehlt";
+  if (issue.includes("check_in while employee was already checked in")) {
+    return "Doppeltes Einstempeln";
+  }
+  if (issue.includes("check_out without preceding check_in")) {
+    return "Ausstempeln ohne Einstempeln";
+  }
+  if (issue.includes("break_start without active working state")) {
+    return "Pausenbeginn ohne aktive Arbeitszeit";
+  }
+  if (issue.includes("break_end without active break")) {
+    return "Pausenende ohne Pausenbeginn";
+  }
+  return issue;
+}
+
+function getEntryDateGroups(
+  entries: TimeEntryInspection[],
+  summaries: WorkDaySummary[],
+) {
+  const grouped = new Map<
+    string,
+    {
+      date: string;
+      entries: TimeEntryInspection[];
+      summary: WorkDaySummary | null;
+    }
+  >();
+
+  for (const summary of summaries) {
+    grouped.set(summary.local_work_date, {
+      date: summary.local_work_date,
+      entries: [],
+      summary,
+    });
+  }
+
+  for (const entry of entries) {
+    const localDate = getLocalDatePart(entry.local_time);
+    const current = grouped.get(localDate) ?? {
+      date: localDate,
+      entries: [],
+      summary: null,
+    };
+
+    current.entries.push(entry);
+    grouped.set(localDate, current);
+  }
+
+  return Array.from(grouped.values()).sort((a, b) =>
+  a.date.localeCompare(b.date),
+  );
+}
+
 function getInitialMonth() {
   const now = new Date();
 
@@ -185,6 +329,11 @@ export default function TimesPage() {
   const [rows, setRows] = useState<MonthOverviewRow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [activeTab, setActiveTab] = useState<TimesTab>("overview");
+  const [selectedEmployeeId, setSelectedEmployeeId] = useState("");
+  const [timeEntries, setTimeEntries] = useState<TimeEntryInspection[]>([]);
+  const [workDaySummaries, setWorkDaySummaries] = useState<WorkDaySummary[]>([]);
+  const [isEntriesLoading, setIsEntriesLoading] = useState(false);
 
   async function loadOverview() {
     setIsLoading(true);
@@ -218,6 +367,85 @@ export default function TimesPage() {
   useEffect(() => {
     void loadOverview();
   }, [year, month]);
+
+  useEffect(() => {
+    if (rows.length === 0) {
+      setSelectedEmployeeId("");
+      return;
+    }
+
+    if (
+      !selectedEmployeeId ||
+      !rows.some((row) => row.employee_id === selectedEmployeeId)
+    ) {
+      setSelectedEmployeeId(rows[0].employee_id);
+    }
+  }, [rows, selectedEmployeeId]);
+
+  async function loadEmployeeEntries() {
+    if (!selectedEmployeeId) {
+      setTimeEntries([]);
+      setWorkDaySummaries([]);
+      return;
+    }
+
+    setIsEntriesLoading(true);
+
+    try {
+      const range = getBufferedMonthRange(year, month);
+
+      const [entriesResult, workDaysResult] = await Promise.all([
+        supabase.rpc("inspect_business_employee_time_entries", {
+          p_employee_id: selectedEmployeeId,
+          p_from: range.from,
+          p_to: range.to,
+        }),
+        supabase.rpc("get_business_employee_work_days", {
+          p_employee_id: selectedEmployeeId,
+          p_from: range.from,
+          p_to: range.to,
+        }),
+      ]);
+
+      if (entriesResult.error) {
+        console.error("TIME ENTRIES INSPECTION ERROR:", entriesResult.error);
+        showToast({
+          type: "error",
+          title: "Stempelungen konnten nicht geladen werden",
+          description: entriesResult.error.message || "Bitte versuche es erneut.",
+        });
+        setTimeEntries([]);
+      } else {
+        setTimeEntries(
+          ((entriesResult.data || []) as TimeEntryInspection[]).filter((entry) =>
+            isDateInSelectedMonth(
+              getLocalDatePart(entry.local_time),
+              year,
+              month,
+            ),
+          ),
+        );
+      }
+
+      if (workDaysResult.error) {
+        console.error("WORK DAY SUMMARY ERROR:", workDaysResult.error);
+        setWorkDaySummaries([]);
+      } else {
+        setWorkDaySummaries(
+          ((workDaysResult.data || []) as WorkDaySummary[]).filter((summary) =>
+            isDateInSelectedMonth(summary.local_work_date, year, month),
+          ),
+        );
+      }
+    } finally {
+      setIsEntriesLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    if (activeTab !== "entries") return;
+    void loadEmployeeEntries();
+  }, [activeTab, selectedEmployeeId, year, month]);
 
   function changeMonth(direction: number) {
     const date = new Date(year, month - 1, 1);
@@ -269,12 +497,35 @@ export default function TimesPage() {
 
   const periodStatus = rows[0]?.period_status ?? "open";
 
+  const entryGroups = useMemo(
+    () => getEntryDateGroups(timeEntries, workDaySummaries),
+    [timeEntries, workDaySummaries],
+  );
+
+  const selectedEmployeeName =
+    rows.find((row) => row.employee_id === selectedEmployeeId)?.employee_name ??
+    "Mitarbeiter";
+
+  const selectedMonthNetMinutes = workDaySummaries.reduce(
+    (sum, day) => sum + Number(day.net_minutes ?? 0),
+    0,
+  );
+
+  const selectedMonthBreakMinutes = workDaySummaries.reduce(
+    (sum, day) => sum + Number(day.break_minutes ?? 0),
+    0,
+  );
+
+  const selectedMonthConflictDays = workDaySummaries.filter(
+    (day) => day.has_conflict,
+  ).length;
+
   if (isLoading) {
     return (
       <div className="space-y-8">
         <PageHeader
-          title="Arbeitszeiten & Bruttovergütung"
-          description="Monatliche Übersicht über Arbeitszeiten, Stundenkonten und Bruttovergütung aller Mitarbeiter."
+          title="Zeiten & Löhne"
+          description="Arbeitszeiten, Stempelungen, Stundenkonten und Bruttolöhne zentral im Überblick."
         />
 
         <StatsSkeleton />
@@ -292,9 +543,45 @@ export default function TimesPage() {
   return (
     <div className="space-y-8">
       <PageHeader
-        title="Arbeitszeiten & Bruttovergütung"
-        description="Monatliche Übersicht über Arbeitszeiten, Stundenkonten und Bruttovergütung aller Mitarbeiter."
+        title="Zeiten & Löhne"
+        description="Arbeitszeiten, Stempelungen, Stundenkonten und Bruttolöhne zentral im Überblick."
       />
+
+      <div className="rounded-3xl border border-[#D7DEE8] bg-[#EEF2F6] p-2 shadow-[0_6px_18px_rgba(15,23,42,0.08)]">
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+          <button
+            type="button"
+            onClick={() => setActiveTab("overview")}
+            className={[
+              "rounded-2xl border px-5 py-4 text-left transition-all duration-200",
+              activeTab === "overview"
+                ? "border-[#2563EB] bg-[#2563EB] text-white shadow-[0_10px_24px_rgba(37,99,235,0.20)]"
+                : "border-transparent bg-[#E9EEF4] text-[#0F172A] shadow-[0_3px_9px_rgba(15,23,42,0.06)] hover:border-[#BFDBFE] hover:bg-[#E8F2FB]",
+            ].join(" ")}
+          >
+            <span className="text-base font-semibold">Monatsübersicht</span>
+            <p className={["mt-1 text-sm", activeTab === "overview" ? "text-white/80" : "text-[#64748B]"].join(" ")}>
+              Soll, Ist, Stundenkonto, Zuschläge und Bruttolohn.
+            </p>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab("entries")}
+            className={[
+              "rounded-2xl border px-5 py-4 text-left transition-all duration-200",
+              activeTab === "entries"
+                ? "border-[#2563EB] bg-[#2563EB] text-white shadow-[0_10px_24px_rgba(37,99,235,0.20)]"
+                : "border-transparent bg-[#E9EEF4] text-[#0F172A] shadow-[0_3px_9px_rgba(15,23,42,0.06)] hover:border-[#BFDBFE] hover:bg-[#E8F2FB]",
+            ].join(" ")}
+          >
+            <span className="text-base font-semibold">Stempelungen</span>
+            <p className={["mt-1 text-sm", activeTab === "entries" ? "text-white/80" : "text-[#64748B]"].join(" ")}>
+              Einzelne Stempelereignisse, Pausen und Konflikte je Mitarbeiter.
+            </p>
+          </button>
+        </div>
+      </div>
 
       <Section
         title={formatMonthLabel(year, month)}
@@ -334,7 +621,8 @@ export default function TimesPage() {
           </div>
         }
       >
-        <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-5">
+        {activeTab === "overview" ? (
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-5">
           <StatCard
             title="Mitarbeiter"
             value={rows.length}
@@ -363,10 +651,29 @@ export default function TimesPage() {
             badge="Gesamt"
             badgeVariant="primary"
           />
-        </div>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+            <StatCard
+              title="Nettoarbeitszeit"
+              value={formatMinutes(selectedMonthNetMinutes)}
+            />
+            <StatCard
+              title="Pausenzeit"
+              value={formatMinutes(selectedMonthBreakMinutes)}
+            />
+            <StatCard
+              title="Konflikttage"
+              value={selectedMonthConflictDays}
+              badge={selectedMonthConflictDays > 0 ? "Prüfen" : "Sauber"}
+              badgeVariant={selectedMonthConflictDays > 0 ? "warning" : "success"}
+            />
+          </div>
+        )}
       </Section>
 
-      <Section
+      {activeTab === "overview" && (
+        <Section
         title="Mitarbeiterübersicht"
         description="Öffne einen Mitarbeiter, um Zeitkonto und Vergütungsbestandteile im Detail zu sehen."
         action={
@@ -742,6 +1049,197 @@ export default function TimesPage() {
           </div>
         )}
       </Section>
+      )}
+
+      {activeTab === "entries" && (
+        <Section
+          title="Stempelungen"
+          description="Wähle einen Mitarbeiter und prüfe die einzelnen Stempelereignisse des ausgewählten Monats. Änderungen bleiben bewusst im Bereich „Korrekturen“."
+          action={
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+              <select
+                value={selectedEmployeeId}
+                onChange={(event) => setSelectedEmployeeId(event.target.value)}
+                className="h-10 min-w-[240px] rounded-xl border border-transparent bg-[#E9EEF4] px-3 text-sm text-[#0F172A] outline-none shadow-[0_3px_9px_rgba(15,23,42,0.05)] transition hover:bg-[#E3E9F0] focus:border-[#60A5FA] focus:bg-white focus:ring-4 focus:ring-[#DBEAFE]"
+              >
+                {rows.map((row) => (
+                  <option key={row.employee_id} value={row.employee_id}>
+                    {row.employee_name}
+                  </option>
+                ))}
+              </select>
+
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() => {
+                  window.location.href = "/admin/corrections";
+                }}
+              >
+                Korrekturen öffnen
+              </Button>
+            </div>
+          }
+        >
+          {!selectedEmployeeId ? (
+            <EmptyState
+              title="Kein Mitarbeiter verfügbar"
+              description="Für den ausgewählten Monat ist kein Mitarbeiter in der Monatsübersicht vorhanden."
+            />
+          ) : isEntriesLoading ? (
+            <TableSkeleton rows={6} columns={5} />
+          ) : entryGroups.length === 0 ? (
+            <EmptyState
+              title="Keine Stempelungen vorhanden"
+              description={`${selectedEmployeeName} hat im ausgewählten Monat keine Stempelereignisse.`}
+            />
+          ) : (
+            <div className="space-y-5">
+              <div className="rounded-3xl border border-[#CBD5E1] bg-[#EEF2F6] px-5 py-4 shadow-[0_6px_18px_rgba(15,23,42,0.07)]">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <p className="text-sm font-semibold text-[#0F172A]">
+                      {selectedEmployeeName}
+                    </p>
+                    <p className="mt-1 text-xs text-[#64748B]">
+                      {formatMonthLabel(year, month)} · {timeEntries.length} Stempelereignis{timeEntries.length === 1 ? "" : "se"}
+                    </p>
+                  </div>
+
+                  <Badge
+                    variant={selectedMonthConflictDays > 0 ? "warning" : "success"}
+                    dot
+                  >
+                    {selectedMonthConflictDays > 0
+                      ? `${selectedMonthConflictDays} Konflikttag${selectedMonthConflictDays === 1 ? "" : "e"}`
+                      : "Keine Konflikte"}
+                  </Badge>
+                </div>
+              </div>
+
+              {entryGroups.map((group) => (
+                <div
+                  key={group.date}
+                  className={[
+                    "overflow-hidden rounded-3xl border bg-white shadow-[0_6px_18px_rgba(15,23,42,0.09)]",
+                    group.summary?.has_conflict
+                      ? "border-[#F6D58B]"
+                      : "border-[#D7DEE8]",
+                  ].join(" ")}
+                >
+                  <div className="flex flex-col gap-4 border-b border-[#CBD5E1] bg-[#EEF2F6] px-5 py-4 md:flex-row md:items-center md:justify-between">
+                    <div className="flex flex-wrap items-center gap-3">
+                      <div>
+                        <p className="text-base font-semibold text-[#0F172A]">
+                          {formatLocalDate(group.date)}
+                        </p>
+                        <p className="mt-1 text-xs text-[#64748B]">
+                          {group.summary
+                            ? `${group.summary.session_count} Arbeitssitzung${group.summary.session_count === 1 ? "" : "en"}`
+                            : "Stempelereignisse"}
+                        </p>
+                      </div>
+
+                      {group.summary?.has_conflict && (
+                        <Badge variant="warning" dot>
+                          Konflikt
+                        </Badge>
+                      )}
+                    </div>
+
+                    {group.summary && (
+                      <div className="grid grid-cols-3 gap-2 sm:min-w-[360px]">
+                        <div className="rounded-xl border border-[#D7DEE8] bg-white px-3 py-2">
+                          <p className="text-[10px] font-medium uppercase tracking-[0.06em] text-[#64748B]">
+                            Brutto
+                          </p>
+                          <p className="mt-1 text-xs font-semibold text-[#0F172A]">
+                            {formatMinutes(group.summary.gross_minutes)}
+                          </p>
+                        </div>
+                        <div className="rounded-xl border border-[#D7DEE8] bg-white px-3 py-2">
+                          <p className="text-[10px] font-medium uppercase tracking-[0.06em] text-[#64748B]">
+                            Pause
+                          </p>
+                          <p className="mt-1 text-xs font-semibold text-[#0F172A]">
+                            {formatMinutes(group.summary.break_minutes)}
+                          </p>
+                        </div>
+                        <div className="rounded-xl border border-[#D7DEE8] bg-white px-3 py-2">
+                          <p className="text-[10px] font-medium uppercase tracking-[0.06em] text-[#64748B]">
+                            Netto
+                          </p>
+                          <p className="mt-1 text-xs font-semibold text-[#047857]">
+                            {formatMinutes(group.summary.net_minutes)}
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="divide-y divide-[#E2E8F0]">
+                    {group.entries.map((entry) => (
+                      <div
+                        key={`${entry.entry_id}-${entry.action}-${entry.local_time}`}
+                        className={[
+                          "flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between",
+                          entry.is_valid ? "bg-white" : "bg-[#FFF8E8]",
+                        ].join(" ")}
+                      >
+                        <div className="flex min-w-0 items-center gap-4">
+                          <div className="w-14 shrink-0 text-lg font-semibold tracking-[-0.02em] text-[#0F172A]">
+                            {formatLocalTime(entry.local_time)}
+                          </div>
+
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <Badge
+                                variant={
+                                  entry.is_valid
+                                    ? actionBadgeVariant(entry.action)
+                                    : "warning"
+                                }
+                                dot={!entry.is_valid}
+                              >
+                                {actionLabel(entry.action)}
+                              </Badge>
+
+                              {!entry.is_valid && (
+                                <span className="text-xs font-medium text-[#B45309]">
+                                  {getIssueLabel(entry.issue)}
+                                </span>
+                              )}
+                            </div>
+
+                            <p className="mt-1 text-xs text-[#64748B]">
+                              {stateLabel(entry.state_before)} →{" "}
+                              {stateLabel(entry.state_after)}
+                            </p>
+                          </div>
+                        </div>
+
+                        {!entry.is_valid && (
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => {
+                              window.location.href = "/admin/corrections";
+                            }}
+                          >
+                            Prüfen
+                          </Button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </Section>
+      )}
     </div>
   );
 }
