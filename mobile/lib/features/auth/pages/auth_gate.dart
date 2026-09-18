@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -45,6 +46,11 @@ class _AuthGateState extends ConsumerState<AuthGate> {
         unawaited(_evaluateSession(authState.session));
       },
       onError: (Object error, StackTrace stackTrace) {
+        if (kDebugMode) {
+          debugPrint('AUTH: Auth-State-Stream fehlgeschlagen: $error');
+          debugPrintStack(stackTrace: stackTrace);
+        }
+
         _showDenied(
           'Die Anmeldung konnte nicht sicher geprüft werden. '
           'Bitte versuche es erneut.',
@@ -52,7 +58,11 @@ class _AuthGateState extends ConsumerState<AuthGate> {
       },
     );
 
-    unawaited(_evaluateSession(Supabase.instance.client.auth.currentSession));
+    unawaited(
+      _evaluateSession(
+        Supabase.instance.client.auth.currentSession,
+      ),
+    );
   }
 
   Future<void> _evaluateSession(Session? session) async {
@@ -124,26 +134,42 @@ class _AuthGateState extends ConsumerState<AuthGate> {
 
       _showDenied(
         'Die Prüfung des Mitarbeiterkontos dauert zu lange. '
-        'Bitte prüfe deine Internetverbindung und die '
-        'Supabase-Berechtigungen.',
+        'Bitte prüfe deine Internetverbindung und versuche '
+        'es erneut.',
       );
-    } on PostgrestException catch (error) {
+    } on PostgrestException catch (error, stackTrace) {
+      if (kDebugMode) {
+        debugPrint(
+          'AUTH: Mitarbeiterprofil konnte nicht geladen werden: '
+          '${error.message}',
+        );
+        debugPrintStack(stackTrace: stackTrace);
+      }
+
       if (!mounted || requestId != _requestId) {
         return;
       }
 
       _showDenied(
-        'Das Mitarbeiterprofil konnte nicht geladen werden: '
-        '${error.message}',
+        'Das Mitarbeiterprofil konnte nicht geladen werden. '
+        'Bitte versuche es erneut.',
       );
-    } catch (error) {
+    } catch (error, stackTrace) {
+      if (kDebugMode) {
+        debugPrint(
+          'AUTH: Mitarbeiterzugang konnte nicht geprüft werden: '
+          '$error',
+        );
+        debugPrintStack(stackTrace: stackTrace);
+      }
+
       if (!mounted || requestId != _requestId) {
         return;
       }
 
       _showDenied(
         'Der Mitarbeiterzugang konnte nicht geprüft werden. '
-        'Technischer Fehler: $error',
+        'Bitte versuche es erneut.',
       );
     }
   }
@@ -166,23 +192,35 @@ class _AuthGateState extends ConsumerState<AuthGate> {
       final token = await service.initialize();
 
       if (token == null) {
-        debugPrint(
-          'PUSH: Für diesen Benutzer wurde '
-          'kein FCM-Token erzeugt.',
-        );
+        if (kDebugMode) {
+          debugPrint(
+            'PUSH: Für diesen Benutzer wurde '
+            'kein FCM-Token erzeugt.',
+          );
+        }
 
         return;
       }
 
-      debugPrint('PUSH: FCM-Token erfolgreich erhalten.');
+      if (kDebugMode) {
+        debugPrint(
+          'PUSH: FCM-Token erfolgreich erhalten.',
+        );
+      }
     } catch (error, stackTrace) {
       /*
        * Push darf niemals verhindern, dass der
        * Mitarbeiter die App verwenden kann.
+       *
+       * Technische Details werden nur in Debug-Builds
+       * ausgegeben.
        */
-      debugPrint('PUSH: Initialisierung fehlgeschlagen: $error');
-
-      debugPrintStack(stackTrace: stackTrace);
+      if (kDebugMode) {
+        debugPrint(
+          'PUSH: Initialisierung fehlgeschlagen: $error',
+        );
+        debugPrintStack(stackTrace: stackTrace);
+      }
 
       /*
        * Bei einem echten Initialisierungsfehler darf
@@ -192,12 +230,17 @@ class _AuthGateState extends ConsumerState<AuthGate> {
     }
   }
 
-  Future<void> _denyAndSignOut(String message, int requestId) async {
+  Future<void> _denyAndSignOut(
+    String message,
+    int requestId,
+  ) async {
     _isDenyingAccess = true;
     _pushInitializedForUserId = null;
 
     try {
-      await _authService.signOut().timeout(const Duration(seconds: 5));
+      await _authService.signOut().timeout(
+        const Duration(seconds: 5),
+      );
     } catch (_) {
       // Zugriff bleibt auch bei fehlgeschlagenem
       // Sign-out gesperrt.

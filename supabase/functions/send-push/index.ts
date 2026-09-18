@@ -152,13 +152,17 @@ export default {
         /*
          * Sicherstellen, dass der Zielmitarbeiter
          * tatsächlich zum selben Betrieb gehört.
+         *
+         * account_status wird bewusst mitgeladen,
+         * damit deaktivierte Mitarbeiter keine
+         * Push-Nachrichten mehr erhalten können.
          */
         const {
           data: targetEmployee,
           error: employeeError,
         } = await ctx.supabaseAdmin
           .from("employees")
-          .select("id, business_id")
+          .select("id, business_id, account_status")
           .eq("id", payload.employeeId)
           .eq("business_id", businessId)
           .maybeSingle();
@@ -195,7 +199,29 @@ export default {
         }
 
         /*
-         * Alle registrierten Geräte des Mitarbeiters laden.
+         * Offboarding-Schutz:
+         *
+         * Ein deaktivierter Mitarbeiter darf keine
+         * Push-Nachrichten mehr erhalten – selbst dann
+         * nicht, wenn noch alte FCM-Tokens in
+         * push_devices vorhanden sind.
+         */
+        if (targetEmployee.account_status !== "active") {
+          return Response.json(
+            {
+              success: false,
+              error:
+                "An deaktivierte Mitarbeiter können keine Push-Benachrichtigungen gesendet werden.",
+            },
+            {
+              status: 403,
+            },
+          );
+        }
+
+        /*
+         * Alle registrierten Geräte des aktiven
+         * Mitarbeiters laden.
          */
         const {
           data: devices,
@@ -301,13 +327,13 @@ export default {
                   data: payload.data ?? {},
 
                   android: {
-                  priority: "high",
+                    priority: "high",
 
-                  notification: {
-                    channel_id: "dipera_high_importance_v1",
-                    sound: "default",
+                    notification: {
+                      channel_id: "dipera_high_importance_v1",
+                      sound: "default",
+                    },
                   },
-                },
 
                   apns: {
                     payload: {

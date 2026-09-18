@@ -1,274 +1,307 @@
-import 'dart:async'; 
-import 'dart:convert'; 
-import 'dart:io'; 
+import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
 
-import 'package:firebase_messaging/firebase_messaging.dart'; 
-import 'package:flutter/foundation.dart'; 
-import 'package:flutter_local_notifications/flutter_local_notifications.dart'; 
-import 'package:supabase_flutter/supabase_flutter.dart'; 
+import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
-class PushNotificationService { 
-  PushNotificationService(this._client); 
+class PushNotificationService {
+  PushNotificationService(this._client);
 
-  final SupabaseClient _client; 
+  final SupabaseClient _client;
 
-  final FirebaseMessaging _messaging = FirebaseMessaging.instance; 
+  final FirebaseMessaging _messaging = FirebaseMessaging.instance;
 
-  final FlutterLocalNotificationsPlugin _localNotifications = 
-      FlutterLocalNotificationsPlugin(); 
+  final FlutterLocalNotificationsPlugin _localNotifications =
+      FlutterLocalNotificationsPlugin();
 
-  StreamSubscription<RemoteMessage>? _foregroundSubscription; 
+  StreamSubscription<RemoteMessage>? _foregroundSubscription;
+  StreamSubscription<String>? _tokenRefreshSubscription;
 
-  StreamSubscription<String>? _tokenRefreshSubscription; 
+  bool _listenersInitialized = false;
+  bool _localNotificationsInitialized = false;
 
-  bool _listenersInitialized = false; 
-  bool _localNotificationsInitialized = false; 
+  static const String _channelId = 'dipera_high_importance_v1';
 
-  static const String _channelId = 'dipera_high_importance_v1'; 
+  static const String _channelName = 'Dipera Benachrichtigungen';
 
-  static const String _channelName = 'Dipera Benachrichtigungen'; 
+  static const String _channelDescription =
+      'Wichtige Benachrichtigungen zu Schichten, '
+      'Dokumenten, Abwesenheiten und weiteren '
+      'Dipera-Aktualisierungen.';
 
-  static const String _channelDescription = 
-      'Wichtige Benachrichtigungen zu Schichten, ' 
-      'Dokumenten, Abwesenheiten und weiteren ' 
-      'Dipera-Aktualisierungen.'; 
+  Future<String?> initialize() async {
+    await _initializeLocalNotifications();
 
-  Future<String?> initialize() async { 
-    await _initializeLocalNotifications(); 
+    final settings = await _messaging.requestPermission(
+      alert: true,
+      badge: true,
+      sound: true,
+      provisional: false,
+    );
 
-    final settings = await _messaging.requestPermission( 
-      alert: true, 
-      badge: true, 
-      sound: true, 
-      provisional: false, 
-    ); 
+    if (kDebugMode) {
+      debugPrint(
+        'PUSH: Berechtigungsstatus = '
+        '${settings.authorizationStatus}',
+      );
+    }
 
-    debugPrint( 
-      'PUSH: Berechtigungsstatus = ' 
-      '${settings.authorizationStatus}', 
-    ); 
+    if (settings.authorizationStatus == AuthorizationStatus.denied ||
+        settings.authorizationStatus == AuthorizationStatus.notDetermined) {
+      if (kDebugMode) {
+        debugPrint(
+          'PUSH: Benachrichtigungen nicht freigegeben.',
+        );
+      }
 
-    if (settings.authorizationStatus == AuthorizationStatus.denied || 
-        settings.authorizationStatus == AuthorizationStatus.notDetermined) { 
-      debugPrint('PUSH: Benachrichtigungen nicht freigegeben.'); 
+      return null;
+    }
 
-      return null; 
-    } 
+    /*
+     * Für iOS/macOS:
+     * Im Vordergrund dürfen Benachrichtigungen
+     * direkt vom Betriebssystem dargestellt werden.
+     *
+     * Unter Android zeigen wir sie über
+     * flutter_local_notifications.
+     */
+    if (Platform.isIOS || Platform.isMacOS) {
+      await _messaging.setForegroundNotificationPresentationOptions(
+        alert: true,
+        badge: true,
+        sound: true,
+      );
+    }
 
-    /* 
-     * Für iOS/macOS: 
-     * Im Vordergrund dürfen Benachrichtigungen 
-     * direkt vom Betriebssystem dargestellt werden. 
-     * 
-     * Unter Android zeigen wir sie über 
-     * flutter_local_notifications. 
-     */ 
-    if (Platform.isIOS || Platform.isMacOS) { 
-      await _messaging.setForegroundNotificationPresentationOptions( 
-        alert: true, 
-        badge: true, 
-        sound: true, 
-      ); 
-    } 
+    final token = await _messaging.getToken();
 
-    final token = await _messaging.getToken(); 
+    if (token != null && token.isNotEmpty) {
+      await _saveToken(token);
 
-    debugPrint('=============================='); 
-    debugPrint('AKTUELLER FCM TOKEN:'); 
-    debugPrint(token); 
-    debugPrint('=============================='); 
+      if (kDebugMode) {
+        debugPrint(
+          'PUSH: FCM-Token erfolgreich registriert.',
+        );
+      }
+    }
 
-    if (token != null && token.isNotEmpty) { 
-      await _saveToken(token); 
+    _initializeListeners();
 
-      debugPrint('PUSH: FCM-Token erfolgreich registriert.'); 
-    } 
+    return token;
+  }
 
-    _initializeListeners(); 
+  Future<void> _initializeLocalNotifications() async {
+    if (_localNotificationsInitialized) {
+      return;
+    }
 
-    return token; 
-  } 
+    const androidInitializationSettings = AndroidInitializationSettings(
+      '@mipmap/ic_launcher',
+    );
 
-  Future<void> _initializeLocalNotifications() async { 
-    if (_localNotificationsInitialized) { 
-      return; 
-    } 
+    const darwinInitializationSettings =
+        DarwinInitializationSettings();
 
-    const androidInitializationSettings = AndroidInitializationSettings( 
-      '@mipmap/ic_launcher', 
-    ); 
+    const initializationSettings = InitializationSettings(
+      android: androidInitializationSettings,
+      iOS: darwinInitializationSettings,
+    );
 
-    const darwinInitializationSettings = DarwinInitializationSettings(); 
+    await _localNotifications.initialize(
+      settings: initializationSettings,
+      onDidReceiveNotificationResponse: _handleNotificationTap,
+    );
 
-    const initializationSettings = InitializationSettings( 
-      android: androidInitializationSettings, 
-      iOS: darwinInitializationSettings, 
-    ); 
+    /*
+     * Android Notification Channel.
+     *
+     * Importance.max sorgt für Heads-up-Banner,
+     * sofern Android/Samsung diese nicht in den
+     * Systemeinstellungen deaktiviert hat.
+     */
+    const channel = AndroidNotificationChannel(
+      _channelId,
+      _channelName,
+      description: _channelDescription,
+      importance: Importance.max,
+      playSound: true,
+      enableVibration: true,
+      showBadge: true,
+    );
 
-    await _localNotifications.initialize( 
-      settings: initializationSettings, 
-      onDidReceiveNotificationResponse: _handleNotificationTap, 
-    ); 
+    final androidPlugin = _localNotifications
+        .resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin
+        >();
 
-    /* 
-     * Android Notification Channel. 
-     * 
-     * Importance.max sorgt für Heads-up-Banner, 
-     * sofern Android/Samsung diese nicht in den 
-     * Systemeinstellungen deaktiviert hat. 
-     */ 
-    const channel = AndroidNotificationChannel( 
-      _channelId, 
-      _channelName, 
-      description: _channelDescription, 
-      importance: Importance.max, 
-      playSound: true, 
-      enableVibration: true, 
-      showBadge: true, 
-    ); 
+    await androidPlugin?.createNotificationChannel(channel);
 
-    final androidPlugin = _localNotifications 
-        .resolvePlatformSpecificImplementation< 
-          AndroidFlutterLocalNotificationsPlugin 
-        >(); 
+    _localNotificationsInitialized = true;
 
-    await androidPlugin?.createNotificationChannel(channel); 
+    if (kDebugMode) {
+      debugPrint(
+        'PUSH: Lokaler High-Importance-Channel initialisiert.',
+      );
+    }
+  }
 
-    _localNotificationsInitialized = true; 
+  void _initializeListeners() {
+    if (_listenersInitialized) {
+      return;
+    }
 
-    debugPrint('PUSH: Lokaler High-Importance-Channel initialisiert.'); 
-  } 
+    /*
+     * Nachricht trifft ein, während Dipera geöffnet ist.
+     */
+    _foregroundSubscription =
+        FirebaseMessaging.onMessage.listen(
+      (RemoteMessage message) async {
+        if (kDebugMode) {
+          debugPrint(
+            'PUSH: Nachricht im Vordergrund erhalten.',
+          );
+        }
 
-  void _initializeListeners() { 
-    if (_listenersInitialized) { 
-      return; 
-    } 
+        /*
+         * Android zeigt FCM-Notifications im
+         * Vordergrund nicht automatisch sichtbar an.
+         *
+         * Deshalb erzeugen wir hier selbst eine
+         * lokale Heads-up-Benachrichtigung.
+         */
+        if (Platform.isAndroid) {
+          await _showForegroundNotification(message);
+        }
+      },
+    );
 
-    /* 
-     * Nachricht trifft ein, während Dipera geöffnet ist. 
-     */ 
-    _foregroundSubscription = FirebaseMessaging.onMessage.listen(( 
-      RemoteMessage message, 
-    ) async { 
-      debugPrint('PUSH: Nachricht im Vordergrund erhalten'); 
+    /*
+     * Firebase kann Tokens erneuern.
+     */
+    _tokenRefreshSubscription =
+        _messaging.onTokenRefresh.listen(
+      (String newToken) async {
+        try {
+          await _saveToken(newToken);
 
-      debugPrint( 
-        'PUSH: Titel = ' 
-        '${message.notification?.title}', 
-      ); 
+          if (kDebugMode) {
+            debugPrint(
+              'PUSH: Aktualisierter FCM-Token gespeichert.',
+            );
+          }
+        } catch (error, stackTrace) {
+          if (kDebugMode) {
+            debugPrint(
+              'PUSH: Token-Refresh konnte nicht gespeichert werden: '
+              '$error',
+            );
+            debugPrintStack(stackTrace: stackTrace);
+          }
+        }
+      },
+    );
 
-      debugPrint( 
-        'PUSH: Inhalt = ' 
-        '${message.notification?.body}', 
-      ); 
+    /*
+     * Nachricht wurde angeklickt,
+     * während App im Hintergrund war.
+     */
+    FirebaseMessaging.onMessageOpenedApp.listen(
+      (RemoteMessage message) {
+        if (kDebugMode) {
+          debugPrint(
+            'PUSH: Benachrichtigung wurde geöffnet.',
+          );
+        }
 
-      /* 
-         * Android zeigt FCM-Notifications im 
-         * Vordergrund nicht automatisch sichtbar an. 
-         * 
-         * Deshalb erzeugen wir hier selbst eine 
-         * lokale Heads-up-Benachrichtigung. 
-         */ 
-      if (Platform.isAndroid) { 
-        await _showForegroundNotification(message); 
-      } 
-    }); 
+        /*
+         * Hier können wir später navigieren:
+         *
+         * type = shift      -> Schichten
+         * type = document   -> Dokumente
+         * type = absence    -> Abwesenheiten
+         */
+      },
+    );
 
-    /* 
-     * Firebase kann Tokens erneuern. 
-     */ 
-    _tokenRefreshSubscription = _messaging.onTokenRefresh.listen(( 
-      String newToken, 
-    ) async { 
-      try { 
-        await _saveToken(newToken); 
+    _listenersInitialized = true;
+  }
 
-        debugPrint('PUSH: Aktualisierter FCM-Token gespeichert.'); 
-      } catch (error) { 
-        debugPrint( 
-          'PUSH: Token-Refresh konnte nicht ' 
-          'gespeichert werden: $error', 
-        ); 
-      } 
-    }); 
+  Future<void> _showForegroundNotification(
+    RemoteMessage message,
+  ) async {
+    final notification = message.notification;
 
-    /* 
-     * Nachricht wurde angeklickt, 
-     * während App im Hintergrund war. 
-     */ 
-    FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) { 
-      debugPrint('PUSH: Benachrichtigung wurde geöffnet.'); 
+    final title =
+        notification?.title ??
+        message.data['title'] ??
+        'Dipera';
 
-      debugPrint('PUSH DATA: ${message.data}'); 
+    final body =
+        notification?.body ??
+        message.data['body'] ??
+        'Es gibt eine neue Mitteilung.';
 
-      /* 
-         * Hier können wir später navigieren: 
-         * 
-         * type = shift      -> Schichten 
-         * type = document   -> Dokumente 
-         * type = absence    -> Abwesenheiten 
-         */ 
-    }); 
+    const androidDetails = AndroidNotificationDetails(
+      _channelId,
+      _channelName,
+      channelDescription: _channelDescription,
+      importance: Importance.max,
+      priority: Priority.high,
+      playSound: true,
+      enableVibration: true,
+      enableLights: true,
+      showWhen: true,
+    );
 
-    _listenersInitialized = true; 
-  } 
+    const notificationDetails =
+        NotificationDetails(android: androidDetails);
 
-  Future<void> _showForegroundNotification(RemoteMessage message) async { 
-    final notification = message.notification; 
+    final notificationId =
+        DateTime.now().millisecondsSinceEpoch.remainder(
+      2147483647,
+    );
 
-    final title = notification?.title ?? message.data['title'] ?? 'Dipera'; 
+    await _localNotifications.show(
+      id: notificationId,
+      title: title,
+      body: body,
+      notificationDetails: notificationDetails,
+      payload: jsonEncode(message.data),
+    );
 
-    final body = 
-        notification?.body ?? 
-        message.data['body'] ?? 
-        'Es gibt eine neue Mitteilung.'; 
+    if (kDebugMode) {
+      debugPrint(
+        'PUSH: Vordergrund-Banner angezeigt.',
+      );
+    }
+  }
 
-    const androidDetails = AndroidNotificationDetails( 
-      _channelId, 
-      _channelName, 
-      channelDescription: _channelDescription, 
-      importance: Importance.max, 
-      priority: Priority.high, 
-      playSound: true, 
-      enableVibration: true, 
-      enableLights: true, 
-      showWhen: true, 
-    ); 
+  void _handleNotificationTap(
+    NotificationResponse response,
+  ) {
+    if (kDebugMode) {
+      debugPrint(
+        'PUSH: Lokale Benachrichtigung geöffnet.',
+      );
+    }
 
-    const notificationDetails = NotificationDetails(android: androidDetails); 
-
-    final notificationId = DateTime.now().millisecondsSinceEpoch.remainder( 
-      2147483647, 
-    ); 
-
-    await _localNotifications.show( 
-      id: notificationId, 
-      title: title, 
-      body: body, 
-      notificationDetails: notificationDetails, 
-      payload: jsonEncode(message.data), 
-    ); 
-
-    debugPrint('PUSH: Vordergrund-Banner angezeigt.'); 
-  } 
-
-  void _handleNotificationTap(NotificationResponse response) { 
-    final payload = response.payload; 
-
-    debugPrint('PUSH: Lokale Benachrichtigung geöffnet.'); 
-
-    debugPrint('PUSH PAYLOAD: $payload'); 
-
-    /* 
-     * Hier bauen wir anschließend die Navigation ein. 
-     */ 
-  } 
+    /*
+     * Hier bauen wir anschließend die Navigation ein.
+     *
+     * response.payload kann dann gezielt ausgewertet werden.
+     */
+  }
 
   Future<void> _saveToken(String token) async {
     final user = _client.auth.currentUser;
 
     if (user == null) {
-      throw StateError('Kein angemeldeter Benutzer vorhanden.');
+      throw StateError(
+        'Kein angemeldeter Benutzer vorhanden.',
+      );
     }
 
     final platform = Platform.isAndroid
@@ -309,22 +342,29 @@ class PushNotificationService {
         },
       );
 
-      debugPrint('PUSH: Gerät wurde deregistriert.');
-    } catch (error) {
-      debugPrint(
-        'PUSH: Gerät konnte nicht deregistriert werden: '
-        '$error',
-      );
+      if (kDebugMode) {
+        debugPrint(
+          'PUSH: Gerät wurde deregistriert.',
+        );
+      }
+    } catch (error, stackTrace) {
+      if (kDebugMode) {
+        debugPrint(
+          'PUSH: Gerät konnte nicht deregistriert werden: '
+          '$error',
+        );
+        debugPrintStack(stackTrace: stackTrace);
+      }
     }
   }
 
-  Future<void> dispose() async { 
-    await _foregroundSubscription?.cancel(); 
-    await _tokenRefreshSubscription?.cancel(); 
+  Future<void> dispose() async {
+    await _foregroundSubscription?.cancel();
+    await _tokenRefreshSubscription?.cancel();
 
-    _foregroundSubscription = null; 
-    _tokenRefreshSubscription = null; 
+    _foregroundSubscription = null;
+    _tokenRefreshSubscription = null;
 
-    _listenersInitialized = false; 
-  } 
-} 
+    _listenersInitialized = false;
+  }
+}

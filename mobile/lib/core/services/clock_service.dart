@@ -203,9 +203,6 @@ class ClockService {
 
     final todayClockRaw =
         await _client.rpc('get_my_today_clock_data');
-        debugPrint(
-  'FLUTTER WORKED MINUTES RPC: ${todayClockRaw['worked_minutes']}',
-);
 
     if (todayClockRaw is! Map<String, dynamic>) {
       throw StateError(

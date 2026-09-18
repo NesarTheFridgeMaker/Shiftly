@@ -212,9 +212,18 @@ class WorkingTimeService {
           created_at
           ''')
         .eq('employee_id', employeeId)
-        .gte('created_at', start.toUtc().toIso8601String())
-        .lt('created_at', end.toUtc().toIso8601String())
-        .order('created_at', ascending: true);
+        .gte(
+          'created_at',
+          start.toUtc().toIso8601String(),
+        )
+        .lt(
+          'created_at',
+          end.toUtc().toIso8601String(),
+        )
+        .order(
+          'created_at',
+          ascending: true,
+        );
 
     final entries = (data as List<dynamic>).map((row) {
       final map = row as Map<String, dynamic>;
@@ -229,7 +238,8 @@ class WorkingTimeService {
       );
     }).toList();
 
-    final grouped = <String, List<WorkingTimeEntry>>{};
+    final grouped =
+        <String, List<WorkingTimeEntry>>{};
 
     for (final entry in entries) {
       final local = entry.createdAt;
@@ -250,52 +260,71 @@ class WorkingTimeService {
     final days = <WorkingTimeDay>[];
 
     for (final group in grouped.entries) {
-      final date = DateTime.parse(group.key);
+      final date = DateTime.parse(
+        group.key,
+      );
 
-      final dayEntries = [...group.value]
-        ..sort(
-          (a, b) => a.createdAt.compareTo(b.createdAt),
+      final dayEntries = [
+        ...group.value,
+      ]..sort(
+          (a, b) =>
+              a.createdAt.compareTo(
+            b.createdAt,
+          ),
         );
 
-      final calculation = _calculateDay(dayEntries);
+      final calculation =
+          _calculateDay(dayEntries);
 
       days.add(
         WorkingTimeDay(
           date: date,
           entries: dayEntries,
-          workedMinutes: calculation.workedMinutes,
-          breakMinutes: calculation.breakMinutes,
-          isComplete: calculation.isComplete,
+          workedMinutes:
+              calculation.workedMinutes,
+          breakMinutes:
+              calculation.breakMinutes,
+          isComplete:
+              calculation.isComplete,
         ),
       );
     }
 
     days.sort(
-      (a, b) => b.date.compareTo(a.date),
+      (a, b) =>
+          b.date.compareTo(a.date),
     );
 
-    final totalWorkedMinutes = days.fold<int>(
+    final totalWorkedMinutes =
+        days.fold<int>(
       0,
-      (sum, day) => sum + day.workedMinutes,
+      (sum, day) =>
+          sum + day.workedMinutes,
     );
 
-    final totalBreakMinutes = days.fold<int>(
+    final totalBreakMinutes =
+        days.fold<int>(
       0,
-      (sum, day) => sum + day.breakMinutes,
+      (sum, day) =>
+          sum + day.breakMinutes,
     );
 
     return WorkingTimeMonth(
       days: days,
-      totalWorkedMinutes: totalWorkedMinutes,
-      totalBreakMinutes: totalBreakMinutes,
+      totalWorkedMinutes:
+          totalWorkedMinutes,
+      totalBreakMinutes:
+          totalBreakMinutes,
     );
   }
 
   _DayCalculation _calculateDay(
     List<WorkingTimeEntry> entries,
   ) {
-    var workedMinutes = 0;
-    var breakMinutes = 0;
+    var workedDuration =
+        Duration.zero;
+    var breakDuration =
+        Duration.zero;
 
     DateTime? workStart;
     DateTime? breakStart;
@@ -309,7 +338,8 @@ class WorkingTimeService {
             invalidSequence = true;
           }
 
-          workStart = entry.createdAt;
+          workStart =
+              entry.createdAt;
           breakStart = null;
           break;
 
@@ -319,11 +349,14 @@ class WorkingTimeService {
             break;
           }
 
-          workedMinutes +=
-              entry.createdAt.difference(workStart).inMinutes;
+          workedDuration +=
+              entry.createdAt.difference(
+            workStart,
+          );
 
           workStart = null;
-          breakStart = entry.createdAt;
+          breakStart =
+              entry.createdAt;
           break;
 
         case 'break_end':
@@ -332,11 +365,14 @@ class WorkingTimeService {
             break;
           }
 
-          breakMinutes +=
-              entry.createdAt.difference(breakStart).inMinutes;
+          breakDuration +=
+              entry.createdAt.difference(
+            breakStart,
+          );
 
           breakStart = null;
-          workStart = entry.createdAt;
+          workStart =
+              entry.createdAt;
           break;
 
         case 'check_out':
@@ -345,8 +381,10 @@ class WorkingTimeService {
             break;
           }
 
-          workedMinutes +=
-              entry.createdAt.difference(workStart).inMinutes;
+          workedDuration +=
+              entry.createdAt.difference(
+            workStart,
+          );
 
           workStart = null;
           breakStart = null;
@@ -359,12 +397,23 @@ class WorkingTimeService {
         workStart == null &&
         breakStart == null;
 
+    final workedMinutes =
+        workedDuration.isNegative
+            ? 0
+            : workedDuration.inMinutes;
+
+    final breakMinutes =
+        breakDuration.isNegative
+            ? 0
+            : breakDuration.inMinutes;
+
     return _DayCalculation(
       workedMinutes:
-          workedMinutes < 0 ? 0 : workedMinutes,
+          workedMinutes,
       breakMinutes:
-          breakMinutes < 0 ? 0 : breakMinutes,
-      isComplete: isComplete,
+          breakMinutes,
+      isComplete:
+          isComplete,
     );
   }
 }
