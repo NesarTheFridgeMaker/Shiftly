@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../shared/widgets/dipera_card.dart';
 import '../../documents/pages/documents_page.dart';
@@ -9,19 +10,29 @@ import '../../absences/pages/absences_page.dart';
 class MorePage extends StatelessWidget {
   const MorePage({super.key});
 
+  static final Uri _privacyPolicyUri = Uri.parse(
+    'https://app.dipera.de/datenschutz',
+  );
+
   Future<void> _signOut() async {
     await Supabase.instance.client.auth.signOut();
   }
 
-  void _showComingSoon(
-    BuildContext context,
-    String feature,
-  ) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('$feature wird später verbunden.'),
-      ),
+  Future<void> _openPrivacyPolicy(BuildContext context) async {
+    final wasOpened = await launchUrl(
+      _privacyPolicyUri,
+      mode: LaunchMode.externalApplication,
     );
+
+    if (!wasOpened && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Die Datenschutzerklärung konnte nicht geöffnet werden.',
+          ),
+        ),
+      );
+    }
   }
 
   @override
@@ -71,12 +82,12 @@ class MorePage extends StatelessWidget {
               foregroundColor: const Color(0xFF6941C6),
               backgroundColor: const Color(0xFFF4EBFF),
               onTap: () {
-  Navigator.of(context).push(
-    MaterialPageRoute(
-      builder: (_) => const DocumentsPage(),
-    ),
-  );
-},
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => const DocumentsPage(),
+                  ),
+                );
+              },
             ),
             const SizedBox(height: 14),
             _MoreEntry(
@@ -92,6 +103,15 @@ class MorePage extends StatelessWidget {
                   ),
                 );
               },
+            ),
+            const SizedBox(height: 14),
+            _MoreEntry(
+              title: 'Datenschutz',
+              subtitle: 'Datenschutzerklärung von Dipera',
+              icon: Icons.privacy_tip_outlined,
+              foregroundColor: const Color(0xFF027A48),
+              backgroundColor: const Color(0xFFECFDF3),
+              onTap: () => _openPrivacyPolicy(context),
             ),
             const SizedBox(height: 14),
             _MoreEntry(
