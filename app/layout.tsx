@@ -1,12 +1,8 @@
-import type { Metadata } from "next";
-import {
-  Noto_Sans,
-  Geist_Mono,
-} from "next/font/google";
+import type { Metadata, Viewport } from "next";
+import { Noto_Sans, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { ToastProvider } from "@/components/ui/ToastProvider";
 import "mapbox-gl/dist/mapbox-gl.css";
-
 
 const notoSans = Noto_Sans({
   variable: "--font-noto-sans",
@@ -25,8 +21,6 @@ export const metadata: Metadata = {
 
   manifest: "/manifest.json",
 
-  themeColor: "#0B1220",
-
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
@@ -39,6 +33,10 @@ export const metadata: Metadata = {
   },
 };
 
+export const viewport: Viewport = {
+  themeColor: "#0B1220",
+};
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -46,14 +44,12 @@ export default function RootLayout({
 }>) {
   return (
     <html
-  lang="de"
-  className={`${notoSans.variable} ${geistMono.variable} h-full antialiased`}
->
+      lang="de"
+      className={`${notoSans.variable} ${geistMono.variable} h-full antialiased`}
+    >
       <body className="min-h-full flex flex-col">
-  <ToastProvider>
-    {children}
-  </ToastProvider>
-</body>
+        <ToastProvider>{children}</ToastProvider>
+      </body>
     </html>
   );
 }
