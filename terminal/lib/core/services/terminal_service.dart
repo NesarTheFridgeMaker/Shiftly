@@ -52,6 +52,7 @@ class TerminalStatus {
     final business = Map<String, dynamic>.from(
       json['business'] as Map,
     );
+
     final counts = Map<String, dynamic>.from(
       json['counts'] as Map,
     );
@@ -100,9 +101,10 @@ class TerminalEmployeeLookup {
       id: json['id'] as String,
       name: (json['name'] as String?)?.trim() ?? '',
       status: (json['status'] as String?)?.trim() ?? 'unknown',
-      allowedActions: (json['allowedActions'] as List<dynamic>? ?? const [])
-          .map((value) => value.toString())
-          .toList(),
+      allowedActions:
+          (json['allowedActions'] as List<dynamic>? ?? const [])
+              .map((value) => value.toString())
+              .toList(),
     );
   }
 }
@@ -138,15 +140,56 @@ class TerminalService {
   String get _baseUrl =>
       AppEnvironment.apiBaseUrl.replaceAll(RegExp(r'/$'), '');
 
-  Future<Map<String, String>> _headers() async {
-    final session = _supabase.auth.currentSession;
+  Future<Session> _ensureValidSession({
+    bool forceRefresh = false,
+  }) async {
+    var session = _supabase.auth.currentSession;
 
     if (session == null) {
       throw const TerminalApiException(
         'AUTH_REQUIRED',
-        'Die Terminal-Anmeldung ist nicht mehr gültig.',
+        'Keine Terminal-Anmeldung vorhanden.',
       );
     }
+
+    if (!forceRefresh && !session.isExpired) {
+      return session;
+    }
+
+    try {
+      final response = await _supabase.auth.refreshSession();
+      final refreshedSession = response.session;
+
+      if (refreshedSession == null) {
+        throw const TerminalApiException(
+          'AUTH_REFRESH_FAILED',
+          'Die Terminal-Anmeldung konnte nicht automatisch erneuert werden.',
+        );
+      }
+
+      return refreshedSession;
+    } on AuthException catch (error) {
+      throw TerminalApiException(
+        'AUTH_REFRESH_FAILED',
+        'Die Terminal-Anmeldung konnte nicht automatisch erneuert werden: '
+            '${error.message}',
+      );
+    } on TerminalApiException {
+      rethrow;
+    } catch (_) {
+      throw const TerminalApiException(
+        'AUTH_TEMPORARILY_UNAVAILABLE',
+        'Die Verbindung zur Anmeldung konnte momentan nicht hergestellt werden.',
+      );
+    }
+  }
+
+  Future<Map<String, String>> _headers({
+    bool forceRefresh = false,
+  }) async {
+    final session = await _ensureValidSession(
+      forceRefresh: forceRefresh,
+    );
 
     return {
       'authorization': 'Bearer ${session.accessToken}',
@@ -155,10 +198,41 @@ class TerminalService {
     };
   }
 
+  Future<http.Response> _sendWithAuthRetry(
+    Future<http.Response> Function(
+      Map<String, String> headers,
+    ) request,
+  ) async {
+    final firstResponse = await request(
+      await _headers(),
+    );
+
+    if (firstResponse.statusCode != 401) {
+      return firstResponse;
+    }
+
+    /*
+     * Der Access-Token kann theoretisch zwischen Prüfung
+     * und API-Aufruf ablaufen.
+     *
+     * Bei einem 401 erneuern wir die Session deshalb genau
+     * einmal und wiederholen den Request.
+     *
+     * Kein Endlos-Retry.
+     */
+    final retryResponse = await request(
+      await _headers(forceRefresh: true),
+    );
+
+    return retryResponse;
+  }
+
   Future<TerminalStatus> getStatus() async {
-    final response = await _httpClient.get(
-      Uri.parse('$_baseUrl/api/kiosk/status'),
-      headers: await _headers(),
+    final response = await _sendWithAuthRetry(
+      (headers) => _httpClient.get(
+        Uri.parse('$_baseUrl/api/kiosk/status'),
+        headers: headers,
+      ),
     );
 
     final json = _decode(response);
@@ -167,13 +241,18 @@ class TerminalService {
   }
 
   Future<TerminalEmployeeLookup> lookupPin(String pin) async {
-    final response = await _httpClient.post(
-      Uri.parse('$_baseUrl/api/kiosk/lookup'),
-      headers: await _headers(),
-      body: jsonEncode({'pin': pin}),
+    final response = await _sendWithAuthRetry(
+      (headers) => _httpClient.post(
+        Uri.parse('$_baseUrl/api/kiosk/lookup'),
+        headers: headers,
+        body: jsonEncode({
+          'pin': pin,
+        }),
+      ),
     );
 
     final json = _decode(response);
+
     final employee = Map<String, dynamic>.from(
       json['employee'] as Map,
     );
@@ -185,13 +264,15 @@ class TerminalService {
     required String pin,
     required String action,
   }) async {
-    final response = await _httpClient.post(
-      Uri.parse('$_baseUrl/api/kiosk/clock'),
-      headers: await _headers(),
-      body: jsonEncode({
-        'pin': pin,
-        'action': action,
-      }),
+    final response = await _sendWithAuthRetry(
+      (headers) => _httpClient.post(
+        Uri.parse('$_baseUrl/api/kiosk/clock'),
+        headers: headers,
+        body: jsonEncode({
+          'pin': pin,
+          'action': action,
+        }),
+      ),
     );
 
     final json = _decode(response);
@@ -199,6 +280,7 @@ class TerminalService {
     final entry = Map<String, dynamic>.from(
       json['entry'] as Map? ?? const {},
     );
+
     final employee = Map<String, dynamic>.from(
       json['employee'] as Map,
     );
@@ -232,7 +314,8 @@ class TerminalService {
       );
     }
 
-    if (response.statusCode < 200 || response.statusCode >= 300) {
+    if (response.statusCode < 200 ||
+        response.statusCode >= 300) {
       final error = json['error'];
 
       if (error is Map) {
@@ -247,7 +330,7 @@ class TerminalService {
         );
       }
 
-      throw TerminalApiException(
+      throw const TerminalApiException(
         'REQUEST_FAILED',
         'Die Anfrage konnte nicht verarbeitet werden.',
       );
