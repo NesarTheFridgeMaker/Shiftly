@@ -58,10 +58,10 @@ class DefaultFirebaseOptions {
   );
   static const FirebaseOptions ios = FirebaseOptions(
     apiKey: 'AIzaSyDm4f4z0lxPffbTrDTxS3Wte7CWYSTS_Bw',
-    appId: '1:561570389657:ios:467da24c1da149bc146208',
+    appId: '1:561570389657:ios:ce802cecb7943c8f146208',
     messagingSenderId: '561570389657',
     projectId: 'dipera',
     storageBucket: 'dipera.firebasestorage.app',
-    iosBundleId: 'com.example.mobile',
+    iosBundleId: 'app.dipera.mobile',
   );
 }
