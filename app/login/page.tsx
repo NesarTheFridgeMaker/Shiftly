@@ -2,11 +2,13 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import { Eye, EyeOff } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [popupMessage, setPopupMessage] = useState("");
   const [showPopup, setShowPopup] = useState(false);
 
@@ -76,101 +78,206 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="relative min-h-screen overflow-hidden bg-[#f7f7f8] flex items-center justify-center p-4">
-      <div className="absolute top-8 left-10 z-10">
-        <img
-          src="/logo/dipera-logo-dark.png"
-          alt="Dipera"
-          className="w-36 h-auto"
-        />
-      </div>
-
-      <div className="pointer-events-none absolute inset-0">
-        <div className="absolute -left-24 bottom-16 h-72 w-[55rem] rotate-[-18deg] rounded-full bg-gradient-to-r from-blue-100/40 via-white to-blue-200/30 blur-2xl" />
-        <div className="absolute right-20 top-24 h-80 w-[38rem] rotate-[22deg] rounded-full bg-gradient-to-r from-white via-blue-100/50 to-slate-200/40 blur-2xl" />
-
-        {[...Array(9)].map((_, index) => (
-          <div
-            key={index}
-            className="absolute h-40 w-12 rounded-2xl border border-white/80 bg-white/55 shadow-2xl backdrop-blur"
-            style={{
-              left: `${18 + index * 8}%`,
-              top: `${56 - Math.sin(index) * 18}%`,
-              transform: `rotate(${-34 + index * 9}deg)`,
-              opacity: 0.45,
-            }}
-          />
-        ))}
-      </div>
-
-      <section className="relative z-10 w-full max-w-md rounded-3xl bg-white/95 p-8 shadow-2xl border border-white">
-        <div className="text-center mb-8">
-          <h1 className="text-[2.6rem] leading-tight font-light tracking-[-0.04em] text-blue-950">
-            Einloggen
-          </h1>
-
-          <p className="mt-2 text-sm text-slate-500">
-            Zugriff auf dein Dipera-Dashboard
-          </p>
-        </div>
-
-        <div className="flex flex-col gap-4">
-          <input
-            type="email"
-            placeholder="E-Mail-Adresse"
-            value={email}
-            onChange={(event) => setEmail(event.target.value)}
-            className="h-12 rounded-xl border border-slate-300 bg-white px-4 text-black outline-none focus:border-blue-700"
-          />
-
-          <input
-            type="password"
-            placeholder="Passwort"
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
-            className="h-12 rounded-xl border border-slate-300 bg-white px-4 text-black outline-none focus:border-blue-700"
-          />
-
-          <div className="flex justify-end -mt-1">
-            <Link
-              href="/forgot-password"
-              className="text-sm font-semibold text-blue-700 hover:text-blue-950"
-            >
-              Passwort vergessen?
+    <main className="min-h-screen bg-white text-[#24324d]">
+      <div className="grid min-h-screen lg:grid-cols-[52%_48%]">
+        {/* =========================================================
+            LINKE SEITE – DIPERA MARKENFLÄCHE
+        ========================================================== */}
+        <section className="relative hidden min-h-screen overflow-hidden bg-[#102b4c] lg:flex lg:items-center">
+          <div className="w-full px-16 xl:px-24 2xl:px-32">
+            {/* Logo */}
+            <Link href="/" className="mb-14 inline-flex">
+              <img
+                src="/logo/dipera-logo-light.png"
+                alt="Dipera"
+                className="h-auto w-[180px]"
+              />
             </Link>
+
+            {/* Text */}
+            <div className="max-w-[650px]">
+              <p className="mb-5 text-[13px] font-bold uppercase tracking-[0.22em] text-[#31aef0]">
+                Willkommen bei Dipera
+              </p>
+
+              <h2 className="text-[48px] font-bold leading-[1.06] tracking-[-0.045em] text-white xl:text-[58px]">
+                Dein Arbeitsplatz.
+                <br />
+                <span className="text-[#31aef0]">
+                  Einfach organisiert.
+                </span>
+              </h2>
+
+              <p className="mt-7 max-w-[590px] text-[17px] leading-8 text-[#aebed1] xl:text-[18px]">
+                Arbeitszeiten, Dienstpläne und Abwesenheiten übersichtlich
+                verwalten – alles an einem Ort für dich und dein Team.
+              </p>
+            </div>
+
+            {/* Kleine Trennlinie */}
+            <div className="mt-12 h-[2px] w-16 rounded-full bg-[#31aef0]" />
+
+            <p className="mt-6 max-w-[480px] text-[14px] leading-6 text-[#7f94ac]">
+              Einfach. Übersichtlich. Dipera.
+            </p>
           </div>
+        </section>
 
-          <button
-            type="button"
-            onClick={handleLogin}
-            className="h-12 rounded-xl bg-blue-700 text-white font-semibold hover:bg-blue-800 transition"
-          >
-            Einloggen
-          </button>
+        {/* =========================================================
+            RECHTE SEITE – LOGIN
+        ========================================================== */}
+        <section className="relative flex min-h-screen items-center justify-center bg-white px-5 py-10 sm:px-8 lg:px-12 xl:px-20">
+          {/* Logo auf Mobile */}
+          <Link href="/" className="absolute left-6 top-6 lg:hidden">
+            <img
+              src="/logo/dipera-logo-dark.png"
+              alt="Dipera"
+              className="h-auto w-[125px]"
+            />
+          </Link>
 
-          <p className="text-center text-sm text-slate-500 mt-2">
-            Noch kein Konto?{" "}
-            <Link
-              href="/register"
-              className="font-semibold text-blue-700 hover:text-blue-950"
-            >
-              Kostenlos registrieren
-            </Link>
-          </p>
-        </div>
-      </section>
+          <div className="w-full max-w-[470px] pt-16 lg:pt-0">
+            {/* Überschrift */}
+            <div className="mb-9">
+              <p className="mb-3 text-[13px] font-bold uppercase tracking-[0.18em] text-[#31aef0]">
+                Willkommen zurück
+              </p>
 
+              <h1 className="text-[38px] font-bold leading-tight tracking-[-0.045em] text-[#24324d] sm:text-[44px]">
+                Einloggen
+              </h1>
+
+              <p className="mt-3 text-[15px] leading-6 text-[#64748b]">
+                Melde dich an und greife auf dein Dipera-Konto zu.
+              </p>
+
+              <p className="mt-4 text-[14px] text-[#64748b]">
+                Noch kein Konto?{" "}
+                <Link
+                  href="/register"
+                  className="font-bold text-[#31aef0] transition hover:text-[#168dcc]"
+                >
+                  Kostenlos registrieren
+                </Link>
+              </p>
+            </div>
+
+            {/* Formular */}
+            <div className="space-y-5">
+              {/* E-Mail */}
+              <div>
+                <label
+                  htmlFor="login-email"
+                  className="mb-2 block text-[14px] font-semibold text-[#24324d]"
+                >
+                  E-Mail-Adresse
+                </label>
+
+                <input
+                  id="login-email"
+                  type="email"
+                  autoComplete="email"
+                  placeholder="name@unternehmen.de"
+                  value={email}
+                  onChange={(event) => setEmail(event.target.value)}
+                  className="h-[54px] w-full rounded-xl border border-[#d7e0ea] bg-white px-4 text-[15px] text-[#24324d] outline-none transition placeholder:text-slate-400 focus:border-[#31aef0] focus:ring-4 focus:ring-[#31aef0]/10"
+                />
+              </div>
+
+              {/* Passwort */}
+              <div>
+                <div className="mb-2 flex items-center justify-between gap-4">
+                  <label
+                    htmlFor="login-password"
+                    className="block text-[14px] font-semibold text-[#24324d]"
+                  >
+                    Passwort
+                  </label>
+
+                  <Link
+                    href="/forgot-password"
+                    className="text-[13px] font-semibold text-[#31aef0] transition hover:text-[#168dcc]"
+                  >
+                    Passwort vergessen?
+                  </Link>
+                </div>
+
+                <div className="relative">
+                  <input
+                    id="login-password"
+                    type={showPassword ? "text" : "password"}
+                    autoComplete="current-password"
+                    placeholder="Passwort eingeben"
+                    value={password}
+                    onChange={(event) => setPassword(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        event.preventDefault();
+                        void handleLogin();
+                      }
+                    }}
+                    className="h-[54px] w-full rounded-xl border border-[#d7e0ea] bg-white px-4 pr-12 text-[15px] text-[#24324d] outline-none transition placeholder:text-slate-400 focus:border-[#31aef0] focus:ring-4 focus:ring-[#31aef0]/10"
+                  />
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setShowPassword((current) => !current)
+                    }
+                    aria-label={
+                      showPassword
+                        ? "Passwort ausblenden"
+                        : "Passwort anzeigen"
+                    }
+                    className="absolute right-3 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-[#24324d]"
+                  >
+                    {showPassword ? (
+                      <EyeOff className="h-5 w-5" />
+                    ) : (
+                      <Eye className="h-5 w-5" />
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              {/* Login Button */}
+              <button
+                type="button"
+                onClick={() => void handleLogin()}
+                className="group mt-2 flex h-[58px] w-full items-center justify-center rounded-full bg-[#102b4c] px-7 text-[15px] font-bold text-white transition hover:-translate-y-0.5 hover:bg-[#0a203b]"
+              >
+                Einloggen
+
+                <span
+                  className="ml-4 text-xl transition-transform group-hover:translate-x-1"
+                  aria-hidden="true"
+                >
+                  →
+                </span>
+              </button>
+            </div>
+
+            <p className="mt-7 text-center text-[13px] leading-6 text-slate-400">
+              Sicherer Zugriff auf deine Dipera-Arbeitsumgebung.
+            </p>
+          </div>
+        </section>
+      </div>
+
+      {/* =========================================================
+          POPUP
+      ========================================================== */}
       {showPopup && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-6 z-50">
-          <div className="max-w-lg w-full text-center rounded-3xl bg-[#0B1220]/95 p-8">
-            <p className="text-2xl font-bold text-white mb-8">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-6 backdrop-blur-sm">
+          <div className="w-full max-w-lg rounded-3xl bg-[#0B1220]/95 p-8 text-center">
+            <p className="mb-8 text-2xl font-bold text-white">
               {popupMessage}
             </p>
 
             <button
               type="button"
               onClick={() => setShowPopup(false)}
-              className="bg-blue-600 text-white px-10 py-4 rounded-2xl"
+              className="rounded-2xl bg-[#31aef0] px-10 py-4 font-semibold text-white transition hover:bg-[#168dcc]"
             >
               OK
             </button>
