@@ -2,6 +2,9 @@ name: Dipera Backup
 
 on:
   workflow_dispatch:
+  schedule:
+    # Daily at 03:15 UTC (05:15 CEST / 04:15 CET).
+    - cron: "15 3 * * *"
 
 permissions:
   contents: read
@@ -341,10 +344,29 @@ jobs:
         run: |
           set -euo pipefail
 
+          BACKUP_FILE="${BACKUP_NAME}.tar.gz.enc"
+
+          # Every successful run is kept as a daily backup first.
           aws s3 cp \
-            "${BACKUP_NAME}.tar.gz.enc" \
-            "s3://${R2_BUCKET}/weekly/${BACKUP_NAME}.tar.gz.enc" \
+            "$BACKUP_FILE" \
+            "s3://${R2_BUCKET}/daily/${BACKUP_FILE}" \
             --endpoint-url "$R2_ENDPOINT"
+
+          # Sunday snapshot: keep one weekly copy.
+          if [ "$(date -u +%u)" = "7" ]; then
+            aws s3 cp \
+              "$BACKUP_FILE" \
+              "s3://${R2_BUCKET}/weekly/${BACKUP_FILE}" \
+              --endpoint-url "$R2_ENDPOINT"
+          fi
+
+          # First day of the month: keep one monthly copy.
+          if [ "$(date -u +%d)" = "01" ]; then
+            aws s3 cp \
+              "$BACKUP_FILE" \
+              "s3://${R2_BUCKET}/monthly/${BACKUP_FILE}" \
+              --endpoint-url "$R2_ENDPOINT"
+          fi
 
       - name: Verify backup exists in R2
         shell: bash
@@ -356,7 +378,56 @@ jobs:
           set -euo pipefail
 
           aws s3 ls \
-            "s3://${R2_BUCKET}/weekly/${BACKUP_NAME}.tar.gz.enc" \
+            "s3://${R2_BUCKET}/daily/${BACKUP_NAME}.tar.gz.enc" \
             --endpoint-url "$R2_ENDPOINT"
 
           echo "Backup upload verified."
+
+      - name: Apply backup retention
+        shell: bash
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+        run: |
+          set -euo pipefail
+
+          prune_prefix() {
+            local prefix="$1"
+            local keep="$2"
+
+            mapfile -t keys < <(
+              aws s3api list-objects-v2 \
+                --bucket "$R2_BUCKET" \
+                --prefix "${prefix}/" \
+                --endpoint-url "$R2_ENDPOINT" \
+                --query 'Contents[].Key' \
+                --output text |
+              tr '\t' '\n' |
+              grep -E "^${prefix}/dipera-backup-.*\.tar\.gz\.enc$" |
+              sort || true
+            )
+
+            local count="${#keys[@]}"
+            if [ "$count" -le "$keep" ]; then
+              echo "${prefix}: ${count} backup(s), nothing to prune."
+              return
+            fi
+
+            local delete_count=$((count - keep))
+            echo "${prefix}: deleting ${delete_count} old backup(s); keeping ${keep}."
+
+            for ((i=0; i<delete_count; i++)); do
+              aws s3 rm \
+                "s3://${R2_BUCKET}/${keys[$i]}" \
+                --endpoint-url "$R2_ENDPOINT"
+            done
+          }
+
+          # Retention:
+          # - 14 daily backups
+          # - 8 weekly backups
+          # - 12 monthly backups
+          prune_prefix "daily" 14
+          prune_prefix "weekly" 8
+          prune_prefix "monthly" 12
