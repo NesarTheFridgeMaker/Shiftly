@@ -308,7 +308,7 @@ jobs:
 
           tar -czf "${BACKUP_NAME}.tar.gz" backup
 
-                - name: Debug backup passphrase fingerprint
+      - name: Debug backup passphrase fingerprint
         shell: bash
         run: |
           set -euo pipefail
