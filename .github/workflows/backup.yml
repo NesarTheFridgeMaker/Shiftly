@@ -308,6 +308,15 @@ jobs:
 
           tar -czf "${BACKUP_NAME}.tar.gz" backup
 
+                - name: Debug backup passphrase fingerprint
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          printf '%s' "$BACKUP_ENCRYPTION_PASSPHRASE" \
+            | sha256sum \
+            | awk '{print "Passphrase SHA256: " $1}'
+
       - name: Encrypt archive
         shell: bash
         run: |
