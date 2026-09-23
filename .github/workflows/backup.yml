@@ -336,6 +336,13 @@ jobs:
           echo "Encrypted backup created:"
           ls -lh "${BACKUP_NAME}.tar.gz.enc"
 
+      - name: Print encrypted backup SHA256
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          sha256sum "${BACKUP_NAME}.tar.gz.enc"
+
       - name: Verify encrypted archive can be decrypted
         shell: bash
         run: |
