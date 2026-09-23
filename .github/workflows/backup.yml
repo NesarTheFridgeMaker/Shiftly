@@ -336,6 +336,24 @@ jobs:
           echo "Encrypted backup created:"
           ls -lh "${BACKUP_NAME}.tar.gz.enc"
 
+      - name: Verify encrypted archive can be decrypted
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          openssl enc \
+            -d \
+            -aes-256-cbc \
+            -pbkdf2 \
+            -iter 200000 \
+            -in "${BACKUP_NAME}.tar.gz.enc" \
+            -out "${BACKUP_NAME}.restore-test.tar.gz" \
+            -pass env:BACKUP_ENCRYPTION_PASSPHRASE
+
+          gzip -t "${BACKUP_NAME}.restore-test.tar.gz"
+          rm -f "${BACKUP_NAME}.restore-test.tar.gz"
+          echo "Encrypted archive successfully decrypted and validated."
+
       - name: Remove plaintext backup archive
         shell: bash
         run: |
