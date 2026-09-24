@@ -196,6 +196,25 @@ jobs:
                   `Could not list bucket "${bucket}" prefix "${prefix}": ${error.message}`
                 );
               }
+
+              console.log(
+                `LIST prefix="${prefix}" returned ${data ? data.length : 0} entr${data && data.length === 1 ? 'y' : 'ies'}`
+              );
+
+              if (data) {
+                for (const item of data) {
+                  console.log(
+                    JSON.stringify({
+                      prefix,
+                      name: item.name,
+                      id: item.id ?? null,
+                      hasMetadata: item.metadata != null,
+                      metadataSize: item.metadata?.size ?? null
+                    })
+                  );
+                }
+              }
+
               if (!data || data.length === 0) break;
 
               for (const item of data) {
