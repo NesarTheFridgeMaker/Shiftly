@@ -21,7 +21,6 @@ import TableSkeleton from "@/components/skeletons/TableSkeleton";
 import StatsSkeleton from "@/components/skeletons/StatsSkeleton";
 import { FaWhatsapp } from "react-icons/fa";
 import EmployeeInviteCard from "@/components/employees/EmployeeInviteCard";
-import EmployeeCard from "@/components/employees/EmployeeCard";
 import EmployeeDocumentsCard from "@/components/employees/EmployeeDocumentsCard";
 
 type LocationTrackingMode = "required" | "remote_allowed" | "disabled";
@@ -206,6 +205,78 @@ function generateInviteCode() {
   return `DIPERA-${randomPart}`;
 }
 
+function getEmployeeInitials(name: string) {
+  return name
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((part) => part.charAt(0).toUpperCase())
+    .join("") || "MA";
+}
+
+function formatEmployeeDate(value?: string | null) {
+  if (!value) return "–";
+  return new Date(`${value}T00:00:00`).toLocaleDateString("de-DE");
+}
+
+function formatEmployeeMoney(value?: number | null) {
+  if (value === null || value === undefined) return "–";
+  return new Intl.NumberFormat("de-DE", {
+    style: "currency",
+    currency: "EUR",
+    minimumFractionDigits: 2,
+  }).format(value);
+}
+
+function employmentScopeLabel(value?: EmploymentScope | null) {
+  if (value === "full_time") return "Vollzeit";
+  if (value === "part_time") return "Teilzeit";
+  return "–";
+}
+
+type EmployeeDetailIconName =
+  | "calendar"
+  | "badge"
+  | "user"
+  | "clock"
+  | "wallet"
+  | "vacation";
+
+function EmployeeDetailIcon({ name }: { name: EmployeeDetailIconName }) {
+  const common = {
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: 1.8,
+    strokeLinecap: "round" as const,
+    strokeLinejoin: "round" as const,
+  };
+
+  return (
+    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#F8FAFC] text-[#64748B]">
+      <svg viewBox="0 0 24 24" aria-hidden="true" className="h-[18px] w-[18px]">
+        {name === "calendar" && (
+          <><path d="M7 3v3M17 3v3M4 9h16" {...common} /><rect x="4" y="5" width="16" height="16" rx="3" {...common} /></>
+        )}
+        {name === "badge" && (
+          <><path d="M12 3 5 6v6c0 4.4 2.8 7.2 7 9 4.2-1.8 7-4.6 7-9V6l-7-3Z" {...common} /><path d="M9.5 12h5M12 9.5v5" {...common} /></>
+        )}
+        {name === "user" && (
+          <><circle cx="12" cy="8" r="3.5" {...common} /><path d="M5.5 20c.7-4 3-6 6.5-6s5.8 2 6.5 6" {...common} /></>
+        )}
+        {name === "clock" && (
+          <><circle cx="12" cy="12" r="8.5" {...common} /><path d="M12 7.5V12l3 2" {...common} /></>
+        )}
+        {name === "wallet" && (
+          <><path d="M4 7.5h14.5A1.5 1.5 0 0 1 20 9v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7.5Z" {...common} /><path d="M5.5 7.5 16 4.5v3M15.5 12h4.5v3h-4.5a1.5 1.5 0 0 1 0-3Z" {...common} /></>
+        )}
+        {name === "vacation" && (
+          <><path d="M5 20h14M7 17c1.5-4 3.2-6.8 5-9 1.8 2.2 3.5 5 5 9" {...common} /><path d="M9 9c1.5-2.7 3.5-4.4 6-5-.2 2.6-1.2 4.6-3 6" {...common} /></>
+        )}
+      </svg>
+    </span>
+  );
+}
+
 export default function EmployeesPage() {
 
   
@@ -219,6 +290,7 @@ export default function EmployeesPage() {
   const [expandedEmployeeId, setExpandedEmployeeId] =
   useState<string | null>(null);
   const [employeeSearch, setEmployeeSearch] = useState("");
+  const [employeeDetailTab, setEmployeeDetailTab] = useState<"overview" | "documents" | "notes">("overview");
   const EMPLOYEES_PER_PAGE = 12;
   const [visibleEmployeeCount, setVisibleEmployeeCount] =
   useState(EMPLOYEES_PER_PAGE);
@@ -3191,6 +3263,10 @@ const inactiveEmployees = employees
     (employee) => employee.invite?.used_at,
   ).length;
 
+  const selectedEmployee = expandedEmployeeId
+    ? employees.find((employee) => employee.id === expandedEmployeeId) ?? null
+    : null;
+
   if (isLoading) {
     return (
       <div className="space-y-8">
@@ -3900,112 +3976,225 @@ const inactiveEmployees = employees
     </div>
   </div>
 ) : (
-  <div className="rounded-3xl border border-[#D7DEE8] bg-[#EEF2F6] p-4 shadow-[0_6px_18px_rgba(15,23,42,0.07)]">
-    <div className="grid grid-cols-1 gap-5 lg:grid-cols-2 2xl:grid-cols-3">
-      {visibleActiveEmployees.map((employee) => (
-      <EmployeeCard
-        key={employee.id}
-        employee={employee}
-        isExpanded={expandedEmployeeId === employee.id}
-        onToggleExpanded={() =>
-          setExpandedEmployeeId((currentEmployeeId) =>
-            currentEmployeeId === employee.id ? null : employee.id,
-          )
-        }
-        canEditPayroll={canEditPayroll}
-        canEditLocationTracking={canEditLocationTracking}
-        hasUnsavedMonthlyHours={Boolean(
-          unsavedMonthlyHours[employee.id],
-        )}
-        onMonthlyHoursChange={(value) => {
-          setEmployees((currentEmployees) =>
-            currentEmployees.map((currentEmployee) =>
-              currentEmployee.id === employee.id
-                ? {
-                    ...currentEmployee,
-                    monthly_target_hours: value,
-                  }
-                : currentEmployee,
-            ),
-          );
+  <div className={selectedEmployee ? "grid gap-5 xl:grid-cols-[minmax(0,1fr)_360px]" : "grid gap-5"}>
+    <div className="rounded-[22px] border border-[#E2E8F0] bg-[#F8FAFC] p-3 sm:p-4">
+      <div className={selectedEmployee ? "grid grid-cols-1 gap-3 md:grid-cols-2 2xl:grid-cols-3" : "grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3"}>
+        {visibleActiveEmployees.map((employee) => {
+          const selected = expandedEmployeeId === employee.id;
+          const inviteOpen = Boolean(employee.invite && !employee.invite.used_at);
+          const isActive = employee.account_status === "active";
+          const targetLabel =
+            employee.time_account_settings?.time_account_period === "weekly"
+              ? `${employee.weekly_target_hours} Std. / Woche`
+              : employee.time_account_settings?.time_account_period === "none"
+                ? "Kein Arbeitszeitkonto"
+                : `${employee.monthly_target_hours} Std. / Monat`;
+          const wageLabel =
+            employee.wage_type === "salary"
+              ? employee.monthly_salary != null
+                ? `${formatEmployeeMoney(employee.monthly_salary)} / Monat`
+                : "Monatsgehalt"
+              : employee.hourly_rate != null
+                ? `${formatEmployeeMoney(employee.hourly_rate)} / Std.`
+                : "–";
 
-          setUnsavedMonthlyHours((current) => ({
-            ...current,
-            [employee.id]: true,
-          }));
-        }}
-        onSaveMonthlyHours={() =>
-          handleUpdateMonthlyHours(
-            employee.id,
-            employee.monthly_target_hours,
-          )
-        }
-        onToggleAccountStatus={() =>
-          handleToggleAccountStatus(
-            employee.id,
-            employee.account_status,
-          )
-        }
-        onOpenLocationTracking={() =>
-          handleOpenLocationTracking(employee)
-        }
-        onOpenPayroll={() => handleOpenEditPayroll(employee)}
-        onDelete={() => setEmployeeToDelete(employee.id)}
-        inviteContent={
-          employee.invite ? (
-            <EmployeeInviteCard
-              invite={employee.invite}
-              onOpenInvite={() => handleOpenExistingInvite(employee)}
-            />
-          ) : (
-            <div className="rounded-2xl border border-[#E2E8F0] bg-white p-4">
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                <div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <h4 className="font-semibold text-[#0F172A]">
-                      Mitarbeiter-Zugang
-                    </h4>
-
-                    <Badge variant="muted">
-                      Einladung fehlt
-                    </Badge>
+          return (
+            <button
+              key={employee.id}
+              type="button"
+              onClick={() => {
+                setExpandedEmployeeId(employee.id);
+                setEmployeeDetailTab("overview");
+              }}
+              className={[
+                "group w-full rounded-[18px] border bg-white p-4 text-left transition-all",
+                selected
+                  ? "border-[#93C5FD] shadow-[0_8px_24px_rgba(15,23,42,0.08)] ring-2 ring-[#DBEAFE]"
+                  : "border-[#E2E8F0] shadow-[0_3px_12px_rgba(15,23,42,0.04)] hover:border-[#CBD5E1] hover:shadow-[0_8px_22px_rgba(15,23,42,0.07)]",
+              ].join(" ")}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex min-w-0 items-center gap-3">
+                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#EFF6FF] text-sm font-bold text-[#2563EB]">
+                    {getEmployeeInitials(employee.name)}
                   </div>
-
-                  <p className="mt-1 text-sm text-[#64748B]">
-                    Einladung für das Mitarbeiter-Dashboard.
-                  </p>
-
-                  <p className="mt-3 text-sm leading-6 text-[#64748B]">
-                    Für diesen Mitarbeiter wurde noch kein Einladungscode
-                    erstellt. Du kannst die Einladung jederzeit nachträglich
-                    erzeugen und anschließend per E-Mail oder WhatsApp
-                    versenden.
-                  </p>
+                  <div className="min-w-0">
+                    <p className="truncate font-semibold text-[#0F172A]">{employee.name}</p>
+                    <p className="mt-0.5 truncate text-sm text-[#64748B]">{employee.role}</p>
+                  </div>
                 </div>
 
-                <div className="shrink-0">
-                  <Button
-                    variant="primary"
-                    size="sm"
-                    type="button"
-                    onClick={() =>
-                      void handleCreateMissingInvite(employee)
-                    }
-                  >
-                    Einladung erstellen
-                  </Button>
+                <span
+                  className={[
+                    "inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold",
+                    inviteOpen
+                      ? "bg-[#FFF7E8] text-[#B45309]"
+                      : isActive
+                        ? "bg-[#ECFDF3] text-[#047857]"
+                        : "bg-[#F1F5F9] text-[#64748B]",
+                  ].join(" ")}
+                >
+                  <span
+                    className={[
+                      "h-1.5 w-1.5 rounded-full",
+                      inviteOpen ? "bg-[#F59E0B]" : isActive ? "bg-[#10B981]" : "bg-[#94A3B8]",
+                    ].join(" ")}
+                  />
+                  {inviteOpen ? "Einladung offen" : isActive ? "Aktiv" : "Inaktiv"}
+                </span>
+              </div>
+
+              <div className="mt-5 space-y-3">
+                <div className="flex items-start gap-3">
+                  <span className="mt-0.5 text-[#64748B]">◷</span>
+                  <div>
+                    <p className="text-sm font-semibold text-[#0F172A]">{targetLabel}</p>
+                    <p className="text-xs text-[#94A3B8]">Sollstunden</p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-3">
+                  <span className="mt-0.5 text-[#64748B]">◉</span>
+                  <div>
+                    <p className="text-sm font-semibold text-[#0F172A]">{wageLabel}</p>
+                    <p className="text-xs text-[#94A3B8]">Vergütung</p>
+                  </div>
                 </div>
               </div>
-            </div>
-          )
-        }
-        documentsContent={
-          <EmployeeDocumentsCard employeeId={employee.id} />
-        }
-        notesContent={renderNotes(employee)}
-      />
-      ))}
+
+              <div className="mt-4 flex h-9 items-center justify-center rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] text-sm font-semibold text-[#334155] transition group-hover:bg-[#F1F5F9]">
+                Details anzeigen <span className="ml-2">→</span>
+              </div>
+            </button>
+          );
+        })}
+      </div>
+
+      {hasMoreActiveEmployees && (
+        <div className="mt-4 flex justify-center">
+          <Button
+            variant="secondary"
+            type="button"
+            onClick={() =>
+              setVisibleEmployeeCount((current) => current + EMPLOYEES_PER_PAGE)
+            }
+          >
+            Weitere Mitarbeiter anzeigen
+          </Button>
+        </div>
+      )}
     </div>
+
+    {selectedEmployee && (
+      <aside className="xl:sticky xl:top-6 xl:self-start">
+        <div className="overflow-hidden rounded-[22px] border border-[#E2E8F0] bg-white shadow-[0_8px_28px_rgba(15,23,42,0.06)]">
+          <div className="p-5">
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex min-w-0 items-center gap-3">
+                <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-[#EFF6FF] text-lg font-bold text-[#2563EB]">
+                  {getEmployeeInitials(selectedEmployee.name)}
+                </div>
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h3 className="truncate text-lg font-semibold text-[#0F172A]">{selectedEmployee.name}</h3>
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-[#ECFDF3] px-2.5 py-1 text-xs font-semibold text-[#047857]">
+                      <span className="h-1.5 w-1.5 rounded-full bg-[#10B981]" /> Aktiv
+                    </span>
+                  </div>
+                  <p className="mt-1 text-sm text-[#64748B]">{selectedEmployee.role}</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setExpandedEmployeeId(null)}
+                aria-label="Mitarbeiterdetails schließen"
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#F8FAFC] text-xl text-[#64748B] transition hover:bg-[#F1F5F9] hover:text-[#0F172A]"
+              >
+                ×
+              </button>
+            </div>
+          </div>
+
+          <div className="flex border-b border-[#E2E8F0] px-4">
+            {([
+              ["overview", "Übersicht"],
+              ["documents", "Dokumente"],
+              ["notes", "Notizen"],
+            ] as const).map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => setEmployeeDetailTab(value)}
+                className={[
+                  "border-b-2 px-3 py-3 text-sm font-medium transition",
+                  employeeDetailTab === value
+                    ? "border-[#2563EB] text-[#2563EB]"
+                    : "border-transparent text-[#64748B] hover:text-[#334155]",
+                ].join(" ")}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
+          {employeeDetailTab === "overview" && (
+            <div className="max-h-[62vh] overflow-y-auto p-5">
+              <h4 className="text-sm font-semibold text-[#0F172A]">Persönliche Daten</h4>
+              <div className="mt-4 space-y-3">
+                <div className="flex items-center gap-3"><EmployeeDetailIcon name="calendar" /><div className="min-w-0"><p className="text-xs text-[#94A3B8]">Geburtsdatum</p><p className="mt-0.5 text-sm font-medium text-[#334155]">{formatEmployeeDate(selectedEmployee.birth_date)}</p></div></div>
+                <div className="flex items-center gap-3"><EmployeeDetailIcon name="badge" /><div className="min-w-0"><p className="text-xs text-[#94A3B8]">Personalnummer</p><p className="mt-0.5 text-sm font-medium text-[#334155]">{selectedEmployee.datev_personnel_number || "–"}</p></div></div>
+                <div className="flex items-center gap-3"><EmployeeDetailIcon name="calendar" /><div className="min-w-0"><p className="text-xs text-[#94A3B8]">Eintrittsdatum</p><p className="mt-0.5 text-sm font-medium text-[#334155]">{formatEmployeeDate(selectedEmployee.employment_start_date)}</p></div></div>
+                <div className="flex items-center gap-3"><EmployeeDetailIcon name="calendar" /><div className="min-w-0"><p className="text-xs text-[#94A3B8]">Austrittsdatum</p><p className="mt-0.5 text-sm font-medium text-[#334155]">{formatEmployeeDate(selectedEmployee.employment_end_date)}</p></div></div>
+              </div>
+
+              <div className="my-5 border-t border-[#E2E8F0]" />
+              <h4 className="text-sm font-semibold text-[#0F172A]">Beschäftigung</h4>
+              <div className="mt-4 space-y-3">
+                <div className="flex items-center gap-3"><EmployeeDetailIcon name="user" /><div className="min-w-0"><p className="text-xs text-[#94A3B8]">Rolle</p><p className="mt-0.5 text-sm font-medium text-[#334155]">{selectedEmployee.role}</p></div></div>
+                <div className="flex items-center gap-3"><EmployeeDetailIcon name="clock" /><div className="min-w-0"><p className="text-xs text-[#94A3B8]">Arbeitszeitmodell</p><p className="mt-0.5 text-sm font-medium text-[#334155]">{employmentScopeLabel(selectedEmployee.employment_scope)}</p></div></div>
+                <div className="flex items-center gap-3"><EmployeeDetailIcon name="clock" /><div className="min-w-0"><p className="text-xs text-[#94A3B8]">Wochen-Soll</p><p className="mt-0.5 text-sm font-medium text-[#334155]">{selectedEmployee.weekly_target_hours} Std.</p></div></div>
+                <div className="flex items-center gap-3"><EmployeeDetailIcon name="clock" /><div className="min-w-0"><p className="text-xs text-[#94A3B8]">Monats-Soll</p><p className="mt-0.5 text-sm font-medium text-[#334155]">{selectedEmployee.monthly_target_hours} Std.</p></div></div>
+                <div className="flex items-center gap-3"><EmployeeDetailIcon name="wallet" /><div className="min-w-0"><p className="text-xs text-[#94A3B8]">Vergütung</p><p className="mt-0.5 text-sm font-medium text-[#334155]">{selectedEmployee.wage_type === "salary" ? `${formatEmployeeMoney(selectedEmployee.monthly_salary)} / Monat` : `${formatEmployeeMoney(selectedEmployee.hourly_rate)} / Std.`}</p></div></div>
+                <div className="flex items-center gap-3"><EmployeeDetailIcon name="vacation" /><div className="min-w-0"><p className="text-xs text-[#94A3B8]">Urlaub</p><p className="mt-0.5 text-sm font-medium text-[#334155]">{selectedEmployee.vacation_days_per_year} Tage / Jahr</p></div></div>
+              </div>
+
+              <div className="mt-6 grid gap-2">
+                {canEditPayroll && (
+                  <Button variant="primary" type="button" fullWidth onClick={() => handleOpenEditPayroll(selectedEmployee)}>
+                    Bearbeiten
+                  </Button>
+                )}
+                {canEditLocationTracking && (
+                  <Button variant="secondary" type="button" fullWidth onClick={() => handleOpenLocationTracking(selectedEmployee)}>
+                    Standort-Einstellungen
+                  </Button>
+                )}
+                {selectedEmployee.invite && !selectedEmployee.invite.used_at ? (
+                  <Button variant="secondary" type="button" fullWidth onClick={() => handleOpenExistingInvite(selectedEmployee)}>
+                    Einladung öffnen
+                  </Button>
+                ) : !selectedEmployee.invite ? (
+                  <Button variant="secondary" type="button" fullWidth onClick={() => void handleCreateMissingInvite(selectedEmployee)}>
+                    Einladung erstellen
+                  </Button>
+                ) : null}
+              </div>
+            </div>
+          )}
+
+          {employeeDetailTab === "documents" && (
+            <div className="max-h-[62vh] overflow-y-auto p-5">
+              <EmployeeDocumentsCard employeeId={selectedEmployee.id} />
+            </div>
+          )}
+
+          {employeeDetailTab === "notes" && (
+            <div className="max-h-[62vh] overflow-y-auto p-5">
+              {renderNotes(selectedEmployee)}
+            </div>
+          )}
+        </div>
+      </aside>
+    )}
   </div>
 )}
 

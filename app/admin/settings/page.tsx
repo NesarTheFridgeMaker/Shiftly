@@ -53,7 +53,48 @@ type ShiftTemplate = {
 type WorkType = {
   id: string;
   name: string;
+  color: string | null;
 };
+
+const workTypeColorPalette = [
+  "blue",
+  "green",
+  "purple",
+  "amber",
+  "red",
+  "cyan",
+  "pink",
+  "indigo",
+] as const;
+
+const workTypeColorStyles: Record<
+  string,
+  { background: string; text: string; border: string }
+> = {
+  blue: { background: "#DBEAFE", text: "#1D4ED8", border: "#BFDBFE" },
+  green: { background: "#DCFCE7", text: "#15803D", border: "#BBF7D0" },
+  purple: { background: "#F3E8FF", text: "#7E22CE", border: "#E9D5FF" },
+  amber: { background: "#FEF3C7", text: "#B45309", border: "#FDE68A" },
+  red: { background: "#FEE2E2", text: "#B91C1C", border: "#FECACA" },
+  cyan: { background: "#CFFAFE", text: "#0E7490", border: "#A5F3FC" },
+  pink: { background: "#FCE7F3", text: "#BE185D", border: "#FBCFE8" },
+  indigo: { background: "#E0E7FF", text: "#4338CA", border: "#C7D2FE" },
+};
+
+function getWorkTypeColorStyle(color: string | null) {
+  return workTypeColorStyles[color ?? ""] ?? workTypeColorStyles.blue;
+}
+
+function getNextWorkTypeColor(workTypes: WorkType[]) {
+  const usedColors = new Set(
+    workTypes.map((workType) => workType.color).filter(Boolean),
+  );
+
+  return (
+    workTypeColorPalette.find((color) => !usedColors.has(color)) ??
+    workTypeColorPalette[workTypes.length % workTypeColorPalette.length]
+  );
+}
 
 type BusinessLocation = {
   id: string;
@@ -438,7 +479,7 @@ if (
 
     const { data, error } = await supabase
       .from("work_types")
-      .select("id, name")
+      .select("id, name, color")
       .eq("business_id", businessId)
       .order("name", { ascending: true });
 
@@ -479,10 +520,13 @@ if (
     setIsSaving(true);
 
     try {
+      const nextColor = getNextWorkTypeColor(workTypes);
+
       const { error } = await supabase.from("work_types").insert([
         {
           business_id: businessId,
           name: workTypeName.trim(),
+          color: nextColor,
         },
       ]);
 
@@ -1537,13 +1581,23 @@ if (
 
           <div className="mt-6 flex flex-col gap-3">
             {workTypes.length > 0 ? (
-              visibleWorkTypes.map((type) => (
+              visibleWorkTypes.map((type) => {
+                const colorStyle = getWorkTypeColorStyle(type.color);
+
+                return (
                 <div
                   key={type.id}
                   className="flex flex-col gap-3 rounded-2xl border border-[#CBD5E1] bg-[#EEF2F6] p-4 shadow-[0_5px_14px_rgba(15,23,42,0.07)] transition hover:border-[#B8C4D1] hover:shadow-[0_8px_18px_rgba(15,23,42,0.10)] md:flex-row md:items-center md:justify-between"
                 >
                   <div className="flex items-center gap-3">
-                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-[#EFF6FF] text-sm font-semibold text-[#2563EB]">
+                    <div
+                      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border text-sm font-semibold"
+                      style={{
+                        backgroundColor: colorStyle.background,
+                        color: colorStyle.text,
+                        borderColor: colorStyle.border,
+                      }}
+                    >
                       {getInitials(type.name)}
                     </div>
 
@@ -1570,7 +1624,8 @@ if (
                     Löschen
                   </Button>
                 </div>
-              ))
+                );
+              })
             ) : (
               <div className="rounded-2xl border border-dashed border-[#CBD5E1] bg-[#F8FAFC] p-5 text-sm leading-6 text-[#64748B]">
                 Noch keine Arbeitstypen vorhanden. Lege zuerst deine wichtigsten

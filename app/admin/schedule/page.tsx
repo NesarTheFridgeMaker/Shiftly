@@ -60,7 +60,77 @@ type ShiftTemplate = {
 type WorkType = {
   id: string;
   name: string;
+  color?: string | null;
 };
+
+type WorkTypeColorStyle = {
+  card: string;
+  time: string;
+  label: string;
+  deleteButton: string;
+  draftBadge: string;
+};
+
+const WORK_TYPE_COLOR_STYLES: Record<string, WorkTypeColorStyle> = {
+  blue: {
+    card: "border-[#BFDBFE] bg-[#DBEAFE] hover:bg-[#D2E7FD]",
+    time: "text-[#0758C9]",
+    label: "text-[#1265D6]",
+    deleteButton: "bg-[#2563EB]/10 text-[#2563EB] hover:bg-[#2563EB]/20",
+    draftBadge: "bg-[#2563EB]/10 text-[#1D4ED8]",
+  },
+  green: {
+    card: "border-[#BBF7D0] bg-[#DCFCE7] hover:bg-[#D2F8DF]",
+    time: "text-[#087A45]",
+    label: "text-[#0F8A50]",
+    deleteButton: "bg-[#16A34A]/10 text-[#15803D] hover:bg-[#16A34A]/20",
+    draftBadge: "bg-[#16A34A]/10 text-[#15803D]",
+  },
+  purple: {
+    card: "border-[#DDD6FE] bg-[#EDE9FE] hover:bg-[#E7E1FD]",
+    time: "text-[#5B21D1]",
+    label: "text-[#6D28D9]",
+    deleteButton: "bg-[#7C3AED]/10 text-[#6D28D9] hover:bg-[#7C3AED]/20",
+    draftBadge: "bg-[#7C3AED]/10 text-[#6D28D9]",
+  },
+  amber: {
+    card: "border-[#FDE68A] bg-[#FEF3C7] hover:bg-[#FDEEB9]",
+    time: "text-[#9A5A00]",
+    label: "text-[#B36B00]",
+    deleteButton: "bg-[#D97706]/10 text-[#B45309] hover:bg-[#D97706]/20",
+    draftBadge: "bg-[#D97706]/10 text-[#B45309]",
+  },
+  red: {
+    card: "border-[#FECACA] bg-[#FEE2E2] hover:bg-[#FDD8D8]",
+    time: "text-[#C81E1E]",
+    label: "text-[#DC2626]",
+    deleteButton: "bg-[#DC2626]/10 text-[#DC2626] hover:bg-[#DC2626]/20",
+    draftBadge: "bg-[#DC2626]/10 text-[#DC2626]",
+  },
+  cyan: {
+    card: "border-[#A5F3FC] bg-[#CFFAFE] hover:bg-[#C2F6FB]",
+    time: "text-[#0E7490]",
+    label: "text-[#0891B2]",
+    deleteButton: "bg-[#0891B2]/10 text-[#0E7490] hover:bg-[#0891B2]/20",
+    draftBadge: "bg-[#0891B2]/10 text-[#0E7490]",
+  },
+  pink: {
+    card: "border-[#FBCFE8] bg-[#FCE7F3] hover:bg-[#FADDEC]",
+    time: "text-[#BE185D]",
+    label: "text-[#DB2777]",
+    deleteButton: "bg-[#DB2777]/10 text-[#BE185D] hover:bg-[#DB2777]/20",
+    draftBadge: "bg-[#DB2777]/10 text-[#BE185D]",
+  },
+  indigo: {
+    card: "border-[#C7D2FE] bg-[#E0E7FF] hover:bg-[#D7DFFD]",
+    time: "text-[#4338CA]",
+    label: "text-[#4F46E5]",
+    deleteButton: "bg-[#4F46E5]/10 text-[#4338CA] hover:bg-[#4F46E5]/20",
+    draftBadge: "bg-[#4F46E5]/10 text-[#4338CA]",
+  },
+};
+
+const DEFAULT_WORK_TYPE_COLOR_STYLE = WORK_TYPE_COLOR_STYLES.blue;
 
 type EmployeeNote = {
   employee_id: string;
@@ -419,7 +489,7 @@ export default function SchedulePage() {
 
     const { data, error } = await supabase
       .from("work_types")
-      .select("id,name")
+      .select("id,name,color")
       .eq("business_id", businessId)
       .order("name");
 
@@ -2006,7 +2076,7 @@ setPlannedBreakMinutes(
                         employee.id,
                       )
                     }
-                    className={`min-w-0 border-r border-[#CBD5E1] px-3 py-3 text-left transition ${
+                    className={`min-w-0 border-r border-[#CBD5E1] px-3 py-2 text-left transition ${
                       employeeId ===
                       employee.id
                         ? "bg-[#E8F2FB]"
@@ -2014,7 +2084,7 @@ setPlannedBreakMinutes(
                     }`}
                   >
                     <div className="flex min-w-0 items-center gap-2.5">
-                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#2563EB] text-xs font-semibold text-white shadow-[0_4px_10px_rgba(37,99,235,0.18)]">
+                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-[#2563EB] text-[11px] font-semibold text-white shadow-[0_4px_10px_rgba(37,99,235,0.18)]">
                         {employee.name
                           .slice(
                             0,
@@ -2099,7 +2169,7 @@ setPlannedBreakMinutes(
                               day.date,
                             )
                           }
-                          className={`group relative min-h-[112px] min-w-0 border-r border-[#CBD5E1] p-1.5 last:border-r-0 transition ${
+                          className={`group relative min-h-[66px] min-w-0 border-r border-[#CBD5E1] p-1 last:border-r-0 transition ${
                             day.date ===
                             todayDate
                               ? "bg-[#EAF2FF]"
@@ -2144,13 +2214,13 @@ setPlannedBreakMinutes(
                             <div className="space-y-1.5">
                               {cellShifts.map(
                                 (shift) => {
-                                  const shiftNetMinutes =
-                                    getPlannedNetMinutes(
-                                      shift.start_time,
-                                      shift.end_time,
-                                      shift.planned_break_minutes ??
-                                        0,
-                                    );
+                                  const workType = workTypes.find(
+                                    (type) => type.id === shift.work_type_id,
+                                  );
+
+                                  const colorStyle =
+                                    WORK_TYPE_COLOR_STYLES[workType?.color || ""] ??
+                                    DEFAULT_WORK_TYPE_COLOR_STYLE;
 
                                   return (
                                     <div
@@ -2191,7 +2261,7 @@ setPlannedBreakMinutes(
                                           shift,
                                         );
                                       }}
-                                      className="pointer-events-auto relative cursor-grab rounded-lg border border-[#1D4ED8] bg-[#2563EB] px-2 py-1.5 text-white shadow-[0_6px_14px_rgba(37,99,235,0.24)] transition hover:-translate-y-px hover:bg-[#1D4ED8] hover:shadow-[0_9px_20px_rgba(37,99,235,0.30)] active:cursor-grabbing"
+                                      className={`pointer-events-auto relative cursor-grab rounded-md border px-2 py-1 shadow-[0_2px_6px_rgba(15,23,42,0.08)] transition hover:-translate-y-px hover:shadow-[0_4px_10px_rgba(15,23,42,0.11)] active:cursor-grabbing ${colorStyle.card}`}
                                     >
                                       <button
                                         type="button"
@@ -2209,12 +2279,12 @@ setPlannedBreakMinutes(
                                               ),
                                           );
                                         }}
-                                        className="absolute right-1 top-1 flex h-4 w-4 items-center justify-center rounded-full bg-white/15 text-[11px] leading-none text-white/90 transition hover:bg-white/30 hover:text-white"
+                                        className={`absolute right-1 top-1 flex h-4 w-4 items-center justify-center rounded-full text-[11px] leading-none transition ${colorStyle.deleteButton}`}
                                       >
                                         ×
                                       </button>
 
-                                      <p className="truncate pr-4 text-[11px] font-bold leading-4 text-white">
+                                      <p className={`truncate pr-4 text-[11px] font-bold leading-4 ${colorStyle.time}`}>
                                         {shift.start_time.slice(
                                           0,
                                           5,
@@ -2227,27 +2297,20 @@ setPlannedBreakMinutes(
                                       </p>
 
                                       {shift.work_type_name && (
-                                        <p className="mt-0.5 truncate text-[10px] font-medium leading-4 text-white/90">
+                                        <p className={`truncate text-[10px] font-medium leading-3 ${colorStyle.label}`}>
                                           {
                                             shift.work_type_name
                                           }
                                         </p>
                                       )}
 
-                                      <div className="mt-1 flex min-w-0 items-center justify-between gap-1 text-[9px] leading-3 text-white/75">
-                                        <span className="truncate">
-                                          {formatMinutesAsHours(
-                                            shiftNetMinutes,
-                                          )}{" "}
-                                          h netto
+                                      {!shift.is_published && (
+                                        <span
+                                          className={`absolute bottom-1 right-1 rounded px-1 py-0.5 text-[8px] font-semibold leading-none ${colorStyle.draftBadge}`}
+                                        >
+                                          Entwurf
                                         </span>
-
-                                        {!shift.is_published && (
-                                          <span className="shrink-0 rounded bg-white/15 px-1 py-0.5 font-semibold text-white">
-                                            Entwurf
-                                          </span>
-                                        )}
-                                      </div>
+                                      )}
                                     </div>
                                   );
                                 },
