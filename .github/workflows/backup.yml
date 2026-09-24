@@ -153,7 +153,6 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-
           cd /tmp/dipera-backup-tools
 
           node <<'NODE'
@@ -169,68 +168,47 @@ jobs:
             throw new Error('Missing Supabase Storage configuration.');
           }
 
-          const supabase = createClient(
-            `https://${projectRef}.supabase.co`,
-            secretKey,
-            {
-              auth: {
-                persistSession: false,
-                autoRefreshToken: false
-              }
-            }
-          );
+          const supabase = createClient(`https://${projectRef}.supabase.co`, secretKey, {
+            auth: { persistSession: false, autoRefreshToken: false }
+          });
 
           const outputRoot = path.join(
-            process.env.GITHUB_WORKSPACE,
-            'backup',
-            'storage',
-            bucket
+            process.env.GITHUB_WORKSPACE, 'backup', 'storage', bucket
           );
-
           fs.mkdirSync(outputRoot, { recursive: true });
 
           let downloadedFiles = 0;
+          let downloadedBytes = 0;
 
           async function downloadPrefix(prefix = '') {
             let offset = 0;
             const limit = 1000;
 
             while (true) {
-              const { data, error } = await supabase.storage
-                .from(bucket)
-                .list(prefix, {
-                  limit,
-                  offset,
-                  sortBy: {
-                    column: 'name',
-                    order: 'asc'
-                  }
-                });
+              const { data, error } = await supabase.storage.from(bucket).list(prefix, {
+                limit,
+                offset,
+                sortBy: { column: 'name', order: 'asc' }
+              });
 
               if (error) {
                 throw new Error(
                   `Could not list bucket "${bucket}" prefix "${prefix}": ${error.message}`
                 );
               }
-
-              if (!data || data.length === 0) {
-                break;
-              }
+              if (!data || data.length === 0) break;
 
               for (const item of data) {
-                const objectPath = prefix
-                  ? `${prefix}/${item.name}`
-                  : item.name;
+                const objectPath = prefix ? `${prefix}/${item.name}` : item.name;
 
-                if (!item.id) {
+                // Supabase documents folder entries with id === null.
+                if (item.id === null) {
                   await downloadPrefix(objectPath);
                   continue;
                 }
 
                 const { data: fileData, error: downloadError } =
-                  await supabase.storage
-                    .from(bucket)
-                    .download(objectPath);
+                  await supabase.storage.from(bucket).download(objectPath);
 
                 if (downloadError) {
                   throw new Error(
@@ -238,29 +216,18 @@ jobs:
                   );
                 }
 
-                const localPath = path.join(
-                  outputRoot,
-                  ...objectPath.split('/')
-                );
+                const localPath = path.join(outputRoot, ...objectPath.split('/'));
+                fs.mkdirSync(path.dirname(localPath), { recursive: true });
 
-                fs.mkdirSync(path.dirname(localPath), {
-                  recursive: true
-                });
-
-                const buffer = Buffer.from(
-                  await fileData.arrayBuffer()
-                );
-
+                const buffer = Buffer.from(await fileData.arrayBuffer());
                 fs.writeFileSync(localPath, buffer);
 
                 downloadedFiles++;
-                console.log(`Backed up: ${objectPath}`);
+                downloadedBytes += buffer.length;
+                console.log(`Backed up: ${objectPath} (${buffer.length} bytes)`);
               }
 
-              if (data.length < limit) {
-                break;
-              }
-
+              if (data.length < limit) break;
               offset += limit;
             }
           }
@@ -268,14 +235,36 @@ jobs:
           downloadPrefix()
             .then(() => {
               console.log(
-                `Storage backup complete. Files downloaded: ${downloadedFiles}`
+                `Storage backup complete. Files downloaded: ${downloadedFiles}; bytes: ${downloadedBytes}`
               );
+              if (downloadedFiles === 0) {
+                throw new Error(
+                  `Storage backup for bucket "${bucket}" downloaded 0 files. Refusing to create an incomplete backup.`
+                );
+              }
             })
             .catch((error) => {
               console.error(error);
               process.exit(1);
             });
           NODE
+
+      - name: Verify Storage backup contains files
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          STORAGE_DIR="backup/storage/${STORAGE_BUCKET}"
+          STORAGE_FILE_COUNT="$(find "$STORAGE_DIR" -type f | wc -l | tr -d ' ')"
+
+          echo "Storage files included in backup: ${STORAGE_FILE_COUNT}"
+
+          if [ "$STORAGE_FILE_COUNT" -eq 0 ]; then
+            echo "::error::Storage bucket ${STORAGE_BUCKET} produced zero backup files."
+            exit 1
+          fi
+
+          find "$STORAGE_DIR" -type f -printf '%P\n' | sort
 
       - name: Create backup manifest
         shell: bash
@@ -308,15 +297,6 @@ jobs:
 
           tar -czf "${BACKUP_NAME}.tar.gz" backup
 
-      - name: Debug backup passphrase fingerprint
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          printf '%s' "$BACKUP_ENCRYPTION_PASSPHRASE" \
-            | sha256sum \
-            | awk '{print "Passphrase SHA256: " $1}'
-
       - name: Encrypt archive
         shell: bash
         run: |
@@ -335,13 +315,6 @@ jobs:
 
           echo "Encrypted backup created:"
           ls -lh "${BACKUP_NAME}.tar.gz.enc"
-
-      - name: Print encrypted backup SHA256
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          sha256sum "${BACKUP_NAME}.tar.gz.enc"
 
       - name: Verify encrypted archive can be decrypted
         shell: bash
