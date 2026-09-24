@@ -26,7 +26,7 @@ jobs:
       BACKUP_ENCRYPTION_PASSPHRASE: ${{ secrets.BACKUP_ENCRYPTION_PASSPHRASE }}
 
       R2_BUCKET: dipera-backups
-      STORAGE_BUCKET: Employee-documents
+      STORAGE_BUCKET: employee-documents
 
       DB_HOST: aws-0-eu-west-1.pooler.supabase.com
       DB_PORT: "5432"
