@@ -350,10 +350,6 @@ export default function EmployeesPage() {
   const [showPopup, setShowPopup] = useState(false);
   const [employeeToDelete, setEmployeeToDelete] = useState<string | null>(null);
 
-  const [showEmployeeLimitPopup, setShowEmployeeLimitPopup] = useState(false);
-  const [employeeLimit, setEmployeeLimit] = useState<number | null>(null);
-  const [isOpeningBillingPortal, setIsOpeningBillingPortal] = useState(false);
-
   const [newEmployeeWageType, setNewEmployeeWageType] = useState<WageType>("hourly");
 
   const [newEmployeeHourlyRate, setNewEmployeeHourlyRate] = useState("");
@@ -718,62 +714,6 @@ if (timeAccountSettingsError) {
 }, [employeeSearch]);
 
 
-  async function handleOpenBillingPortal() {
-    if (isOpeningBillingPortal) return;
-
-    setIsOpeningBillingPortal(true);
-
-    try {
-      const {
-        data: { session },
-        error: sessionError,
-      } = await supabase.auth.getSession();
-
-      if (sessionError || !session?.access_token) {
-        showToast({
-          type: "error",
-          title: "Anmeldung abgelaufen",
-          description: "Bitte melde dich erneut an.",
-        });
-        return;
-      }
-
-      const response = await fetch("/api/stripe/create-portal-session", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${session.access_token}`,
-        },
-      });
-
-      const data = (await response.json()) as {
-        url?: string;
-        error?: string;
-      };
-
-      if (!response.ok || !data.url) {
-        showToast({
-          type: "error",
-          title: "Abo-Verwaltung konnte nicht geöffnet werden",
-          description: data.error || "Bitte versuche es erneut.",
-        });
-        return;
-      }
-
-      window.location.href = data.url;
-    } catch (error) {
-      console.error("OPEN BILLING PORTAL ERROR:", error);
-
-      showToast({
-        type: "error",
-        title: "Abo-Verwaltung konnte nicht geöffnet werden",
-        description: "Bitte versuche es erneut.",
-      });
-    } finally {
-      setIsOpeningBillingPortal(false);
-    }
-  }
-
   async function handleAddEmployee() {
     if (isSaving) return;
 
@@ -907,47 +847,6 @@ if (
           title: "Betrieb nicht gefunden",
           description: "Der Mitarbeiter konnte nicht angelegt werden.",
         });
-        return;
-      }
-
-      const { data: businessData, error: businessError } = await supabase
-        .from("businesses")
-        .select("employee_limit")
-        .eq("id", businessId)
-        .single();
-
-      if (businessError || !businessData) {
-        console.error(businessError);
-        showToast({
-          type: "error",
-          title: "Betriebsdaten konnten nicht geladen werden",
-          description: "Bitte versuche es erneut.",
-        });
-        return;
-      }
-
-      const { count, error: countError } = await supabase
-        .from("employees")
-        .select("*", {
-          count: "exact",
-          head: true,
-        })
-        .eq("business_id", businessId)
-        .eq("account_status", "active");
-
-      if (countError) {
-        console.error(countError);
-        showToast({
-          type: "error",
-          title: "Mitarbeiteranzahl konnte nicht geprüft werden",
-          description: "Bitte versuche es erneut.",
-        });
-        return;
-      }
-
-      if ((count ?? 0) >= businessData.employee_limit) {
-        setEmployeeLimit(businessData.employee_limit);
-        setShowEmployeeLimitPopup(true);
         return;
       }
 
@@ -1866,17 +1765,6 @@ async function handleOpenWhatsAppInvite() {
   }
 
   async function handleToggleAccountStatus(id: string, currentStatus: string) {
-    const businessId = await getBusinessId();
-
-    if (!businessId) {
-      showToast({
-        type: "error",
-        title: "Betrieb nicht gefunden",
-        description: "Der Status konnte nicht geändert werden.",
-      });
-      return;
-    }
-
     const employee = employees.find((employeeItem) => employeeItem.id === id);
 
     if (!employee) {
@@ -1888,119 +1776,54 @@ async function handleOpenWhatsAppInvite() {
       return;
     }
 
-    if (employee.role === "Owner") {
-      showToast({
-        type: "warning",
-        title: "Owner kann nicht deaktiviert werden",
-        description: "Der Hauptinhaber des Betriebs bleibt immer aktiv.",
-      });
-      return;
-    }
+    const newStatus = currentStatus === "inactive" ? "active" : "inactive";
 
-    if (employee.role === "Admin" && currentUserRole !== "owner") {
-      showToast({
-        type: "error",
-        title: "Keine Berechtigung",
-        description: "Du darfst den Status von Admins nicht ändern.",
-      });
-      return;
-    }
-
-    const isReactivating = currentStatus === "inactive";
-    if (!isReactivating) {
-  const { data: currentEmployeeStatus, error: statusError } = await supabase
-    .from("employees")
-    .select("status")
-    .eq("id", id)
-    .eq("business_id", businessId)
-    .single();
-
-  if (statusError || !currentEmployeeStatus) {
-    console.error("EMPLOYEE STATUS CHECK ERROR:", statusError);
-
-    showToast({
-      type: "error",
-      title: "Status konnte nicht geprüft werden",
-      description: "Bitte versuche es erneut.",
+    const { error } = await supabase.rpc("set_employee_account_status", {
+      p_employee_id: id,
+      p_new_status: newStatus,
     });
-    return;
-  }
-
-  if (currentEmployeeStatus.status !== "not_checked_in") {
-    showToast({
-      type: "warning",
-      title: "Mitarbeiter noch eingestempelt",
-      description:
-        "Der Mitarbeiter kann erst deaktiviert werden, nachdem die laufende Zeiterfassung beendet oder korrigiert wurde.",
-    });
-    return;
-  }
-}
-
-    /*
-     * Beim Deaktivieren wird ein Platz frei.
-     * Nur beim Reaktivieren muss das Paketlimit geprüft werden.
-     */
-    if (isReactivating) {
-      const { data: businessLimitData, error: businessLimitError } =
-        await supabase
-          .from("businesses")
-          .select("employee_limit")
-          .eq("id", businessId)
-          .single();
-
-      if (businessLimitError || !businessLimitData) {
-        console.error("BUSINESS LIMIT LOAD ERROR:", businessLimitError);
-
-        showToast({
-          type: "error",
-          title: "Mitarbeiterlimit konnte nicht geprüft werden",
-          description: "Bitte versuche es erneut.",
-        });
-        return;
-      }
-
-      const { count: activeEmployeeCount, error: employeeCountError } =
-        await supabase
-          .from("employees")
-          .select("*", {
-            count: "exact",
-            head: true,
-          })
-          .eq("business_id", businessId)
-          .eq("account_status", "active");
-
-      if (employeeCountError) {
-        console.error("ACTIVE EMPLOYEE COUNT ERROR:", employeeCountError);
-
-        showToast({
-          type: "error",
-          title: "Mitarbeiteranzahl konnte nicht geprüft werden",
-          description: "Bitte versuche es erneut.",
-        });
-        return;
-      }
-
-      if ((activeEmployeeCount ?? 0) >= businessLimitData.employee_limit) {
-        setEmployeeLimit(businessLimitData.employee_limit);
-
-        setShowEmployeeLimitPopup(true);
-        return;
-      }
-    }
-
-    const newStatus = isReactivating ? "active" : "inactive";
-
-    const { error } = await supabase
-      .from("employees")
-      .update({
-        account_status: newStatus,
-      })
-      .eq("id", id)
-      .eq("business_id", businessId);
 
     if (error) {
-      console.error("EMPLOYEE STATUS UPDATE ERROR:", error);
+      console.error("EMPLOYEE STATUS RPC ERROR:", error);
+
+      const normalizedMessage = error.message.toLowerCase();
+
+      if (normalizedMessage.includes("owner_cannot_be_deactivated")) {
+        showToast({
+          type: "warning",
+          title: "Owner kann nicht deaktiviert werden",
+          description: "Der Hauptinhaber des Betriebs bleibt immer aktiv.",
+        });
+        return;
+      }
+
+      if (normalizedMessage.includes("admin_status_requires_owner")) {
+        showToast({
+          type: "error",
+          title: "Keine Berechtigung",
+          description: "Du darfst den Status von Admins nicht ändern.",
+        });
+        return;
+      }
+
+      if (normalizedMessage.includes("employee_still_clocked_in")) {
+        showToast({
+          type: "warning",
+          title: "Mitarbeiter noch eingestempelt",
+          description:
+            "Der Mitarbeiter kann erst deaktiviert werden, nachdem die laufende Zeiterfassung beendet oder korrigiert wurde.",
+        });
+        return;
+      }
+
+      if (normalizedMessage.includes("employee_not_found")) {
+        showToast({
+          type: "error",
+          title: "Mitarbeiter nicht gefunden",
+          description: "Bitte lade die Seite neu und versuche es erneut.",
+        });
+        return;
+      }
 
       showToast({
         type: "error",
@@ -2023,6 +1846,7 @@ async function handleOpenWhatsAppInvite() {
       }.`,
     });
   }
+
   // Bearbeitet nur die Monats-Sollstunden.
   // Wochen-Sollstunden bleiben ein eigenständiger Vertragswert.
   async function handleUpdateMonthlyHours(
@@ -4158,26 +3982,64 @@ const inactiveEmployees = employees
               </div>
 
               <div className="mt-6 grid gap-2">
-                {canEditPayroll && (
-                  <Button variant="primary" type="button" fullWidth onClick={() => handleOpenEditPayroll(selectedEmployee)}>
-                    Bearbeiten
-                  </Button>
-                )}
-                {canEditLocationTracking && (
-                  <Button variant="secondary" type="button" fullWidth onClick={() => handleOpenLocationTracking(selectedEmployee)}>
-                    Standort-Einstellungen
-                  </Button>
-                )}
-                {selectedEmployee.invite && !selectedEmployee.invite.used_at ? (
-                  <Button variant="secondary" type="button" fullWidth onClick={() => handleOpenExistingInvite(selectedEmployee)}>
-                    Einladung öffnen
-                  </Button>
-                ) : !selectedEmployee.invite ? (
-                  <Button variant="secondary" type="button" fullWidth onClick={() => void handleCreateMissingInvite(selectedEmployee)}>
-                    Einladung erstellen
-                  </Button>
-                ) : null}
-              </div>
+  {canEditPayroll && (
+    <Button
+      variant="primary"
+      type="button"
+      fullWidth
+      onClick={() => handleOpenEditPayroll(selectedEmployee)}
+    >
+      Bearbeiten
+    </Button>
+  )}
+
+  {canEditLocationTracking && (
+    <Button
+      variant="secondary"
+      type="button"
+      fullWidth
+      onClick={() => handleOpenLocationTracking(selectedEmployee)}
+    >
+      Standort-Einstellungen
+    </Button>
+  )}
+
+  {selectedEmployee.invite && !selectedEmployee.invite.used_at ? (
+    <Button
+      variant="secondary"
+      type="button"
+      fullWidth
+      onClick={() => handleOpenExistingInvite(selectedEmployee)}
+    >
+      Einladung öffnen
+    </Button>
+  ) : !selectedEmployee.invite ? (
+    <Button
+      variant="secondary"
+      type="button"
+      fullWidth
+      onClick={() => void handleCreateMissingInvite(selectedEmployee)}
+    >
+      Einladung erstellen
+    </Button>
+  ) : null}
+
+  <Button
+    variant="secondary"
+    type="button"
+    fullWidth
+    onClick={() =>
+      void handleToggleAccountStatus(
+        selectedEmployee.id,
+        selectedEmployee.account_status,
+      )
+    }
+  >
+    {selectedEmployee.account_status === "active"
+      ? "Deaktivieren"
+      : "Reaktivieren"}
+  </Button>
+</div>
             </div>
           )}
 
@@ -4350,27 +4212,6 @@ const inactiveEmployees = employees
           </div>
         </div>
       )}
-
-      <DiperaPopup
-        open={showEmployeeLimitPopup}
-        variant="upgrade"
-        title="Mitarbeiterlimit erreicht"
-        highlight={
-          employeeLimit !== null
-            ? `Bis zu ${employeeLimit} aktive Mitarbeiter`
-            : undefined
-        }
-        message="Du hast die maximale Mitarbeiterzahl deines aktuellen Pakets erreicht. Öffne die Abo-Verwaltung, um dein Paket zu erweitern."
-        confirmText="Abo verwalten"
-        cancelText="Abbrechen"
-        isConfirmLoading={isOpeningBillingPortal}
-        closeOnBackdropClick={!isOpeningBillingPortal}
-        onClose={() => {
-          if (isOpeningBillingPortal) return;
-          setShowEmployeeLimitPopup(false);
-        }}
-        onConfirm={() => void handleOpenBillingPortal()}
-      />
 
       <DiperaPopup
         open={Boolean(employeeToDelete)}
