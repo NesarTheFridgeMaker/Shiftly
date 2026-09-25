@@ -50,6 +50,12 @@ type PendingBusinessSetup = {
   vat_id: string | null;
 
   legal_form: string | null;
+
+  legal_accepted_at: string | null;
+
+  agb_version: string | null;
+
+  avv_version: string | null;
 };
 
 function toIsoDate(unixTimestamp: number | null | undefined) {
@@ -105,6 +111,88 @@ function validatePendingSetup(pendingSetup: PendingBusinessSetup) {
 
   if (!/^[A-Z]{2}$/.test(pendingSetup.country_code)) {
     throw new Error("Das Pending Setup enthält einen ungültigen Ländercode.");
+  }
+
+  if (
+    !pendingSetup.legal_accepted_at ||
+    !pendingSetup.agb_version?.trim() ||
+    !pendingSetup.avv_version?.trim()
+  ) {
+    throw new Error(
+      "Das Pending Setup enthält keinen vollständigen AGB-/AVV-Nachweis.",
+    );
+  }
+}
+
+async function archiveLegalAcceptance(
+  businessId: string,
+  pendingSetup: PendingBusinessSetup,
+  checkoutSessionId: string,
+) {
+  const acceptance = {
+    business_id: businessId,
+    user_id: pendingSetup.user_id,
+    legal_accepted_at: pendingSetup.legal_accepted_at,
+    agb_version: pendingSetup.agb_version,
+    avv_version: pendingSetup.avv_version,
+    stripe_checkout_session_id: checkoutSessionId,
+  };
+
+  const { error: insertError } = await supabaseAdmin
+    .from("legal_acceptances")
+    .insert(acceptance);
+
+  if (!insertError) {
+    return;
+  }
+
+  if (insertError.code !== "23505") {
+    throw insertError;
+  }
+
+  const { data: existingAcceptance, error: existingAcceptanceError } =
+    await supabaseAdmin
+      .from("legal_acceptances")
+      .select(
+        `
+        business_id,
+        user_id,
+        legal_accepted_at,
+        agb_version,
+        avv_version,
+        stripe_checkout_session_id
+      `,
+      )
+      .eq("stripe_checkout_session_id", checkoutSessionId)
+      .single();
+
+  if (existingAcceptanceError || !existingAcceptance) {
+    throw (
+      existingAcceptanceError ??
+      new Error("Vorhandener AGB-/AVV-Nachweis konnte nicht geprüft werden.")
+    );
+  }
+
+  const existingAcceptedAt = new Date(
+    existingAcceptance.legal_accepted_at,
+  ).getTime();
+
+  const pendingAcceptedAt = new Date(
+  pendingSetup.legal_accepted_at!,
+).getTime();
+
+  const matchesExistingAcceptance =
+    existingAcceptance.business_id === businessId &&
+    existingAcceptance.user_id === pendingSetup.user_id &&
+    existingAcceptedAt === pendingAcceptedAt &&
+    existingAcceptance.agb_version === pendingSetup.agb_version &&
+    existingAcceptance.avv_version === pendingSetup.avv_version &&
+    existingAcceptance.stripe_checkout_session_id === checkoutSessionId;
+
+  if (!matchesExistingAcceptance) {
+    throw new Error(
+      "Für diese Stripe-Checkout-Session existiert bereits ein abweichender AGB-/AVV-Nachweis.",
+    );
   }
 }
 
@@ -215,6 +303,7 @@ async function updateBusinessSubscriptionBySubscriptionId(
     await syncEmployeeBilling(business.id, "period_renewal");
   }
 }
+
 async function completePendingSetup(
   pendingSetupId: string,
   userId: string,
@@ -305,7 +394,13 @@ async function handleCheckoutCompleted(
 
         vat_id,
 
-        legal_form
+        legal_form,
+
+        legal_accepted_at,
+
+        agb_version,
+
+        avv_version
       `,
       )
 
@@ -359,6 +454,12 @@ async function handleCheckoutCompleted(
       subscription,
 
       customerId,
+    );
+
+    await archiveLegalAcceptance(
+      existingProfile.business_id,
+      pendingSetup,
+      session.id,
     );
 
     await completePendingSetup(
@@ -424,6 +525,12 @@ async function handleCheckoutCompleted(
     subscription,
 
     customerId,
+  );
+
+  await archiveLegalAcceptance(
+    businessId,
+    pendingSetup,
+    session.id,
   );
 
   await completePendingSetup(
