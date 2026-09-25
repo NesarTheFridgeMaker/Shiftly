@@ -27,7 +27,7 @@ export default function KontoLoeschenPage() {
   return (
     <main className="min-h-screen overflow-x-hidden bg-slate-50 text-slate-900">
       {/* Header */}
-      <header className="relative overflow-hidden bg-[#0B1220]">
+      <header className="relative overflow-hidden bg-[#102B4C]">
         <div
           className="pointer-events-none absolute -right-24 -top-24 h-80 w-80 rounded-full bg-blue-500/10 blur-3xl"
           aria-hidden="true"
