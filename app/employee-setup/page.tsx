@@ -5,6 +5,12 @@ import { supabase } from "@/lib/supabaseClient";
 
 type SetupState = "loading" | "error";
 
+type CompleteEmployeeSetupResponse = {
+  role?: "owner" | "admin" | "employee";
+  error?: string;
+  activationCompleted?: boolean;
+};
+
 export default function EmployeeSetupPage() {
   const [setupState, setSetupState] =
     useState<SetupState>("loading");
@@ -33,61 +39,92 @@ export default function EmployeeSetupPage() {
       }
 
       /*
-       * Bereits bestehende Profile werden sofort weitergeleitet.
+       * Bereits bestehende Profile werden grundsätzlich direkt
+       * weitergeleitet.
+       *
+       * Ausnahme:
+       * Ein Mitarbeiterprofil kann bereits durch einen vorherigen
+       * Aktivierungsversuch angelegt worden sein, während der
+       * anschließende Stripe-Sync fehlgeschlagen ist.
+       *
+       * In diesem Fall muss die serverseitige Complete-Route erneut
+       * aufgerufen werden können. Deshalb verwenden wir die direkte
+       * Weiterleitung nur für Business-Owner.
        */
-      const { data: existingProfile, error: profileError } =
-        await supabase
-          .from("profiles")
-          .select("role")
-          .eq("id", user.id)
-          .maybeSingle();
-
-      if (profileError) {
-        console.error(
-          "EMPLOYEE SETUP PROFILE CHECK ERROR:",
-          profileError
-        );
-
-        setErrorMessage(
-          "Dein Benutzerprofil konnte nicht geprüft werden."
-        );
-        setSetupState("error");
-        return;
-      }
-
-      if (
-        existingProfile?.role === "owner" ||
-        existingProfile?.role === "admin"
-      ) {
-        window.location.replace("/admin");
-        return;
-      }
-
-      if (existingProfile?.role === "employee") {
-        window.location.replace("/employee");
-        return;
-      }
-
       if (
         user.user_metadata?.registration_type ===
         "business_owner"
       ) {
+        const { data: existingOwnerProfile } =
+          await supabase
+            .from("profiles")
+            .select("role")
+            .eq("id", user.id)
+            .maybeSingle();
+
+        if (
+          existingOwnerProfile?.role === "owner" ||
+          existingOwnerProfile?.role === "admin"
+        ) {
+          window.location.replace("/admin");
+          return;
+        }
+
         window.location.replace("/setup");
         return;
       }
 
-      const { data: assignedRole, error: inviteError } =
-        await supabase.rpc(
-          "complete_employee_invite_from_metadata"
-        );
+      /*
+       * Für Mitarbeiter-/Admin-Einladungen wird bewusst die
+       * serverseitige Route verwendet. Sie führt zuerst den
+       * idempotenten Invite-RPC mit dem Benutzer-Token aus und
+       * synchronisiert anschließend die Stripe-Abrechnung.
+       */
+      const {
+        data: { session },
+        error: sessionError,
+      } = await supabase.auth.getSession();
 
-      if (inviteError) {
+      if (
+        sessionError ||
+        !session?.access_token
+      ) {
+        await supabase.auth.signOut();
+        window.location.replace("/login");
+        return;
+      }
+
+      const response = await fetch(
+        "/api/employee-setup/complete",
+        {
+          method: "POST",
+          headers: {
+            Authorization:
+              `Bearer ${session.access_token}`,
+          },
+        }
+      );
+
+      let result: CompleteEmployeeSetupResponse = {};
+
+      try {
+        result =
+          (await response.json()) as CompleteEmployeeSetupResponse;
+      } catch {
+        result = {};
+      }
+
+      if (!response.ok) {
         console.error(
-          "AUTOMATIC EMPLOYEE INVITE ERROR:",
-          inviteError
+          "AUTOMATIC EMPLOYEE SETUP ERROR:",
+          result
         );
 
-        const message = inviteError.message.toLowerCase();
+        const rawMessage =
+          result.error ||
+          "Dein Mitarbeiter-Zugang konnte nicht aktiviert werden.";
+
+        const message = rawMessage.toLowerCase();
 
         if (
           message.includes("bereits verwendet") ||
@@ -102,11 +139,12 @@ export default function EmployeeSetupPage() {
           setErrorMessage(
             "Deinem Konto konnte keine Einladung zugeordnet werden. Bitte registriere dich erneut über den Einladungslink."
           );
-        } else {
+        } else if (result.activationCompleted) {
           setErrorMessage(
-            inviteError.message ||
-              "Dein Mitarbeiter-Zugang konnte nicht aktiviert werden."
+            "Dein Mitarbeiterkonto wurde aktiviert, aber die Abrechnung konnte noch nicht synchronisiert werden. Bitte klicke auf „Erneut versuchen“."
           );
+        } else {
+          setErrorMessage(rawMessage);
         }
 
         setSetupState("error");
@@ -114,14 +152,14 @@ export default function EmployeeSetupPage() {
       }
 
       if (
-        assignedRole === "owner" ||
-        assignedRole === "admin"
+        result.role === "owner" ||
+        result.role === "admin"
       ) {
         window.location.replace("/admin");
         return;
       }
 
-      if (assignedRole === "employee") {
+      if (result.role === "employee") {
         window.location.replace("/employee");
         return;
       }
@@ -190,7 +228,9 @@ export default function EmployeeSetupPage() {
             <div className="mt-6 flex flex-col gap-3">
               <button
                 type="button"
-                onClick={() => void completeEmployeeSetup()}
+                onClick={() =>
+                  void completeEmployeeSetup()
+                }
                 className="h-12 rounded-xl bg-[#005CA8] font-semibold text-white transition hover:bg-[#004b8a]"
               >
                 Erneut versuchen
