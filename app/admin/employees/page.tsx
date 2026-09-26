@@ -3513,7 +3513,7 @@ export default function EmployeesPage() {
                   },
                   {
                     value: "fixed_hourly",
-                    label: "Fixer Monatslohn auf Stundenbasis",
+                    label: "Stundenlohn nach Sollstunden",
                   },
                   {
                     value: "salary",
@@ -5136,7 +5136,7 @@ export default function EmployeesPage() {
                       },
                       {
                         value: "fixed_hourly",
-                        label: "Fixer Monatslohn auf Stundenbasis",
+                        label: "Stundenlohn nach Sollstunden",
                       },
                       {
                         value: "salary",
