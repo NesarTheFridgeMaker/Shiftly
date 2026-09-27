@@ -1,9 +1,5 @@
+import { redirect } from "next/navigation";
+
 export default function Home() {
-  return (
-    <main className="min-h-screen bg-white flex items-center justify-center">
-      <h1 className="text-5xl font-bold text-blue-900">
-        Dipera
-      </h1>
-    </main>
-  );
+  redirect("https://www.dipera.de");
 }
