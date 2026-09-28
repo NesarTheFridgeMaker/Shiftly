@@ -24,9 +24,7 @@ workflows:
         script: flutter pub get
 
       - name: Install CocoaPods dependencies
-        script: |
-          cd ios
-          pod install
+        script: find . -name "Podfile" -execdir pod install \;
 
       - name: Set up iOS code signing
         script: xcode-project use-profiles
