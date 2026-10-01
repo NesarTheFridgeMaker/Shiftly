@@ -24,22 +24,22 @@ export default function Button({
 }: ButtonProps) {
   const variants = {
     primary:
-      "bg-[#2563EB] text-white shadow-[0_8px_20px_rgba(37,99,235,0.18)] hover:bg-[#1D4ED8]",
+      "bg-[#31AEF0] text-white hover:bg-[#219DDB]",
 
     secondary:
-      "bg-white text-[#111827] border border-[#E5E7EB] hover:bg-[#F8FAFC] shadow-sm",
+      "bg-white text-black hover:bg-[#E7EDF1]",
 
     danger:
-      "bg-[#EF4444] text-white hover:bg-[#DC2626] shadow-[0_8px_20px_rgba(239,68,68,0.15)]",
+      "bg-[#EF4444] text-white hover:bg-[#DC2626]",
 
     ghost:
-      "bg-transparent text-[#6B7280] hover:text-[#111827] hover:bg-[#F1F5F9]",
+      "bg-transparent text-[#667085] hover:bg-[#E7EDF1] hover:text-black",
   };
 
   const sizes = {
-    sm: "h-9 px-3 text-sm",
-    md: "h-11 px-4 text-sm",
-    lg: "h-12 px-5 text-base",
+    sm: "h-9 px-3.5 text-sm",
+    md: "h-11 px-4.5 text-sm",
+    lg: "h-12 px-5.5 text-base",
   };
 
   return (
@@ -47,10 +47,10 @@ export default function Button({
       type={type}
       disabled={disabled || loading}
       className={[
-        "inline-flex items-center justify-center gap-2 rounded-xl font-medium",
+        "inline-flex items-center justify-center gap-2 rounded-xl font-semibold",
         "transition-all duration-200 ease-out",
-        "hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98]",
-        "focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#2563EB]/20",
+        "active:scale-[0.98]",
+        "focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#31AEF0]/20",
         "disabled:pointer-events-none disabled:opacity-50",
         "select-none",
         fullWidth ? "w-full" : "",

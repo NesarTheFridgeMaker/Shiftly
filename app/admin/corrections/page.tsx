@@ -922,7 +922,7 @@ export default function CorrectionsPage() {
         description="Prüfe offene Zeitprobleme und greife bei Bedarf auf die paginierte Historie zu."
       />
 
-      <div className="rounded-3xl border border-[#D7DEE8] bg-[#EEF2F6] p-2 shadow-[0_6px_18px_rgba(15,23,42,0.08)]">
+      <div className="rounded-[30px] bg-[#F2F5F8] p-2">
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2" role="tablist" aria-label="Korrekturansicht">
           <button
             type="button"
@@ -930,10 +930,10 @@ export default function CorrectionsPage() {
             aria-selected={activeView === "open"}
             onClick={() => setActiveView("open")}
             className={[
-              "rounded-2xl border px-5 py-4 text-left transition-all duration-200",
+              "rounded-[22px] px-5 py-4 text-left transition-colors duration-200",
               activeView === "open"
-                ? "border-[#2563EB] bg-[#2563EB] text-white shadow-[0_10px_24px_rgba(37,99,235,0.20)]"
-                : "border-transparent bg-[#E9EEF4] text-[#0F172A] shadow-[0_3px_9px_rgba(15,23,42,0.06)] hover:border-[#BFDBFE] hover:bg-[#E8F2FB]",
+                ? "bg-[#31AEF0] text-white"
+                : "bg-[#E7EDF1] text-[#323542] hover:bg-[#DDE6EC]",
             ].join(" ")}
           >
             <div className="flex items-center justify-between gap-3">
@@ -944,12 +944,12 @@ export default function CorrectionsPage() {
                   ? "bg-white/20 text-white"
                   : totalOpen > 0
                     ? "bg-[#FEF3C7] text-[#B45309]"
-                    : "bg-[#E2E8F0] text-[#64748B]",
+                    : "bg-[#E7EDF1] text-[#667085]",
               ].join(" ")}>
                 {totalOpen}
               </span>
             </div>
-            <p className={["mt-1 text-sm", activeView === "open" ? "text-white/80" : "text-[#64748B]"].join(" ")}>
+            <p className={["mt-1 text-sm", activeView === "open" ? "text-white/80" : "text-[#667085]"].join(" ")}>
               Konflikte, Warnungen und Anträge, die noch geprüft werden müssen.
             </p>
           </button>
@@ -963,10 +963,10 @@ export default function CorrectionsPage() {
               loadHistory(0, 0, 0);
             }}
             className={[
-              "rounded-2xl border px-5 py-4 text-left transition-all duration-200",
+              "rounded-[22px] px-5 py-4 text-left transition-colors duration-200",
               activeView === "history"
-                ? "border-[#2563EB] bg-[#2563EB] text-white shadow-[0_10px_24px_rgba(37,99,235,0.20)]"
-                : "border-transparent bg-[#E9EEF4] text-[#0F172A] shadow-[0_3px_9px_rgba(15,23,42,0.06)] hover:border-[#BFDBFE] hover:bg-[#E8F2FB]",
+                ? "bg-[#31AEF0] text-white"
+                : "bg-[#E7EDF1] text-[#323542] hover:bg-[#DDE6EC]",
             ].join(" ")}
           >
             <div className="flex items-center justify-between gap-3">
@@ -975,12 +975,12 @@ export default function CorrectionsPage() {
                 "rounded-full px-2.5 py-1 text-xs font-semibold",
                 activeView === "history"
                   ? "bg-white/20 text-white"
-                  : "bg-[#DBEAFE] text-[#1D4ED8]",
+                  : "bg-[#E7F5FC] text-[#168FD0]",
               ].join(" ")}>
                 Archiv
               </span>
             </div>
-            <p className={["mt-1 text-sm", activeView === "history" ? "text-white/80" : "text-[#64748B]"].join(" ")}>
+            <p className={["mt-1 text-sm", activeView === "history" ? "text-white/80" : "text-[#667085]"].join(" ")}>
               Geprüfte Warnungen sowie erledigte Korrekturen und Anträge.
             </p>
           </button>
@@ -989,7 +989,7 @@ export default function CorrectionsPage() {
 
       {activeView === "open" && (
         <>
-          <div className="rounded-3xl border border-[#D7DEE8] bg-[#EEF2F6] p-4 shadow-[0_6px_18px_rgba(15,23,42,0.08)] md:p-5">
+          <div className="rounded-[30px] bg-[#F2F5F8] p-4 md:p-5">
             <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-4">
               <StatCard
                 title="Systemkonflikte"
@@ -1046,12 +1046,12 @@ export default function CorrectionsPage() {
                 {openConflicts.map((conflict) => (
                   <div
                     key={conflict.conflict_id}
-                    className="rounded-3xl border border-[#F6D58B] bg-[#FFFDF7] p-5 shadow-[0_8px_22px_rgba(15,23,42,0.10)] transition hover:shadow-[0_12px_30px_rgba(15,23,42,0.13)]"
+                    className="rounded-3xl border border-[#F6D58B] bg-[#FFFDF7] p-5 shadow-none transition "
                   >
                     <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
                       <div>
                         <div className="flex flex-wrap items-center gap-3">
-                          <h2 className="text-xl font-semibold text-[#0F172A]">
+                          <h2 className="text-xl font-semibold text-[#000000]">
                             {conflict.employee_name}
                           </h2>
                           <Badge variant="warning" dot>
@@ -1077,31 +1077,31 @@ export default function CorrectionsPage() {
                     </div>
 
                     <div className="mt-5 grid grid-cols-1 gap-3 md:grid-cols-3">
-                      <div className="rounded-2xl border border-[#D7DEE8] bg-[#EEF2F6] p-4 shadow-[0_3px_10px_rgba(15,23,42,0.05)]">
-                        <p className="text-xs font-medium text-[#64748B]">
+                      <div className="rounded-[18px] bg-white p-4">
+                        <p className="text-xs font-medium text-[#667085]">
                           Arbeitstag
                         </p>
-                        <p className="mt-1 text-sm font-semibold text-[#0F172A]">
+                        <p className="mt-1 text-sm font-semibold text-[#000000]">
                           {formatDate(
                             `${conflict.conflict_date}T12:00:00`
                           )}
                         </p>
                       </div>
 
-                      <div className="rounded-2xl border border-[#D7DEE8] bg-[#EEF2F6] p-4 shadow-[0_3px_10px_rgba(15,23,42,0.05)]">
-                        <p className="text-xs font-medium text-[#64748B]">
+                      <div className="rounded-[18px] bg-white p-4">
+                        <p className="text-xs font-medium text-[#667085]">
                           Eingestempelt
                         </p>
-                        <p className="mt-1 text-sm font-semibold text-[#0F172A]">
+                        <p className="mt-1 text-sm font-semibold text-[#000000]">
                           {formatLocalDateTime(conflict.check_in_local)}
                         </p>
                       </div>
 
-                      <div className="rounded-2xl border border-[#D7DEE8] bg-[#EEF2F6] p-4 shadow-[0_3px_10px_rgba(15,23,42,0.05)]">
-                        <p className="text-xs font-medium text-[#64748B]">
+                      <div className="rounded-[18px] bg-white p-4">
+                        <p className="text-xs font-medium text-[#667085]">
                           Konflikt erkannt
                         </p>
-                        <p className="mt-1 text-sm font-semibold text-[#0F172A]">
+                        <p className="mt-1 text-sm font-semibold text-[#000000]">
                           {formatLocalDateTime(conflict.detected_at)}
                         </p>
                       </div>
@@ -1148,12 +1148,12 @@ export default function CorrectionsPage() {
                   return (
                     <div
                       key={warning.id}
-                      className="rounded-3xl border border-[#F6D58B] bg-[#FFFDF7] p-5 shadow-[0_8px_22px_rgba(15,23,42,0.10)] transition hover:shadow-[0_12px_30px_rgba(15,23,42,0.13)]"
+                      className="rounded-3xl border border-[#F6D58B] bg-[#FFFDF7] p-5 shadow-none transition "
                     >
                       <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
                         <div>
                           <div className="flex flex-wrap items-center gap-3">
-                            <h2 className="text-xl font-semibold text-[#0F172A]">
+                            <h2 className="text-xl font-semibold text-[#000000]">
                               {warning.employee_name}
                             </h2>
 
@@ -1168,7 +1168,7 @@ export default function CorrectionsPage() {
                         </div>
 
                         <div className="flex flex-col items-start gap-3 xl:items-end">
-                          <p className="text-sm text-[#64748B]">
+                          <p className="text-sm text-[#667085]">
                             Erkannt am {formatDate(warning.created_at)}
                           </p>
 
@@ -1186,11 +1186,11 @@ export default function CorrectionsPage() {
                       </div>
 
                       <div className="mt-5 grid grid-cols-1 gap-3 md:grid-cols-3">
-                        <div className="rounded-2xl border border-[#D7DEE8] bg-[#EEF2F6] p-4 shadow-[0_3px_10px_rgba(15,23,42,0.05)]">
-                          <p className="text-xs font-medium text-[#64748B]">
+                        <div className="rounded-[18px] bg-white p-4">
+                          <p className="text-xs font-medium text-[#667085]">
                             Arbeitstag
                           </p>
-                          <p className="mt-1 text-sm font-semibold text-[#0F172A]">
+                          <p className="mt-1 text-sm font-semibold text-[#000000]">
                             {formatDate(
                               `${warning.warning_date}T12:00:00`
                             )}
@@ -1199,17 +1199,17 @@ export default function CorrectionsPage() {
 
                         {isDailyLimit && (
                           <>
-                            <div className="rounded-2xl border border-[#D7DEE8] bg-[#EEF2F6] p-4 shadow-[0_3px_10px_rgba(15,23,42,0.05)]">
-                              <p className="text-xs font-medium text-[#64748B]">
+                            <div className="rounded-[18px] bg-white p-4">
+                              <p className="text-xs font-medium text-[#667085]">
                                 Nettoarbeitszeit
                               </p>
-                              <p className="mt-1 text-sm font-semibold text-[#0F172A]">
+                              <p className="mt-1 text-sm font-semibold text-[#000000]">
                                 {formatMinutes(details.net_minutes)}
                               </p>
                             </div>
 
-                            <div className="rounded-2xl border border-[#D7DEE8] bg-[#EEF2F6] p-4 shadow-[0_3px_10px_rgba(15,23,42,0.05)]">
-                              <p className="text-xs font-medium text-[#64748B]">
+                            <div className="rounded-[18px] bg-white p-4">
+                              <p className="text-xs font-medium text-[#667085]">
                                 Über 10 Stunden
                               </p>
                               <p className="mt-1 text-sm font-semibold text-[#B45309]">
@@ -1221,17 +1221,17 @@ export default function CorrectionsPage() {
 
                         {isRestPeriod && (
                           <>
-                            <div className="rounded-2xl border border-[#D7DEE8] bg-[#EEF2F6] p-4 shadow-[0_3px_10px_rgba(15,23,42,0.05)]">
-                              <p className="text-xs font-medium text-[#64748B]">
+                            <div className="rounded-[18px] bg-white p-4">
+                              <p className="text-xs font-medium text-[#667085]">
                                 Tatsächliche Ruhezeit
                               </p>
-                              <p className="mt-1 text-sm font-semibold text-[#0F172A]">
+                              <p className="mt-1 text-sm font-semibold text-[#000000]">
                                 {formatMinutes(details.rest_minutes)}
                               </p>
                             </div>
 
-                            <div className="rounded-2xl border border-[#D7DEE8] bg-[#EEF2F6] p-4 shadow-[0_3px_10px_rgba(15,23,42,0.05)]">
-                              <p className="text-xs font-medium text-[#64748B]">
+                            <div className="rounded-[18px] bg-white p-4">
+                              <p className="text-xs font-medium text-[#667085]">
                                 Fehlende Ruhezeit
                               </p>
                               <p className="mt-1 text-sm font-semibold text-[#B45309]">
@@ -1243,17 +1243,17 @@ export default function CorrectionsPage() {
 
                         {isInsufficientBreak && (
                           <>
-                            <div className="rounded-2xl border border-[#D7DEE8] bg-[#EEF2F6] p-4 shadow-[0_3px_10px_rgba(15,23,42,0.05)]">
-                              <p className="text-xs font-medium text-[#64748B]">
+                            <div className="rounded-[18px] bg-white p-4">
+                              <p className="text-xs font-medium text-[#667085]">
                                 Erfasste Pause
                               </p>
-                              <p className="mt-1 text-sm font-semibold text-[#0F172A]">
+                              <p className="mt-1 text-sm font-semibold text-[#000000]">
                                 {formatMinutes(details.break_minutes)}
                               </p>
                             </div>
 
-                            <div className="rounded-2xl border border-[#D7DEE8] bg-[#EEF2F6] p-4 shadow-[0_3px_10px_rgba(15,23,42,0.05)]">
-                              <p className="text-xs font-medium text-[#64748B]">
+                            <div className="rounded-[18px] bg-white p-4">
+                              <p className="text-xs font-medium text-[#667085]">
                                 Fehlende Pausenzeit
                               </p>
                               <p className="mt-1 text-sm font-semibold text-[#B45309]">
@@ -1265,17 +1265,17 @@ export default function CorrectionsPage() {
 
                         {isContinuousWork && (
                           <>
-                            <div className="rounded-2xl border border-[#D7DEE8] bg-[#EEF2F6] p-4 shadow-[0_3px_10px_rgba(15,23,42,0.05)]">
-                              <p className="text-xs font-medium text-[#64748B]">
+                            <div className="rounded-[18px] bg-white p-4">
+                              <p className="text-xs font-medium text-[#667085]">
                                 Längste Arbeitsphase
                               </p>
-                              <p className="mt-1 text-sm font-semibold text-[#0F172A]">
+                              <p className="mt-1 text-sm font-semibold text-[#000000]">
                                 {formatMinutes(details.max_continuous_minutes)}
                               </p>
                             </div>
 
-                            <div className="rounded-2xl border border-[#D7DEE8] bg-[#EEF2F6] p-4 shadow-[0_3px_10px_rgba(15,23,42,0.05)]">
-                              <p className="text-xs font-medium text-[#64748B]">
+                            <div className="rounded-[18px] bg-white p-4">
+                              <p className="text-xs font-medium text-[#667085]">
                                 Über 6 Stunden
                               </p>
                               <p className="mt-1 text-sm font-semibold text-[#B45309]">
@@ -1289,11 +1289,11 @@ export default function CorrectionsPage() {
                           !isRestPeriod &&
                           !isInsufficientBreak &&
                           !isContinuousWork && (
-                          <div className="rounded-2xl border border-[#D7DEE8] bg-[#EEF2F6] p-4 shadow-[0_3px_10px_rgba(15,23,42,0.05)] md:col-span-2">
-                            <p className="text-xs font-medium text-[#64748B]">
+                          <div className="rounded-[18px] bg-white p-4 md:col-span-2">
+                            <p className="text-xs font-medium text-[#667085]">
                               Hinweis
                             </p>
-                            <p className="mt-1 text-sm leading-6 text-[#0F172A]">
+                            <p className="mt-1 text-sm leading-6 text-[#000000]">
                               Für diesen Warnungstyp ist noch keine spezielle
                               Detaildarstellung hinterlegt.
                             </p>
@@ -1301,7 +1301,7 @@ export default function CorrectionsPage() {
                         )}
                       </div>
 
-                      <div className="mt-4 rounded-2xl border border-[#F6D58B] bg-[#FFF8E8] p-4 shadow-[0_3px_10px_rgba(146,64,14,0.05)]">
+                      <div className="mt-4 rounded-2xl border border-[#F6D58B] bg-[#FFF8E8] p-4 shadow-none">
                         <p className="text-xs font-medium text-[#92400E]">
                           Einordnung
                         </p>
@@ -1344,12 +1344,12 @@ export default function CorrectionsPage() {
                 {openRequests.map((request) => (
                   <div
                     key={request.id}
-                    className="rounded-3xl border border-[#CBD5E1] bg-[#F8FAFC] p-5 shadow-[0_8px_22px_rgba(15,23,42,0.10)] transition hover:shadow-[0_12px_30px_rgba(15,23,42,0.13)]"
+                    className="rounded-[26px] bg-[#E7EDF1] p-5 transition-colors hover:bg-[#E1E8ED]"
                   >
                     <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
                       <div>
                         <div className="flex flex-wrap items-center gap-3">
-                          <h2 className="text-xl font-semibold text-[#0F172A]">
+                          <h2 className="text-xl font-semibold text-[#000000]">
                             {request.employee_name}
                           </h2>
                           <Badge variant="warning" dot>
@@ -1357,7 +1357,7 @@ export default function CorrectionsPage() {
                           </Badge>
                         </div>
 
-                        <p className="mt-1 text-sm text-[#64748B]">
+                        <p className="mt-1 text-sm text-[#667085]">
                           Antrag vom {formatDate(request.created_at)}
                         </p>
                       </div>
@@ -1386,39 +1386,39 @@ export default function CorrectionsPage() {
                     </div>
 
                     <div className="mt-5 grid grid-cols-1 gap-3 md:grid-cols-3">
-                      <div className="rounded-2xl border border-[#D7DEE8] bg-[#EEF2F6] p-4 shadow-[0_3px_10px_rgba(15,23,42,0.05)]">
-                        <p className="text-xs font-medium text-[#64748B]">
+                      <div className="rounded-[18px] bg-white p-4">
+                        <p className="text-xs font-medium text-[#667085]">
                           Datum
                         </p>
-                        <p className="mt-1 text-sm font-semibold text-[#0F172A]">
+                        <p className="mt-1 text-sm font-semibold text-[#000000]">
                           {formatDate(request.correction_date)}
                         </p>
                       </div>
 
-                      <div className="rounded-2xl border border-[#D7DEE8] bg-[#EEF2F6] p-4 shadow-[0_3px_10px_rgba(15,23,42,0.05)]">
-                        <p className="text-xs font-medium text-[#64748B]">
+                      <div className="rounded-[18px] bg-white p-4">
+                        <p className="text-xs font-medium text-[#667085]">
                           Arbeitsbeginn
                         </p>
-                        <p className="mt-1 text-sm font-semibold text-[#0F172A]">
+                        <p className="mt-1 text-sm font-semibold text-[#000000]">
                           {formatTime(request.requested_start_time)}
                         </p>
                       </div>
 
-                      <div className="rounded-2xl border border-[#D7DEE8] bg-[#EEF2F6] p-4 shadow-[0_3px_10px_rgba(15,23,42,0.05)]">
-                        <p className="text-xs font-medium text-[#64748B]">
+                      <div className="rounded-[18px] bg-white p-4">
+                        <p className="text-xs font-medium text-[#667085]">
                           Arbeitsende
                         </p>
-                        <p className="mt-1 text-sm font-semibold text-[#0F172A]">
+                        <p className="mt-1 text-sm font-semibold text-[#000000]">
                           {formatTime(request.requested_end_time)}
                         </p>
                       </div>
                     </div>
 
-                    <div className="mt-4 rounded-2xl bg-[#F8FAFC] p-4">
-                      <p className="text-xs font-medium text-[#64748B]">
+                    <div className="mt-4 rounded-[18px] bg-white p-4">
+                      <p className="text-xs font-medium text-[#667085]">
                         Begründung
                       </p>
-                      <p className="mt-1 text-sm leading-6 text-[#0F172A]">
+                      <p className="mt-1 text-sm leading-6 text-[#000000]">
                         {request.reason || "Keine Begründung angegeben."}
                       </p>
                     </div>
@@ -1432,9 +1432,9 @@ export default function CorrectionsPage() {
 
       {activeView === "history" && (
         <>
-          <div className="rounded-3xl border border-[#CBD5E1] bg-[#E9EEF4] px-6 py-5 shadow-[0_6px_18px_rgba(15,23,42,0.07)]">
-            <h2 className="text-xl font-semibold text-[#0F172A]">Erledigt & Historie</h2>
-            <p className="mt-1 text-sm leading-6 text-[#475569]">
+          <div className="rounded-[30px] bg-[#F2F5F8] px-6 py-5">
+            <h2 className="text-xl font-semibold text-[#000000]">Erledigt & Historie</h2>
+            <p className="mt-1 text-sm leading-6 text-[#667085]">
               Hier findest du geprüfte Arbeitszeit-Warnungen, erledigte Systemkorrekturen und bearbeitete Mitarbeiteranträge.
             </p>
           </div>
@@ -1444,7 +1444,7 @@ export default function CorrectionsPage() {
           >
             <div className="grid grid-cols-1 gap-4 md:grid-cols-3 xl:max-w-4xl">
               <div>
-                <label className="mb-2 block text-sm font-medium text-[#334155]">
+                <label className="mb-2 block text-sm font-medium text-[#323542]">
                   Monat
                 </label>
 
@@ -1456,7 +1456,7 @@ export default function CorrectionsPage() {
                     setConflictHistoryPage(0);
                     setComplianceHistoryPage(0);
                   }}
-                  className="w-full rounded-2xl border border-transparent bg-[#E9EEF4] px-4 py-3 text-sm text-[#0F172A] outline-none shadow-[0_3px_9px_rgba(15,23,42,0.05)] transition hover:bg-[#E3E9F0] focus:border-[#60A5FA] focus:bg-white focus:ring-4 focus:ring-[#DBEAFE]"
+                  className="w-full rounded-2xl border border-transparent bg-[#E7EDF1] px-4 py-3 text-sm text-[#000000] outline-none shadow-[0_3px_9px_rgba(15,23,42,0.05)] transition hover:bg-[#DDE6EC] focus:border-[#31AEF0] focus:bg-white focus:ring-4 focus:ring-[#E7F5FC]"
                 >
                   {monthOptions.map((month) => (
                     <option key={month.value} value={month.value}>
@@ -1467,7 +1467,7 @@ export default function CorrectionsPage() {
               </div>
 
               <div>
-                <label className="mb-2 block text-sm font-medium text-[#334155]">
+                <label className="mb-2 block text-sm font-medium text-[#323542]">
                   Jahr
                 </label>
 
@@ -1479,7 +1479,7 @@ export default function CorrectionsPage() {
                     setConflictHistoryPage(0);
                     setComplianceHistoryPage(0);
                   }}
-                  className="w-full rounded-2xl border border-transparent bg-[#E9EEF4] px-4 py-3 text-sm text-[#0F172A] outline-none shadow-[0_3px_9px_rgba(15,23,42,0.05)] transition hover:bg-[#E3E9F0] focus:border-[#60A5FA] focus:bg-white focus:ring-4 focus:ring-[#DBEAFE]"
+                  className="w-full rounded-2xl border border-transparent bg-[#E7EDF1] px-4 py-3 text-sm text-[#000000] outline-none shadow-[0_3px_9px_rgba(15,23,42,0.05)] transition hover:bg-[#DDE6EC] focus:border-[#31AEF0] focus:bg-white focus:ring-4 focus:ring-[#E7F5FC]"
                 >
                   {historyYearOptions.map((year) => (
                     <option key={year} value={year}>
@@ -1490,7 +1490,7 @@ export default function CorrectionsPage() {
               </div>
 
               <div>
-                <label className="mb-2 block text-sm font-medium text-[#334155]">
+                <label className="mb-2 block text-sm font-medium text-[#323542]">
                   Mitarbeiter
                 </label>
 
@@ -1502,7 +1502,7 @@ export default function CorrectionsPage() {
                     setConflictHistoryPage(0);
                     setComplianceHistoryPage(0);
                   }}
-                  className="w-full rounded-2xl border border-transparent bg-[#E9EEF4] px-4 py-3 text-sm text-[#0F172A] outline-none shadow-[0_3px_9px_rgba(15,23,42,0.05)] transition hover:bg-[#E3E9F0] focus:border-[#60A5FA] focus:bg-white focus:ring-4 focus:ring-[#DBEAFE]"
+                  className="w-full rounded-2xl border border-transparent bg-[#E7EDF1] px-4 py-3 text-sm text-[#000000] outline-none shadow-[0_3px_9px_rgba(15,23,42,0.05)] transition hover:bg-[#DDE6EC] focus:border-[#31AEF0] focus:bg-white focus:ring-4 focus:ring-[#E7F5FC]"
                 >
                   <option value="all">Alle Mitarbeiter</option>
                   {historyEmployees.map((employee) => (
@@ -1514,7 +1514,7 @@ export default function CorrectionsPage() {
               </div>
             </div>
 
-            <p className="mt-4 text-sm text-[#64748B]">
+            <p className="mt-4 text-sm text-[#667085]">
               Angezeigt wird {monthOptions.find((month) => month.value === historyMonth)?.label}{" "}
               {historyYear}
               {historyEmployeeId !== "all"
@@ -1550,12 +1550,12 @@ export default function CorrectionsPage() {
                   {historyConflicts.map((conflict) => (
                     <details
                       key={conflict.conflict_id}
-                      className="rounded-2xl border border-[#CBD5E1] bg-[#F8FAFC] shadow-[0_5px_14px_rgba(15,23,42,0.07)]"
+                      className="group rounded-[22px] bg-[#E7EDF1] transition-colors hover:bg-[#E1E8ED]"
                     >
                       <summary className="flex cursor-pointer list-none flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
                         <div>
                           <div className="flex flex-wrap items-center gap-2">
-                            <span className="font-semibold text-[#0F172A]">
+                            <span className="font-semibold text-[#000000]">
                               {conflict.employee_name}
                             </span>
                             <Badge
@@ -1572,7 +1572,7 @@ export default function CorrectionsPage() {
                             </Badge>
                           </div>
 
-                          <p className="mt-1 text-sm text-[#64748B]">
+                          <p className="mt-1 text-sm text-[#667085]">
                             {formatDate(
                               `${conflict.conflict_date}T12:00:00`
                             )}{" "}
@@ -1580,47 +1580,47 @@ export default function CorrectionsPage() {
                           </p>
                         </div>
 
-                        <span className="text-sm font-medium text-[#2563EB]">
+                        <span className="text-sm font-medium text-[#168FD0]">
                           Details öffnen
                         </span>
                       </summary>
 
-                      <div className="border-t border-[#CBD5E1] bg-[#EEF2F6] p-4">
+                      <div className="p-4 pt-0">
                         <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
-                          <div className="rounded-2xl border border-[#D7DEE8] bg-[#EEF2F6] p-4 shadow-[0_3px_10px_rgba(15,23,42,0.05)]">
-                            <p className="text-xs font-medium text-[#64748B]">
+                          <div className="rounded-[18px] bg-white p-4">
+                            <p className="text-xs font-medium text-[#667085]">
                               Eingestempelt
                             </p>
-                            <p className="mt-1 text-sm font-semibold text-[#0F172A]">
+                            <p className="mt-1 text-sm font-semibold text-[#000000]">
                               {formatLocalDateTime(conflict.check_in_local)}
                             </p>
                           </div>
 
-                          <div className="rounded-2xl border border-[#D7DEE8] bg-[#EEF2F6] p-4 shadow-[0_3px_10px_rgba(15,23,42,0.05)]">
-                            <p className="text-xs font-medium text-[#64748B]">
+                          <div className="rounded-[18px] bg-white p-4">
+                            <p className="text-xs font-medium text-[#667085]">
                               Korrigiertes Arbeitsende
                             </p>
-                            <p className="mt-1 text-sm font-semibold text-[#0F172A]">
+                            <p className="mt-1 text-sm font-semibold text-[#000000]">
                               {formatLocalDateTime(
                                 conflict.corrected_checkout_local
                               )}
                             </p>
                           </div>
 
-                          <div className="rounded-2xl border border-[#D7DEE8] bg-[#EEF2F6] p-4 shadow-[0_3px_10px_rgba(15,23,42,0.05)]">
-                            <p className="text-xs font-medium text-[#64748B]">
+                          <div className="rounded-[18px] bg-white p-4">
+                            <p className="text-xs font-medium text-[#667085]">
                               Erledigt am
                             </p>
-                            <p className="mt-1 text-sm font-semibold text-[#0F172A]">
+                            <p className="mt-1 text-sm font-semibold text-[#000000]">
                               {formatLocalDateTime(conflict.resolved_at)}
                             </p>
                           </div>
 
-                          <div className="rounded-2xl border border-[#D7DEE8] bg-[#EEF2F6] p-4 shadow-[0_3px_10px_rgba(15,23,42,0.05)]">
-                            <p className="text-xs font-medium text-[#64748B]">
+                          <div className="rounded-[18px] bg-white p-4">
+                            <p className="text-xs font-medium text-[#667085]">
                               Bearbeiter
                             </p>
-                            <p className="mt-1 text-sm font-semibold text-[#0F172A]">
+                            <p className="mt-1 text-sm font-semibold text-[#000000]">
                               {conflict.resolved_by_role === "owner"
                                 ? "Owner"
                                 : conflict.resolved_by_role === "admin"
@@ -1630,11 +1630,11 @@ export default function CorrectionsPage() {
                           </div>
                         </div>
 
-                        <div className="mt-3 rounded-2xl bg-[#F8FAFC] p-4">
-                          <p className="text-xs font-medium text-[#64748B]">
+                        <div className="mt-3 rounded-[18px] bg-white p-4">
+                          <p className="text-xs font-medium text-[#667085]">
                             Begründung
                           </p>
-                          <p className="mt-1 text-sm leading-6 text-[#0F172A]">
+                          <p className="mt-1 text-sm leading-6 text-[#000000]">
                             {conflict.resolution_reason ||
                               "Keine Begründung hinterlegt."}
                           </p>
@@ -1644,7 +1644,7 @@ export default function CorrectionsPage() {
                   ))}
                 </div>
 
-                <div className="mt-6 flex items-center justify-between border-t border-[#CBD5E1] pt-5">
+                <div className="mt-6 flex items-center justify-between pt-2">
                   <Button
                     type="button"
                     variant="secondary"
@@ -1663,7 +1663,7 @@ export default function CorrectionsPage() {
                     Zurück
                   </Button>
 
-                  <span className="text-sm text-[#64748B]">
+                  <span className="text-sm text-[#667085]">
                     Seite {conflictHistoryPage + 1}
                   </span>
 
@@ -1724,12 +1724,12 @@ export default function CorrectionsPage() {
                     return (
                       <details
                         key={warning.id}
-                        className="rounded-2xl border border-[#CBD5E1] bg-[#F8FAFC] shadow-[0_5px_14px_rgba(15,23,42,0.07)]"
+                        className="group rounded-[22px] bg-[#E7EDF1] transition-colors hover:bg-[#E1E8ED]"
                       >
                         <summary className="flex cursor-pointer list-none flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
                           <div>
                             <div className="flex flex-wrap items-center gap-2">
-                              <span className="font-semibold text-[#0F172A]">
+                              <span className="font-semibold text-[#000000]">
                                 {warning.employee_name}
                               </span>
 
@@ -1743,7 +1743,7 @@ export default function CorrectionsPage() {
                               </Badge>
                             </div>
 
-                            <p className="mt-1 text-sm text-[#64748B]">
+                            <p className="mt-1 text-sm text-[#667085]">
                               {formatDate(
                                 `${warning.warning_date}T12:00:00`
                               )}{" "}
@@ -1751,18 +1751,18 @@ export default function CorrectionsPage() {
                             </p>
                           </div>
 
-                          <span className="text-sm font-medium text-[#2563EB]">
+                          <span className="text-sm font-medium text-[#168FD0]">
                             Details öffnen
                           </span>
                         </summary>
 
-                        <div className="border-t border-[#CBD5E1] bg-[#EEF2F6] p-4">
+                        <div className="p-4 pt-0">
                           <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
-                            <div className="rounded-2xl border border-[#D7DEE8] bg-[#EEF2F6] p-4 shadow-[0_3px_10px_rgba(15,23,42,0.05)]">
-                              <p className="text-xs font-medium text-[#64748B]">
+                            <div className="rounded-[18px] bg-white p-4">
+                              <p className="text-xs font-medium text-[#667085]">
                                 Arbeitstag
                               </p>
-                              <p className="mt-1 text-sm font-semibold text-[#0F172A]">
+                              <p className="mt-1 text-sm font-semibold text-[#000000]">
                                 {formatDate(
                                   `${warning.warning_date}T12:00:00`
                                 )}
@@ -1771,17 +1771,17 @@ export default function CorrectionsPage() {
 
                             {isDailyLimit && (
                               <>
-                                <div className="rounded-2xl border border-[#D7DEE8] bg-[#EEF2F6] p-4 shadow-[0_3px_10px_rgba(15,23,42,0.05)]">
-                                  <p className="text-xs font-medium text-[#64748B]">
+                                <div className="rounded-[18px] bg-white p-4">
+                                  <p className="text-xs font-medium text-[#667085]">
                                     Nettoarbeitszeit
                                   </p>
-                                  <p className="mt-1 text-sm font-semibold text-[#0F172A]">
+                                  <p className="mt-1 text-sm font-semibold text-[#000000]">
                                     {formatMinutes(details.net_minutes)}
                                   </p>
                                 </div>
 
-                                <div className="rounded-2xl border border-[#D7DEE8] bg-[#EEF2F6] p-4 shadow-[0_3px_10px_rgba(15,23,42,0.05)]">
-                                  <p className="text-xs font-medium text-[#64748B]">
+                                <div className="rounded-[18px] bg-white p-4">
+                                  <p className="text-xs font-medium text-[#667085]">
                                     Über 10 Stunden
                                   </p>
                                   <p className="mt-1 text-sm font-semibold text-[#B45309]">
@@ -1793,17 +1793,17 @@ export default function CorrectionsPage() {
 
                             {isRestPeriod && (
                               <>
-                                <div className="rounded-2xl border border-[#D7DEE8] bg-[#EEF2F6] p-4 shadow-[0_3px_10px_rgba(15,23,42,0.05)]">
-                                  <p className="text-xs font-medium text-[#64748B]">
+                                <div className="rounded-[18px] bg-white p-4">
+                                  <p className="text-xs font-medium text-[#667085]">
                                     Tatsächliche Ruhezeit
                                   </p>
-                                  <p className="mt-1 text-sm font-semibold text-[#0F172A]">
+                                  <p className="mt-1 text-sm font-semibold text-[#000000]">
                                     {formatMinutes(details.rest_minutes)}
                                   </p>
                                 </div>
 
-                                <div className="rounded-2xl border border-[#D7DEE8] bg-[#EEF2F6] p-4 shadow-[0_3px_10px_rgba(15,23,42,0.05)]">
-                                  <p className="text-xs font-medium text-[#64748B]">
+                                <div className="rounded-[18px] bg-white p-4">
+                                  <p className="text-xs font-medium text-[#667085]">
                                     Fehlende Ruhezeit
                                   </p>
                                   <p className="mt-1 text-sm font-semibold text-[#B45309]">
@@ -1815,17 +1815,17 @@ export default function CorrectionsPage() {
 
                             {isInsufficientBreak && (
                               <>
-                                <div className="rounded-2xl border border-[#D7DEE8] bg-[#EEF2F6] p-4 shadow-[0_3px_10px_rgba(15,23,42,0.05)]">
-                                  <p className="text-xs font-medium text-[#64748B]">
+                                <div className="rounded-[18px] bg-white p-4">
+                                  <p className="text-xs font-medium text-[#667085]">
                                     Erfasste Pause
                                   </p>
-                                  <p className="mt-1 text-sm font-semibold text-[#0F172A]">
+                                  <p className="mt-1 text-sm font-semibold text-[#000000]">
                                     {formatMinutes(details.break_minutes)}
                                   </p>
                                 </div>
 
-                                <div className="rounded-2xl border border-[#D7DEE8] bg-[#EEF2F6] p-4 shadow-[0_3px_10px_rgba(15,23,42,0.05)]">
-                                  <p className="text-xs font-medium text-[#64748B]">
+                                <div className="rounded-[18px] bg-white p-4">
+                                  <p className="text-xs font-medium text-[#667085]">
                                     Fehlende Pausenzeit
                                   </p>
                                   <p className="mt-1 text-sm font-semibold text-[#B45309]">
@@ -1837,17 +1837,17 @@ export default function CorrectionsPage() {
 
                             {isContinuousWork && (
                               <>
-                                <div className="rounded-2xl border border-[#D7DEE8] bg-[#EEF2F6] p-4 shadow-[0_3px_10px_rgba(15,23,42,0.05)]">
-                                  <p className="text-xs font-medium text-[#64748B]">
+                                <div className="rounded-[18px] bg-white p-4">
+                                  <p className="text-xs font-medium text-[#667085]">
                                     Längste Arbeitsphase
                                   </p>
-                                  <p className="mt-1 text-sm font-semibold text-[#0F172A]">
+                                  <p className="mt-1 text-sm font-semibold text-[#000000]">
                                     {formatMinutes(details.max_continuous_minutes)}
                                   </p>
                                 </div>
 
-                                <div className="rounded-2xl border border-[#D7DEE8] bg-[#EEF2F6] p-4 shadow-[0_3px_10px_rgba(15,23,42,0.05)]">
-                                  <p className="text-xs font-medium text-[#64748B]">
+                                <div className="rounded-[18px] bg-white p-4">
+                                  <p className="text-xs font-medium text-[#667085]">
                                     Über 6 Stunden
                                   </p>
                                   <p className="mt-1 text-sm font-semibold text-[#B45309]">
@@ -1857,11 +1857,11 @@ export default function CorrectionsPage() {
                               </>
                             )}
 
-                            <div className="rounded-2xl border border-[#D7DEE8] bg-[#EEF2F6] p-4 shadow-[0_3px_10px_rgba(15,23,42,0.05)]">
-                              <p className="text-xs font-medium text-[#64748B]">
+                            <div className="rounded-[18px] bg-white p-4">
+                              <p className="text-xs font-medium text-[#667085]">
                                 Statuszeitpunkt
                               </p>
-                              <p className="mt-1 text-sm font-semibold text-[#0F172A]">
+                              <p className="mt-1 text-sm font-semibold text-[#000000]">
                                 {formatLocalDateTime(
                                   isAcknowledged
                                     ? warning.acknowledged_at
@@ -1871,14 +1871,14 @@ export default function CorrectionsPage() {
                             </div>
                           </div>
 
-                          <div className="mt-3 rounded-2xl bg-[#F8FAFC] p-4">
-                            <p className="text-xs font-medium text-[#64748B]">
+                          <div className="mt-3 rounded-[18px] bg-white p-4">
+                            <p className="text-xs font-medium text-[#667085]">
                               {isAcknowledged
                                 ? "Bemerkung zur Prüfung"
                                 : "Auflösungsgrund"}
                             </p>
 
-                            <p className="mt-1 text-sm leading-6 text-[#0F172A]">
+                            <p className="mt-1 text-sm leading-6 text-[#000000]">
                               {isAcknowledged
                                 ? warning.acknowledgement_note ||
                                   "Keine Bemerkung hinterlegt."
@@ -1892,7 +1892,7 @@ export default function CorrectionsPage() {
                   })}
                 </div>
 
-                <div className="mt-6 flex items-center justify-between border-t border-[#CBD5E1] pt-5">
+                <div className="mt-6 flex items-center justify-between pt-2">
                   <Button
                     type="button"
                     variant="secondary"
@@ -1913,7 +1913,7 @@ export default function CorrectionsPage() {
                     Zurück
                   </Button>
 
-                  <span className="text-sm text-[#64748B]">
+                  <span className="text-sm text-[#667085]">
                     Seite {complianceHistoryPage + 1}
                   </span>
 
@@ -1964,12 +1964,12 @@ export default function CorrectionsPage() {
                   {historyRequests.map((request) => (
                     <details
                       key={request.id}
-                      className="rounded-2xl border border-[#CBD5E1] bg-[#F8FAFC] shadow-[0_5px_14px_rgba(15,23,42,0.07)]"
+                      className="group rounded-[22px] bg-[#E7EDF1] transition-colors hover:bg-[#E1E8ED]"
                     >
                       <summary className="flex cursor-pointer list-none flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
                         <div>
                           <div className="flex flex-wrap items-center gap-2">
-                            <span className="font-semibold text-[#0F172A]">
+                            <span className="font-semibold text-[#000000]">
                               {request.employee_name}
                             </span>
                             <Badge
@@ -1980,24 +1980,24 @@ export default function CorrectionsPage() {
                             </Badge>
                           </div>
 
-                          <p className="mt-1 text-sm text-[#64748B]">
+                          <p className="mt-1 text-sm text-[#667085]">
                             {formatDate(request.correction_date)} ·{" "}
                             {formatTime(request.requested_start_time)} –{" "}
                             {formatTime(request.requested_end_time)}
                           </p>
                         </div>
 
-                        <span className="text-sm font-medium text-[#2563EB]">
+                        <span className="text-sm font-medium text-[#168FD0]">
                           Details öffnen
                         </span>
                       </summary>
 
-                      <div className="border-t border-[#CBD5E1] bg-[#EEF2F6] p-4">
-                        <div className="rounded-2xl border border-[#D7DEE8] bg-[#EEF2F6] p-4 shadow-[0_3px_10px_rgba(15,23,42,0.05)]">
-                          <p className="text-xs font-medium text-[#64748B]">
+                      <div className="p-4 pt-0">
+                        <div className="rounded-[18px] bg-white p-4">
+                          <p className="text-xs font-medium text-[#667085]">
                             Begründung
                           </p>
-                          <p className="mt-1 text-sm leading-6 text-[#0F172A]">
+                          <p className="mt-1 text-sm leading-6 text-[#000000]">
                             {request.reason || "Keine Begründung angegeben."}
                           </p>
                         </div>
@@ -2006,7 +2006,7 @@ export default function CorrectionsPage() {
                   ))}
                 </div>
 
-                <div className="mt-6 flex items-center justify-between border-t border-[#CBD5E1] pt-5">
+                <div className="mt-6 flex items-center justify-between pt-2">
                   <Button
                     type="button"
                     variant="secondary"
@@ -2025,7 +2025,7 @@ export default function CorrectionsPage() {
                     Zurück
                   </Button>
 
-                  <span className="text-sm text-[#64748B]">
+                  <span className="text-sm text-[#667085]">
                     Seite {requestHistoryPage + 1}
                   </span>
 
@@ -2052,9 +2052,9 @@ export default function CorrectionsPage() {
       )}
 
       {selectedComplianceWarning && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#0F172A]/48 p-4 backdrop-blur-sm">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 p-4 backdrop-blur-sm">
           <div
-            className="w-full max-w-xl rounded-3xl border border-[#CBD5E1] bg-[#F8FAFC] p-6 shadow-[0_28px_90px_rgba(15,23,42,0.30)]"
+            className="w-full max-w-xl rounded-[30px] bg-white p-6 shadow-[0_24px_70px_rgba(0,0,0,0.18)]"
             role="dialog"
             aria-modal="true"
             aria-labelledby="compliance-acknowledgement-title"
@@ -2063,7 +2063,7 @@ export default function CorrectionsPage() {
               <div className="flex flex-wrap items-center gap-3">
                 <h2
                   id="compliance-acknowledgement-title"
-                  className="text-xl font-semibold text-[#0F172A]"
+                  className="text-xl font-semibold text-[#000000]"
                 >
                   Arbeitszeit-Warnung prüfen
                 </h2>
@@ -2073,19 +2073,19 @@ export default function CorrectionsPage() {
                 </Badge>
               </div>
 
-              <p className="text-sm leading-6 text-[#64748B]">
+              <p className="text-sm leading-6 text-[#667085]">
                 {formatComplianceType(
                   selectedComplianceWarning.warning_type
                 )}{" "}
                 am{" "}
-                <span className="font-medium text-[#0F172A]">
+                <span className="font-medium text-[#000000]">
                   {formatDate(
                     `${selectedComplianceWarning.warning_date}T12:00:00`
                   )}
                 </span>
               </p>
 
-              <p className="text-sm leading-6 text-[#64748B]">
+              <p className="text-sm leading-6 text-[#667085]">
                 Markiere die Warnung nur dann als geprüft, wenn die
                 zugrunde liegenden Zeitdaten korrekt sind und unverändert
                 bestehen bleiben sollen. Eine spätere Zeitkorrektur kann
@@ -2105,9 +2105,9 @@ export default function CorrectionsPage() {
             </div>
 
             <div className="mt-5">
-              <label className="mb-2 block text-sm font-medium text-[#334155]">
+              <label className="mb-2 block text-sm font-medium text-[#323542]">
                 Bemerkung{" "}
-                <span className="font-normal text-[#94A3B8]">
+                <span className="font-normal text-[#8A94A3]">
                   (optional)
                 </span>
               </label>
@@ -2119,7 +2119,7 @@ export default function CorrectionsPage() {
                 }
                 placeholder="z. B. Arbeitszeit geprüft; tatsächlicher Sondereinsatz."
                 rows={4}
-                className="w-full resize-none rounded-2xl border border-transparent bg-[#E9EEF4] px-4 py-3 text-sm text-[#0F172A] outline-none shadow-[0_3px_9px_rgba(15,23,42,0.05)] transition hover:bg-[#E3E9F0] focus:border-[#60A5FA] focus:bg-white focus:ring-4 focus:ring-[#DBEAFE]"
+                className="w-full resize-none rounded-2xl border border-transparent bg-[#E7EDF1] px-4 py-3 text-sm text-[#000000] outline-none shadow-[0_3px_9px_rgba(15,23,42,0.05)] transition hover:bg-[#DDE6EC] focus:border-[#31AEF0] focus:bg-white focus:ring-4 focus:ring-[#E7F5FC]"
               />
             </div>
 
@@ -2147,9 +2147,9 @@ export default function CorrectionsPage() {
       )}
 
       {selectedConflict && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#0F172A]/48 p-4 backdrop-blur-sm">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 p-4 backdrop-blur-sm">
           <div
-            className="w-full max-w-xl rounded-3xl border border-[#CBD5E1] bg-[#F8FAFC] p-6 shadow-[0_28px_90px_rgba(15,23,42,0.30)]"
+            className="w-full max-w-xl rounded-[30px] bg-white p-6 shadow-[0_24px_70px_rgba(0,0,0,0.18)]"
             role="dialog"
             aria-modal="true"
             aria-labelledby="conflict-correction-title"
@@ -2158,7 +2158,7 @@ export default function CorrectionsPage() {
               <div className="flex flex-wrap items-center gap-3">
                 <h2
                   id="conflict-correction-title"
-                  className="text-xl font-semibold text-[#0F172A]"
+                  className="text-xl font-semibold text-[#000000]"
                 >
                   Fehlendes Ausstempeln korrigieren
                 </h2>
@@ -2168,14 +2168,14 @@ export default function CorrectionsPage() {
                 </Badge>
               </div>
 
-              <p className="text-sm leading-6 text-[#64748B]">
+              <p className="text-sm leading-6 text-[#667085]">
                 Eingestempelt:{" "}
-                <span className="font-medium text-[#0F172A]">
+                <span className="font-medium text-[#000000]">
                   {formatLocalDateTime(selectedConflict.check_in_local)}
                 </span>
               </p>
 
-              <p className="text-sm leading-6 text-[#64748B]">
+              <p className="text-sm leading-6 text-[#667085]">
                 Trage das tatsächliche Arbeitsende ein. Der bestehende Check-in
                 bleibt unverändert.
               </p>
@@ -2197,7 +2197,7 @@ export default function CorrectionsPage() {
             </div>
 
             <div className="mt-4">
-              <label className="mb-2 block text-sm font-medium text-[#334155]">
+              <label className="mb-2 block text-sm font-medium text-[#323542]">
                 Begründung
               </label>
 
@@ -2206,7 +2206,7 @@ export default function CorrectionsPage() {
                 onChange={(event) => setResolutionReason(event.target.value)}
                 placeholder="z. B. Mitarbeiter hat das Ausstempeln nach Schichtende vergessen."
                 rows={4}
-                className="w-full resize-none rounded-2xl border border-transparent bg-[#E9EEF4] px-4 py-3 text-sm text-[#0F172A] outline-none shadow-[0_3px_9px_rgba(15,23,42,0.05)] transition hover:bg-[#E3E9F0] focus:border-[#60A5FA] focus:bg-white focus:ring-4 focus:ring-[#DBEAFE]"
+                className="w-full resize-none rounded-2xl border border-transparent bg-[#E7EDF1] px-4 py-3 text-sm text-[#000000] outline-none shadow-[0_3px_9px_rgba(15,23,42,0.05)] transition hover:bg-[#DDE6EC] focus:border-[#31AEF0] focus:bg-white focus:ring-4 focus:ring-[#E7F5FC]"
               />
             </div>
 

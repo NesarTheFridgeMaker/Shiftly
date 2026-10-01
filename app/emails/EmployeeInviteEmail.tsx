@@ -40,9 +40,13 @@ export default function EmployeeInviteEmail({
               <Img
                 src="https://app.dipera.de/logo/dipera-logo-dark.png"
                 alt="Dipera"
-                width="180"
+                width="160"
                 style={logo}
               />
+            </Section>
+
+            <Section style={badgeSection}>
+              <Text style={badge}>EINLADUNG</Text>
             </Section>
 
             <Heading style={heading}>
@@ -63,12 +67,29 @@ export default function EmployeeInviteEmail({
             </Text>
 
             <Section style={featureBox}>
-              <Text style={featureItem}>• Arbeitszeiten erfassen</Text>
-              <Text style={featureItem}>• Dienstpläne ansehen</Text>
-              <Text style={featureItem}>• Urlaubsanträge stellen</Text>
-              <Text style={featureItem}>• Korrekturanträge einreichen</Text>
               <Text style={featureItem}>
-                • Arbeitszeitkonto und Urlaub einsehen
+                <span style={featureDot}>✓</span>
+                Arbeitszeiten erfassen
+              </Text>
+
+              <Text style={featureItem}>
+                <span style={featureDot}>✓</span>
+                Dienstpläne ansehen
+              </Text>
+
+              <Text style={featureItem}>
+                <span style={featureDot}>✓</span>
+                Urlaubsanträge stellen
+              </Text>
+
+              <Text style={featureItem}>
+                <span style={featureDot}>✓</span>
+                Korrekturanträge einreichen
+              </Text>
+
+              <Text style={featureItemLast}>
+                <span style={featureDot}>✓</span>
+                Arbeitszeitkonto und Urlaub einsehen
               </Text>
             </Section>
 
@@ -80,28 +101,35 @@ export default function EmployeeInviteEmail({
 
             <Section style={infoBox}>
               <Text style={infoText}>
-                Bitte kopiere den Einladungscode.
-Du benötigst ihn im nächsten Schritt, um dein Dipera-Konto mit deinem Mitarbeiterprofil zu verknüpfen.
+                Bitte kopiere den Einladungscode. Du benötigst ihn im
+                nächsten Schritt, um dein Dipera-Konto mit deinem
+                Mitarbeiterprofil zu verknüpfen.
               </Text>
 
-              <Text style={codeLabel}>Einladungscode</Text>
+              <Text style={codeLabel}>
+                EINLADUNGSCODE
+              </Text>
 
-              <Text style={inviteCodeStyle}>{inviteCode}</Text>
+              <Text style={inviteCodeStyle}>
+                {inviteCode}
+              </Text>
             </Section>
 
             <Text style={fallbackText}>
-              Falls der Button nicht funktioniert, kannst du diesen Link in
-              deinem Browser öffnen:
+              Falls der Button nicht funktioniert, kannst du diesen Link
+              in deinem Browser öffnen:
             </Text>
 
             <Link href={inviteUrl} style={fallbackLink}>
               {inviteUrl}
             </Link>
 
-            <Text style={securityText}>
-              Falls du diese Einladung nicht erwartet hast, kannst du diese
-              E-Mail ignorieren.
-            </Text>
+            <Section style={securityBox}>
+              <Text style={securityText}>
+                Falls du diese Einladung nicht erwartet hast, kannst du
+                diese E-Mail ignorieren.
+              </Text>
+            </Section>
           </Section>
 
           <Text style={footer}>
@@ -116,13 +144,14 @@ Du benötigst ihn im nächsten Schritt, um dein Dipera-Konto mit deinem Mitarbei
 const body = {
   margin: "0",
   padding: "0",
-  backgroundColor: "#f7f7f8",
-  fontFamily: "Arial, Helvetica, sans-serif",
-  color: "#0b1220",
+  backgroundColor: "#F2F5F8",
+  fontFamily:
+    "'Be Vietnam Pro', Arial, Helvetica, sans-serif",
+  color: "#323542",
 };
 
 const outerContainer = {
-  maxWidth: "560px",
+  maxWidth: "600px",
   margin: "0 auto",
   padding: "48px 20px",
 };
@@ -130,116 +159,152 @@ const outerContainer = {
 const card = {
   backgroundColor: "#ffffff",
   borderRadius: "28px",
-  padding: "42px 36px",
-  boxShadow: "0 20px 50px rgba(15, 23, 42, 0.12)",
-  textAlign: "center" as const,
+  padding: "44px 38px",
+  textAlign: "left" as const,
 };
 
 const logoSection = {
   marginBottom: "34px",
+  textAlign: "center" as const,
 };
 
 const logo = {
-  width: "180px",
+  width: "160px",
   height: "auto",
   margin: "0 auto",
 };
 
+const badgeSection = {
+  textAlign: "center" as const,
+  marginBottom: "16px",
+};
+
+const badge = {
+  display: "inline-block",
+  margin: "0",
+  padding: "8px 14px",
+  borderRadius: "999px",
+  backgroundColor: "#F2F5F8",
+  color: "#168FD0",
+  fontSize: "11px",
+  lineHeight: "1",
+  fontWeight: "700",
+  letterSpacing: "0.12em",
+};
+
 const heading = {
-  margin: "0 0 22px",
+  margin: "0 auto 30px",
+  maxWidth: "430px",
   fontSize: "34px",
   lineHeight: "1.15",
-  fontWeight: "300",
-  letterSpacing: "-1px",
-  color: "#08245c",
+  fontWeight: "700",
+  letterSpacing: "-1.2px",
+  color: "#000000",
+  textAlign: "center" as const,
 };
 
 const introText = {
   margin: "0 0 14px",
   fontSize: "15px",
   lineHeight: "1.7",
-  color: "#334155",
-  textAlign: "left" as const,
+  color: "#323542",
 };
 
 const paragraph = {
   margin: "0 0 18px",
   fontSize: "15px",
   lineHeight: "1.7",
-  color: "#64748b",
-  textAlign: "left" as const,
+  color: "#667085",
 };
 
 const featureBox = {
   margin: "8px 0 30px",
   padding: "20px 22px",
   borderRadius: "18px",
-  backgroundColor: "#f8fafc",
-  border: "1px solid #e2e8f0",
-  textAlign: "left" as const,
+  backgroundColor: "#F2F5F8",
 };
 
 const featureItem = {
-  margin: "0 0 8px",
+  margin: "0 0 10px",
   fontSize: "14px",
   lineHeight: "1.6",
-  color: "#334155",
+  color: "#323542",
+};
+
+const featureItemLast = {
+  margin: "0",
+  fontSize: "14px",
+  lineHeight: "1.6",
+  color: "#323542",
+};
+
+const featureDot = {
+  display: "inline-block",
+  marginRight: "10px",
+  color: "#31AEF0",
+  fontWeight: "700",
 };
 
 const buttonSection = {
   margin: "0 0 30px",
+  textAlign: "center" as const,
 };
 
 const button = {
   display: "inline-block",
-  backgroundColor: "#1d4ed8",
+  backgroundColor: "#31AEF0",
   color: "#ffffff",
   textDecoration: "none",
-  fontSize: "16px",
-  fontWeight: "600",
-  padding: "15px 30px",
+  fontSize: "15px",
+  fontWeight: "700",
+  padding: "16px 30px",
   borderRadius: "14px",
 };
 
 const infoBox = {
   margin: "0 0 28px",
-  padding: "18px 20px",
+  padding: "20px 22px",
   borderRadius: "18px",
-  backgroundColor: "#eff6ff",
-  border: "1px solid #dbeafe",
+  backgroundColor: "#E7EDF1",
+  textAlign: "center" as const,
 };
 
 const infoText = {
-  margin: "0 0 14px",
+  margin: "0 0 18px",
   fontSize: "13px",
   lineHeight: "1.7",
-  color: "#475569",
+  color: "#323542",
 };
 
 const codeLabel = {
-  margin: "0 0 6px",
-  fontSize: "11px",
+  margin: "0 0 8px",
+  fontSize: "10px",
+  lineHeight: "1.4",
   fontWeight: "700",
-  letterSpacing: "0.08em",
-  textTransform: "uppercase" as const,
-  color: "#64748b",
+  letterSpacing: "0.12em",
+  color: "#667085",
 };
 
 const inviteCodeStyle = {
+  display: "inline-block",
   margin: "0",
+  padding: "10px 16px",
+  borderRadius: "12px",
+  backgroundColor: "#ffffff",
   fontSize: "17px",
   lineHeight: "1.5",
   fontWeight: "700",
   letterSpacing: "0.08em",
-  color: "#08245c",
-  fontFamily: "Courier New, monospace",
+  color: "#000000",
+  fontFamily: "'Courier New', monospace",
 };
 
 const fallbackText = {
   margin: "0 0 8px",
   fontSize: "13px",
   lineHeight: "1.7",
-  color: "#94a3b8",
+  color: "#8B93A1",
+  textAlign: "center" as const,
 };
 
 const fallbackLink = {
@@ -247,16 +312,24 @@ const fallbackLink = {
   margin: "0 auto",
   fontSize: "12px",
   lineHeight: "1.7",
-  color: "#1d4ed8",
+  color: "#168FD0",
   textDecoration: "underline",
   wordBreak: "break-all" as const,
+  textAlign: "center" as const,
+};
+
+const securityBox = {
+  marginTop: "30px",
+  paddingTop: "22px",
+  borderTop: "1px solid #E7EDF1",
 };
 
 const securityText = {
-  margin: "30px 0 0",
+  margin: "0",
   fontSize: "13px",
   lineHeight: "1.7",
-  color: "#94a3b8",
+  color: "#8B93A1",
+  textAlign: "center" as const,
 };
 
 const footer = {
@@ -264,5 +337,5 @@ const footer = {
   margin: "26px 0 0",
   fontSize: "12px",
   lineHeight: "1.6",
-  color: "#94a3b8",
+  color: "#8B93A1",
 };

@@ -43,7 +43,7 @@ export default function StatCard({
       <CardBody>
         <div className="min-w-0">
           <div className="flex min-w-0 items-start justify-between gap-2">
-            <p className="min-w-0 truncate text-sm text-[#6B7280]">
+            <p className="min-w-0 truncate text-xs font-semibold uppercase tracking-[0.06em] text-[#667085]">
               {title}
             </p>
 
@@ -57,22 +57,16 @@ export default function StatCard({
           </div>
 
           <div
-            className={`
-              mt-4
-              min-w-0
-              whitespace-nowrap
-              font-light
-              leading-none
-              tracking-[-0.035em]
-              text-[#111827]
-              ${valueSize}
-            `}
+            className={[
+              "mt-4 min-w-0 whitespace-nowrap font-bold leading-none tracking-[-0.04em] text-black",
+              valueSize,
+            ].join(" ")}
           >
             {value}
           </div>
 
           {subtitle && (
-            <p className="mt-3 text-sm text-[#6B7280]">
+            <p className="mt-3 text-sm text-[#667085]">
               {subtitle}
             </p>
           )}

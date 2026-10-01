@@ -12,10 +12,8 @@ export function Table({
   return (
     <div
       className={[
-        "overflow-hidden rounded-3xl",
-        "border border-[#E2E8F0]",
+        "overflow-hidden rounded-[24px]",
         "bg-white",
-        "shadow-sm",
         className,
       ].join(" ")}
     >
@@ -34,7 +32,7 @@ export function TableHead({
   children: ReactNode;
 }) {
   return (
-    <thead className="bg-[#F8FAFC] text-xs font-semibold uppercase tracking-[0.08em] text-[#64748B]">
+    <thead className="bg-[#E7EDF1] text-xs font-bold uppercase tracking-[0.08em] text-[#667085]">
       {children}
     </thead>
   );
@@ -54,14 +52,7 @@ export function TableRow({
   children: ReactNode;
 }) {
   return (
-    <tr
-      className="
-        transition-colors
-        duration-200
-        hover:bg-[#F8FAFC]
-        even:bg-white
-      "
-    >
+    <tr className="transition-colors duration-200 hover:bg-[#F2F5F8]">
       {children}
     </tr>
   );
@@ -73,7 +64,7 @@ export function TableHeaderCell({
   children: ReactNode;
 }) {
   return (
-    <th className="border-b border-[#E2E8F0] px-5 py-4 text-left">
+    <th className="border-b border-black/[0.06] px-5 py-4 text-left">
       {children}
     </th>
   );
@@ -85,7 +76,7 @@ export function TableCell({
   children: ReactNode;
 }) {
   return (
-    <td className="border-b border-[#F1F5F9] px-5 py-4 text-sm text-[#0F172A]">
+    <td className="border-b border-black/[0.05] px-5 py-4 text-sm text-[#323542]">
       {children}
     </td>
   );

@@ -2735,11 +2735,11 @@ export default function PayrollPage() {
           title="Keine Abrechnungsperioden"
           description="Für diesen Betrieb wurden noch keine Payroll-Perioden angelegt."
         >
-          <div className="rounded-3xl border border-dashed border-[#CBD5E1] bg-[#F8FAFC] px-6 py-12 text-center">
-            <h3 className="text-xl font-semibold text-[#0F172A]">
+          <div className="rounded-[28px] bg-[#E7EDF1] px-6 py-12 text-center">
+            <h3 className="text-xl font-bold text-[#000000]">
               Noch keine Abrechnung vorhanden
             </h3>
-            <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-[#64748B]">
+            <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-[#667085]">
               Sobald eine Payroll-Periode angelegt wurde, kannst du hier
               Abschlussprüfung, Snapshots und Monatsabschluss verwalten.
             </p>
@@ -2773,8 +2773,8 @@ export default function PayrollPage() {
 
               {selectedPeriod && (
                 <div className="flex flex-wrap items-end gap-3">
-                  <div className="rounded-2xl border border-[#E2E8F0] bg-[#F8FAFC] px-4 py-3">
-                    <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[#64748B]">
+                  <div className="rounded-[24px] bg-[#E7EDF1] px-4 py-3">
+                    <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[#667085]">
                       Status
                     </p>
                     <div className="mt-2">
@@ -2793,11 +2793,11 @@ export default function PayrollPage() {
                   </div>
 
                   {selectedPeriod.status === "closed" && (
-                    <div className="rounded-2xl border border-[#E2E8F0] bg-[#F8FAFC] px-4 py-3">
-                      <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[#64748B]">
+                    <div className="rounded-[24px] bg-[#E7EDF1] px-4 py-3">
+                      <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[#667085]">
                         Abgeschlossen am
                       </p>
-                      <p className="mt-2 text-sm font-semibold text-[#0F172A]">
+                      <p className="mt-2 text-sm font-semibold text-[#000000]">
                         {formatDateTime(selectedPeriod.closed_at)}
                       </p>
                     </div>
@@ -2910,17 +2910,17 @@ export default function PayrollPage() {
                     {blockers.map((blocker, index) => (
                       <div
                         key={`${blocker.employee_id ?? "period"}-${blocker.error_code ?? index}`}
-                        className="rounded-2xl border border-[#CBD5E1] bg-[#F8FAFC] p-4 shadow-[0_10px_24px_rgba(15,23,42,0.09)]"
+                        className="rounded-[24px] bg-[#E7EDF1] p-4"
                       >
                         <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
                           <div>
-                            <p className="font-semibold text-[#0F172A]">
+                            <p className="font-semibold text-[#000000]">
                               {blocker.employee_name ?? "Abrechnungsperiode"}
                             </p>
                             <p className="mt-1 text-sm font-medium text-[#B45309]">
                               {getValidationLabel(blocker.error_code)}
                             </p>
-                            <p className="mt-2 text-sm leading-6 text-[#64748B]">
+                            <p className="mt-2 text-sm leading-6 text-[#667085]">
                               {blocker.error_message}
                             </p>
                           </div>
@@ -2954,16 +2954,16 @@ export default function PayrollPage() {
                 title="Export"
                 description="Exportiere die zentral berechneten Payroll-Daten der ausgewählten Abrechnungsperiode für Excel."
               >
-                <div className="rounded-3xl border border-[#CBD5E1] bg-[#E9EEF5] p-5 shadow-[0_14px_34px_rgba(15,23,42,0.12)]">
+                <div className="rounded-3xl border border-[#D5DEE4] bg-[#E7EDF1] p-5 shadow-[0_14px_34px_rgba(15,23,42,0.12)]">
                   <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
                     <div>
                       <div className="flex flex-wrap items-center gap-2">
-                        <h3 className="text-lg font-semibold text-[#0F172A]">
+                        <h3 className="text-lg font-semibold text-[#000000]">
                           Excel-Abrechnung
                         </h3>
                         <Badge variant="muted">{formatMonth(selectedPeriod)}</Badge>
                       </div>
-                      <p className="mt-2 max-w-2xl text-sm leading-6 text-[#475569]">
+                      <p className="mt-2 max-w-2xl text-sm leading-6 text-[#667085]">
                         Ausführliche Excel-Arbeitsmappe mit mehreren Tabellenblättern:
                         Übersicht, Mitarbeiterabrechnung, Stempelungen, Abwesenheiten,
                         Zeitkonto-Buchungen und Abrechnungsprüfung.
@@ -2987,14 +2987,14 @@ export default function PayrollPage() {
                 description="Ledger-Buchungen, die beim Monatsabschluss aus Payroll-Snapshots entstehen."
               >
                 {ledgerTransactions.length === 0 ? (
-                  <div className="rounded-2xl border border-dashed border-[#CBD5E1] bg-[#F8FAFC] px-5 py-8 text-center text-sm text-[#64748B]">
+                  <div className="rounded-2xl border border-dashed border-[#D5DEE4] bg-[#E7EDF1] px-5 py-8 text-center text-sm text-[#667085]">
                     Für diese Periode gibt es aktuell keine Payroll-Ledgerbuchungen.
                   </div>
                 ) : (
                   <div className="overflow-x-auto">
                     <table className="min-w-[900px] w-full border-collapse">
                       <thead>
-                        <tr className="border-b border-[#E2E8F0] text-left text-xs font-semibold uppercase tracking-[0.06em] text-[#64748B]">
+                        <tr className="border-b border-[#DDE5EA] text-left text-xs font-semibold uppercase tracking-[0.06em] text-[#667085]">
                           <th className="px-3 py-3">Datum</th>
                           <th className="px-3 py-3">Mitarbeiter</th>
                           <th className="px-3 py-3">Buchung</th>
@@ -3006,7 +3006,7 @@ export default function PayrollPage() {
                         {ledgerTransactions.map((transaction) => (
                           <tr
                             key={transaction.id}
-                            className="border-b border-[#F1F5F9] text-sm text-[#0F172A]"
+                            className="border-b border-[#E7EDF1] text-sm text-[#000000]"
                           >
                             <td className="px-3 py-4">
                               {new Date(`${transaction.transaction_date}T00:00:00`).toLocaleDateString("de-DE")}
@@ -3016,7 +3016,7 @@ export default function PayrollPage() {
                             </td>
                             <td className="px-3 py-4">{transaction.transaction_type}</td>
                             <td className="px-3 py-4">{formatMinutes(transaction.minutes)}</td>
-                            <td className="px-3 py-4 text-[#64748B]">{transaction.note || "—"}</td>
+                            <td className="px-3 py-4 text-[#667085]">{transaction.note || "—"}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -3030,7 +3030,7 @@ export default function PayrollPage() {
                 description="Unveränderliche Audit-Historie für Close, Reopen und Re-Close."
               >
                 {auditEntries.length === 0 ? (
-                  <div className="rounded-2xl border border-dashed border-[#CBD5E1] bg-[#F8FAFC] px-5 py-8 text-center text-sm text-[#64748B]">
+                  <div className="rounded-2xl border border-dashed border-[#D5DEE4] bg-[#E7EDF1] px-5 py-8 text-center text-sm text-[#667085]">
                     Für diese Periode existieren noch keine Audit-Einträge.
                   </div>
                 ) : (
@@ -3038,12 +3038,12 @@ export default function PayrollPage() {
                     {auditEntries.map((entry) => (
                       <div
                         key={entry.id}
-                        className="rounded-2xl border border-[#CBD5E1] bg-[#F8FAFC] p-4 shadow-[0_10px_24px_rgba(15,23,42,0.09)]"
+                        className="rounded-[24px] bg-[#E7EDF1] p-4"
                       >
                         <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                           <div>
                             <div className="flex flex-wrap items-center gap-2">
-                              <p className="font-semibold text-[#0F172A]">
+                              <p className="font-semibold text-[#000000]">
                                 {getAuditActionLabel(entry.action)}
                               </p>
                               <Badge variant="muted">
@@ -3051,12 +3051,12 @@ export default function PayrollPage() {
                               </Badge>
                             </div>
                             {entry.reason && (
-                              <p className="mt-2 text-sm leading-6 text-[#475569]">
+                              <p className="mt-2 text-sm leading-6 text-[#667085]">
                                 {entry.reason}
                               </p>
                             )}
                           </div>
-                          <span className="text-sm text-[#64748B]">
+                          <span className="text-sm text-[#667085]">
                             {formatDateTime(entry.created_at)}
                           </span>
                         </div>
@@ -3213,8 +3213,8 @@ export default function PayrollPage() {
                   />
                 </div>
 
-                <div className="mt-6 flex flex-col gap-3 border-t border-[#E2E8F0] pt-5 md:flex-row md:items-center md:justify-between">
-                  <p className="text-sm leading-6 text-[#64748B]">
+                <div className="mt-6 flex flex-col gap-3 border-t border-[#DDE5EA] pt-5 md:flex-row md:items-center md:justify-between">
+                  <p className="text-sm leading-6 text-[#667085]">
                     Die Lohnarten werden getrennt für das aktuell ausgewählte DATEV-System gespeichert. Änderungen machen eine bereits durchgeführte DATEV-Prüfung ungültig.
                   </p>
 
@@ -3244,7 +3244,7 @@ export default function PayrollPage() {
       : "Prüfe den geschlossenen Abrechnungszeitraum für DATEV LODAS und verwalte die unveränderliche Exporthistorie."
   }
 >
-                <div className="mb-5 rounded-3xl border border-[#CBD5E1] bg-[#E9EEF5] p-5 shadow-[0_14px_34px_rgba(15,23,42,0.12)]">
+                <div className="mb-5 rounded-3xl border border-[#D5DEE4] bg-[#E7EDF1] p-5 shadow-[0_14px_34px_rgba(15,23,42,0.12)]">
                   <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                     <div className="w-full max-w-sm">
   <Select
@@ -3335,18 +3335,18 @@ export default function PayrollPage() {
                             .map((row, index) => (
                               <div
                                 key={`${row.employee_id ?? "period"}-${row.source_id ?? "source"}-${row.error_code ?? index}`}
-                                className="rounded-2xl border border-[#CBD5E1] bg-[#F8FAFC] p-4 shadow-[0_10px_24px_rgba(15,23,42,0.09)]"
+                                className="rounded-[24px] bg-[#E7EDF1] p-4"
                               >
                                 <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
                                   <div>
-                                    <p className="font-semibold text-[#0F172A]">
+                                    <p className="font-semibold text-[#000000]">
                                       {row.error_code || "DATEV-Prüfung"}
                                     </p>
-                                    <p className="mt-1 text-sm leading-6 text-[#64748B]">
+                                    <p className="mt-1 text-sm leading-6 text-[#667085]">
                                       {row.message || "Keine weitere Beschreibung verfügbar."}
                                     </p>
                                     {row.employee_id && (
-                                      <p className="mt-2 text-xs text-[#94A3B8]">
+                                      <p className="mt-2 text-xs text-[#8A94A3]">
                                         Mitarbeiter-ID: {row.employee_id}
                                       </p>
                                     )}
@@ -3362,11 +3362,11 @@ export default function PayrollPage() {
                 </div>
 
                 {datevExports.length === 0 ? (
-                  <div className="rounded-2xl border border-dashed border-[#CBD5E1] bg-[#F8FAFC] px-5 py-8 text-center">
-                    <p className="font-semibold text-[#0F172A]">
+                  <div className="rounded-2xl border border-dashed border-[#D5DEE4] bg-[#E7EDF1] px-5 py-8 text-center">
+                    <p className="font-semibold text-[#000000]">
                       Noch kein DATEV-Export vorhanden
                     </p>
-                    <p className="mt-2 text-sm text-[#64748B]">
+                    <p className="mt-2 text-sm text-[#667085]">
                       Führe die DATEV-Prüfung durch und erstelle anschließend die erste Exportversion für diese Periode.
                     </p>
                   </div>
@@ -3381,12 +3381,12 @@ export default function PayrollPage() {
                       return (
                         <div
                           key={datevExport.id}
-                          className="rounded-2xl border border-[#CBD5E1] bg-[#F8FAFC] p-5 shadow-[0_10px_24px_rgba(15,23,42,0.09)]"
+                          className="rounded-[24px] bg-[#E7EDF1] p-5"
                         >
                           <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
                             <div className="min-w-0">
                               <div className="flex flex-wrap items-center gap-2">
-                                <h3 className="break-all font-semibold text-[#0F172A]">
+                                <h3 className="break-all font-semibold text-[#000000]">
                                   {datevExport.file_name}
                                 </h3>
                                 <Badge variant={state.variant}>{state.label}</Badge>
@@ -3402,7 +3402,7 @@ export default function PayrollPage() {
                                 </Badge>
                               </div>
 
-                              <div className="mt-3 flex flex-wrap gap-x-6 gap-y-2 text-sm text-[#64748B]">
+                              <div className="mt-3 flex flex-wrap gap-x-6 gap-y-2 text-sm text-[#667085]">
                                 <span>
                                   Erstellt: {formatDateTime(datevExport.generated_at)}
                                 </span>
@@ -3413,7 +3413,7 @@ export default function PayrollPage() {
                                 <span>{downloadCount} Download(s)</span>
                               </div>
 
-                              <p className="mt-3 break-all text-xs text-[#64748B]">
+                              <p className="mt-3 break-all text-xs text-[#667085]">
                                 SHA-256:{" "}
                                 <span className="font-mono">
                                   {datevExport.payload_sha256}
@@ -3448,13 +3448,13 @@ export default function PayrollPage() {
 
 
       {targetReviewSnapshot && selectedPeriod && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#111827]/40 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-xl overflow-hidden rounded-3xl border border-[#E2E8F0] bg-white shadow-[0_24px_80px_rgba(15,23,42,0.18)]">
-            <div className="border-b border-[#E2E8F0] px-6 py-5">
-              <h2 className="text-2xl font-semibold tracking-[-0.02em] text-[#0F172A]">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#323542]/40 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-xl overflow-hidden rounded-3xl border border-[#DDE5EA] bg-white shadow-[0_24px_80px_rgba(15,23,42,0.18)]">
+            <div className="border-b border-[#DDE5EA] px-6 py-5">
+              <h2 className="text-2xl font-semibold tracking-[-0.02em] text-[#000000]">
                 Sollzeit der Teilperiode prüfen
               </h2>
-              <p className="mt-1 text-sm text-[#64748B]">
+              <p className="mt-1 text-sm text-[#667085]">
                 {targetReviewSnapshot.employee_name || targetReviewSnapshot.employee_id} · {formatMonth(selectedPeriod)}
               </p>
             </div>
@@ -3475,8 +3475,8 @@ export default function PayrollPage() {
                 inputMode="decimal"
               />
 
-              <div className="rounded-2xl border border-[#E2E8F0] bg-[#F8FAFC] px-4 py-3 text-sm text-[#475569]">
-                Aktuell im Snapshot: <span className="font-semibold text-[#0F172A]">{formatMinutes(targetReviewSnapshot.target_minutes)}</span>
+              <div className="rounded-[24px] bg-[#E7EDF1] px-4 py-3 text-sm text-[#667085]">
+                Aktuell im Snapshot: <span className="font-semibold text-[#000000]">{formatMinutes(targetReviewSnapshot.target_minutes)}</span>
               </div>
 
               <Textarea
@@ -3488,7 +3488,7 @@ export default function PayrollPage() {
               />
             </div>
 
-            <div className="flex flex-col-reverse gap-3 border-t border-[#E2E8F0] px-6 py-5 sm:flex-row sm:justify-end">
+            <div className="flex flex-col-reverse gap-3 border-t border-[#DDE5EA] px-6 py-5 sm:flex-row sm:justify-end">
               <Button
                 variant="secondary"
                 type="button"
@@ -3516,13 +3516,13 @@ export default function PayrollPage() {
       )}
 
       {showReopenDialog && selectedPeriod && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#111827]/40 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-xl overflow-hidden rounded-3xl border border-[#E2E8F0] bg-white shadow-[0_24px_80px_rgba(15,23,42,0.18)]">
-            <div className="border-b border-[#E2E8F0] px-6 py-5">
-              <h2 className="text-2xl font-semibold tracking-[-0.02em] text-[#0F172A]">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#323542]/40 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-xl overflow-hidden rounded-3xl border border-[#DDE5EA] bg-white shadow-[0_24px_80px_rgba(15,23,42,0.18)]">
+            <div className="border-b border-[#DDE5EA] px-6 py-5">
+              <h2 className="text-2xl font-semibold tracking-[-0.02em] text-[#000000]">
                 Abrechnungsperiode wieder öffnen
               </h2>
-              <p className="mt-1 text-sm text-[#64748B]">
+              <p className="mt-1 text-sm text-[#667085]">
                 {formatMonth(selectedPeriod)}
               </p>
             </div>
@@ -3543,7 +3543,7 @@ export default function PayrollPage() {
               />
             </div>
 
-            <div className="flex flex-col-reverse gap-3 border-t border-[#E2E8F0] px-6 py-5 sm:flex-row sm:justify-end">
+            <div className="flex flex-col-reverse gap-3 border-t border-[#DDE5EA] px-6 py-5 sm:flex-row sm:justify-end">
               <Button
                 variant="secondary"
                 type="button"

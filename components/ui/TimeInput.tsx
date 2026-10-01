@@ -73,7 +73,7 @@ export default function TimeInput({
   return (
     <div className="flex flex-col gap-1.5">
       {label && (
-        <label className="text-sm font-medium text-[#0F172A]">
+        <label className="text-sm font-semibold text-[#323542]">
           {label}
         </label>
       )}
@@ -85,22 +85,22 @@ export default function TimeInput({
         disabled={disabled}
         value={value}
         onChange={(event) => {
-        const value = event.target.value
+          const value = event.target.value
             .replace(/[^\d:]/g, "")
             .slice(0, 5);
 
-        onChange(value);
+          onChange(value);
         }}
         onBlur={() => onChange(normalizeOnBlur(value))}
         className={[
-          "h-12 w-full rounded-xl border bg-white px-4 text-sm text-[#111827]",
+          "h-12 w-full rounded-xl border bg-white px-4 text-sm text-[#323542]",
           "transition-all duration-200 ease-out",
-          "placeholder:text-[#94A3B8]",
+          "placeholder:text-[#8A94A3]",
           "focus:outline-none focus:ring-4",
           hasError
             ? "border-[#EF4444] focus:border-[#EF4444] focus:ring-red-100"
-            : "border-[#CBD5E1] focus:border-[#2563EB] focus:ring-blue-100",
-          "disabled:bg-[#F8FAFC] disabled:text-[#94A3B8] disabled:cursor-not-allowed",
+            : "border-black/[0.08] focus:border-[#31AEF0] focus:ring-[#31AEF0]/10",
+          "disabled:cursor-not-allowed disabled:bg-[#E7EDF1] disabled:text-[#8A94A3]",
           className,
         ].join(" ")}
         {...props}
@@ -113,7 +113,7 @@ export default function TimeInput({
           Bitte gib eine gültige Uhrzeit ein.
         </p>
       ) : helperText ? (
-        <p className="text-xs text-[#64748B]">{helperText}</p>
+        <p className="text-xs text-[#667085]">{helperText}</p>
       ) : null}
     </div>
   );

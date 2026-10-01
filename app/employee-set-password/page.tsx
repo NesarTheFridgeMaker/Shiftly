@@ -8,7 +8,6 @@ import {
   EyeOff,
   LockKeyhole,
 } from "lucide-react";
-
 import { supabase } from "@/lib/supabaseClient";
 
 type PageState = "checking" | "ready" | "saving" | "error";
@@ -275,52 +274,93 @@ export default function EmployeeSetPasswordPage() {
   }
 
   return (
-    <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[#f7f7f8] p-4">
-      <div className="absolute left-5 top-5 z-10 sm:left-10 sm:top-8">
+    <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-white px-5 py-28 text-[#323542] sm:px-8">
+      {/* Hintergrund */}
+      <div
+        className="pointer-events-none absolute -right-28 -top-28 h-[420px] w-[420px] rounded-full bg-[#31AEF0]/10 blur-3xl"
+        aria-hidden="true"
+      />
+
+      <div
+        className="pointer-events-none absolute -bottom-40 -left-32 h-[460px] w-[460px] rounded-full bg-[#E7EDF1] blur-3xl"
+        aria-hidden="true"
+      />
+
+      {/* Logo */}
+      <div className="absolute left-6 top-7 z-10 sm:left-10 sm:top-9">
         <img
           src="/logo/dipera-logo-dark.png"
           alt="Dipera"
-          className="h-auto w-28 sm:w-36"
+          className="h-auto w-[140px] sm:w-[150px]"
         />
       </div>
 
-      <div className="pointer-events-none absolute inset-0">
-        <div className="absolute -left-24 bottom-16 h-72 w-[55rem] rotate-[-18deg] rounded-full bg-gradient-to-r from-blue-100/40 via-white to-blue-200/30 blur-2xl" />
-
-        <div className="absolute right-20 top-24 h-80 w-[38rem] rotate-[22deg] rounded-full bg-gradient-to-r from-white via-blue-100/50 to-slate-200/40 blur-2xl" />
-      </div>
-
-      <section className="relative z-10 w-full max-w-md rounded-3xl border border-white bg-white/95 p-6 shadow-2xl sm:p-8">
+      <section className="relative z-10 w-full max-w-[540px] rounded-[30px] bg-[#F2F5F8] px-6 py-9 sm:px-10 sm:py-11">
         {pageState === "checking" ? (
-          <div className="py-5 text-center">
-            <div className="mx-auto mb-5 h-11 w-11 animate-spin rounded-full border-4 border-blue-100 border-t-[#005CA8]" />
+          <div className="py-6 text-center">
+            <div className="mx-auto mb-7 flex h-16 w-16 items-center justify-center rounded-[20px] bg-white">
+              <div className="h-8 w-8 animate-spin rounded-full border-[3px] border-[#E7EDF1] border-t-[#31AEF0]" />
+            </div>
 
-            <h1 className="text-2xl font-semibold text-blue-950">
+            <div className="mb-4 inline-flex rounded-full bg-white px-4 py-2 text-xs font-bold uppercase tracking-[0.14em] text-[#168FD0]">
+              Einladung prüfen
+            </div>
+
+            <h1 className="text-[30px] font-bold leading-[1.12] tracking-[-0.035em] text-black sm:text-[36px]">
               Einladung wird geprüft
             </h1>
 
-            <p className="mt-3 text-sm leading-6 text-slate-500">
+            <p className="mt-4 text-[15px] leading-7 text-[#667085]">
               Bitte warte einen Augenblick.
             </p>
           </div>
         ) : pageState === "error" ? (
           <div className="py-2 text-center">
-            <div className="mx-auto mb-5 flex h-12 w-12 items-center justify-center rounded-2xl bg-red-50 text-xl font-semibold text-red-600">
-              !
+            <div className="mx-auto mb-7 flex h-16 w-16 items-center justify-center rounded-[20px] bg-white">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                className="h-7 w-7 text-[#D92D20]"
+                aria-hidden="true"
+              >
+                <circle
+                  cx="12"
+                  cy="12"
+                  r="9"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                />
+                <path
+                  d="M12 7.5v6"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                />
+                <path
+                  d="M12 17h.01"
+                  stroke="currentColor"
+                  strokeWidth="2.4"
+                  strokeLinecap="round"
+                />
+              </svg>
             </div>
 
-            <h1 className="text-2xl font-semibold text-blue-950">
+            <div className="mb-4 inline-flex rounded-full bg-white px-4 py-2 text-xs font-bold uppercase tracking-[0.14em] text-[#D92D20]">
+              Einladung
+            </div>
+
+            <h1 className="text-[30px] font-bold leading-[1.12] tracking-[-0.035em] text-black sm:text-[36px]">
               Einladung nicht verfügbar
             </h1>
 
-            <p className="mt-3 text-sm leading-6 text-slate-600">
+            <p className="mx-auto mt-5 max-w-[400px] text-[15px] leading-7 text-[#323542]">
               {errorMessage}
             </p>
 
             <button
               type="button"
               onClick={() => void handleBackToLogin()}
-              className="mt-6 h-12 w-full rounded-xl border border-slate-300 bg-white font-semibold text-slate-700 transition hover:bg-slate-50"
+              className="mt-8 flex min-h-[54px] w-full items-center justify-center rounded-[16px] border border-black/[0.08] bg-white px-6 text-[15px] font-bold text-black transition hover:bg-[#E7EDF1]"
             >
               Zurück zum Login
             </button>
@@ -328,15 +368,19 @@ export default function EmployeeSetPasswordPage() {
         ) : (
           <>
             <div className="text-center">
-              <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-50 text-[#005CA8]">
-                <LockKeyhole size={26} />
+              <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-[20px] bg-white text-[#168FD0]">
+                <LockKeyhole size={28} strokeWidth={1.8} />
               </div>
 
-              <h1 className="text-2xl font-semibold text-blue-950">
+              <div className="mb-4 inline-flex rounded-full bg-white px-4 py-2 text-xs font-bold uppercase tracking-[0.14em] text-[#168FD0]">
+                Zugang einrichten
+              </div>
+
+              <h1 className="text-[30px] font-bold leading-[1.12] tracking-[-0.035em] text-black sm:text-[36px]">
                 Passwort festlegen
               </h1>
 
-              <p className="mt-3 text-sm leading-6 text-slate-500">
+              <p className="mx-auto mt-4 max-w-[390px] text-[15px] leading-7 text-[#667085]">
                 Lege jetzt ein sicheres Passwort für deinen
                 Dipera-Zugang fest.
               </p>
@@ -344,12 +388,12 @@ export default function EmployeeSetPasswordPage() {
 
             <form
               onSubmit={handleSubmit}
-              className="mt-7 space-y-5"
+              className="mt-8 space-y-6"
             >
               <div>
                 <label
                   htmlFor="password"
-                  className="mb-2 block text-sm font-medium text-slate-700"
+                  className="mb-2 block text-sm font-bold text-black"
                 >
                   Neues Passwort
                 </label>
@@ -367,7 +411,7 @@ export default function EmployeeSetPasswordPage() {
                     autoComplete="new-password"
                     required
                     disabled={pageState === "saving"}
-                    className="h-12 w-full rounded-xl border border-slate-300 bg-white px-4 pr-12 text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-[#005CA8] focus:ring-4 focus:ring-blue-100 disabled:cursor-not-allowed disabled:bg-slate-50"
+                    className="h-[54px] w-full rounded-[16px] border border-black/[0.08] bg-white px-4 pr-12 text-[15px] text-black outline-none transition placeholder:text-[#8B93A1] focus:border-[#31AEF0] focus:ring-4 focus:ring-[#31AEF0]/10 disabled:cursor-not-allowed disabled:opacity-60"
                     placeholder="Sicheres Passwort eingeben"
                   />
 
@@ -382,7 +426,7 @@ export default function EmployeeSetPasswordPage() {
                         ? "Passwort ausblenden"
                         : "Passwort anzeigen"
                     }
-                    className="absolute right-3 top-1/2 -translate-y-1/2 rounded-lg p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 disabled:cursor-not-allowed"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 rounded-[10px] p-2 text-[#8B93A1] transition hover:bg-[#F2F5F8] hover:text-black disabled:cursor-not-allowed"
                   >
                     {showPassword ? (
                       <EyeOff size={20} />
@@ -392,40 +436,46 @@ export default function EmployeeSetPasswordPage() {
                   </button>
                 </div>
 
-                <div className="mt-4 space-y-2">
-                  <PasswordRequirement
-                    fulfilled={passwordChecks.minLength}
-                    label={`Mindestens ${MIN_PASSWORD_LENGTH} Zeichen`}
-                  />
+                <div className="mt-4 rounded-[18px] bg-white px-4 py-4">
+                  <p className="mb-3 text-xs font-bold uppercase tracking-[0.08em] text-[#667085]">
+                    Dein Passwort benötigt
+                  </p>
 
-                  <PasswordRequirement
-                    fulfilled={passwordChecks.hasLowercase}
-                    label="Mindestens ein Kleinbuchstabe"
-                  />
+                  <div className="space-y-2.5">
+                    <PasswordRequirement
+                      fulfilled={passwordChecks.minLength}
+                      label={`Mindestens ${MIN_PASSWORD_LENGTH} Zeichen`}
+                    />
 
-                  <PasswordRequirement
-                    fulfilled={passwordChecks.hasUppercase}
-                    label="Mindestens ein Großbuchstabe"
-                  />
+                    <PasswordRequirement
+                      fulfilled={passwordChecks.hasLowercase}
+                      label="Mindestens ein Kleinbuchstabe"
+                    />
 
-                  <PasswordRequirement
-                    fulfilled={passwordChecks.hasNumber}
-                    label="Mindestens eine Zahl"
-                  />
+                    <PasswordRequirement
+                      fulfilled={passwordChecks.hasUppercase}
+                      label="Mindestens ein Großbuchstabe"
+                    />
 
-                  <PasswordRequirement
-                    fulfilled={
-                      passwordChecks.hasSpecialCharacter
-                    }
-                    label="Mindestens ein Sonderzeichen"
-                  />
+                    <PasswordRequirement
+                      fulfilled={passwordChecks.hasNumber}
+                      label="Mindestens eine Zahl"
+                    />
+
+                    <PasswordRequirement
+                      fulfilled={
+                        passwordChecks.hasSpecialCharacter
+                      }
+                      label="Mindestens ein Sonderzeichen"
+                    />
+                  </div>
                 </div>
               </div>
 
               <div>
                 <label
                   htmlFor="passwordRepeat"
-                  className="mb-2 block text-sm font-medium text-slate-700"
+                  className="mb-2 block text-sm font-bold text-black"
                 >
                   Passwort wiederholen
                 </label>
@@ -445,12 +495,12 @@ export default function EmployeeSetPasswordPage() {
                     autoComplete="new-password"
                     required
                     disabled={pageState === "saving"}
-                    className={`h-12 w-full rounded-xl border bg-white px-4 pr-12 text-slate-900 outline-none transition placeholder:text-slate-400 focus:ring-4 disabled:cursor-not-allowed disabled:bg-slate-50 ${
+                    className={`h-[54px] w-full rounded-[16px] border bg-white px-4 pr-12 text-[15px] text-black outline-none transition placeholder:text-[#8B93A1] focus:ring-4 disabled:cursor-not-allowed disabled:opacity-60 ${
                       passwordsMatch
                         ? "border-emerald-400 focus:border-emerald-500 focus:ring-emerald-100"
                         : passwordRepeatHasError
                           ? "border-red-400 focus:border-red-500 focus:ring-red-100"
-                          : "border-slate-300 focus:border-[#005CA8] focus:ring-blue-100"
+                          : "border-black/[0.08] focus:border-[#31AEF0] focus:ring-[#31AEF0]/10"
                     }`}
                     placeholder="Passwort erneut eingeben"
                   />
@@ -468,7 +518,7 @@ export default function EmployeeSetPasswordPage() {
                         ? "Passwort ausblenden"
                         : "Passwort anzeigen"
                     }
-                    className="absolute right-3 top-1/2 -translate-y-1/2 rounded-lg p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 disabled:cursor-not-allowed"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 rounded-[10px] p-2 text-[#8B93A1] transition hover:bg-[#F2F5F8] hover:text-black disabled:cursor-not-allowed"
                   >
                     {showPasswordRepeat ? (
                       <EyeOff size={20} />
@@ -479,12 +529,12 @@ export default function EmployeeSetPasswordPage() {
                 </div>
 
                 {passwordsMatch ? (
-                  <p className="mt-2 flex items-center gap-2 text-xs font-medium text-emerald-600">
+                  <p className="mt-2 flex items-center gap-2 text-xs font-semibold text-emerald-600">
                     <Check size={15} strokeWidth={3} />
                     Die Passwörter stimmen überein.
                   </p>
                 ) : passwordRepeatHasError ? (
-                  <p className="mt-2 text-xs font-medium text-red-600">
+                  <p className="mt-2 text-xs font-semibold text-red-600">
                     Die Passwörter stimmen nicht überein.
                   </p>
                 ) : null}
@@ -493,7 +543,7 @@ export default function EmployeeSetPasswordPage() {
               {errorMessage ? (
                 <div
                   role="alert"
-                  className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm leading-6 text-red-700"
+                  className="rounded-[16px] border border-red-200 bg-red-50 px-4 py-3 text-sm leading-6 text-red-700"
                 >
                   {errorMessage}
                 </div>
@@ -502,7 +552,7 @@ export default function EmployeeSetPasswordPage() {
               <button
                 type="submit"
                 disabled={!canSubmit}
-                className="flex h-12 w-full items-center justify-center rounded-xl bg-[#005CA8] font-semibold text-white transition hover:bg-[#004b8a] disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex min-h-[54px] w-full items-center justify-center rounded-[16px] bg-[#31AEF0] px-6 text-[15px] font-bold text-white transition hover:bg-[#219DDB] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {pageState === "saving" ? (
                   <>
@@ -532,17 +582,17 @@ function PasswordRequirement({
 }: PasswordRequirementProps) {
   return (
     <div
-      className={`flex items-center gap-2 text-xs transition ${
+      className={`flex items-center gap-2.5 text-xs transition ${
         fulfilled
-          ? "font-medium text-emerald-600"
-          : "text-slate-400"
+          ? "font-semibold text-emerald-600"
+          : "text-[#667085]"
       }`}
     >
       <span
         className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border transition ${
           fulfilled
             ? "border-emerald-500 bg-emerald-500 text-white"
-            : "border-slate-300 bg-white text-transparent"
+            : "border-[#C8D0D9] bg-[#F2F5F8] text-transparent"
         }`}
       >
         <Check size={13} strokeWidth={3} />

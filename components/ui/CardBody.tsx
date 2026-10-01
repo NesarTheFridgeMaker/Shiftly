@@ -14,7 +14,7 @@ export default function CardBody({
   return (
     <div
       className={[
-        compact ? "p-4" : "p-6",
+        compact ? "p-5" : "p-6",
         className,
       ].join(" ")}
     >

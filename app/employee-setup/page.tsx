@@ -1,5 +1,7 @@
 "use client";
 
+import Image from "next/image";
+import { Be_Vietnam_Pro } from "next/font/google";
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 
@@ -10,6 +12,12 @@ type CompleteEmployeeSetupResponse = {
   error?: string;
   activationCompleted?: boolean;
 };
+
+const beVietnamPro = Be_Vietnam_Pro({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700", "800"],
+  display: "swap",
+});
 
 export default function EmployeeSetupPage() {
   const [setupState, setSetupState] =
@@ -183,55 +191,108 @@ export default function EmployeeSetupPage() {
   }, [completeEmployeeSetup]);
 
   return (
-    <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[#f7f7f8] p-4">
-      <div className="absolute left-5 top-5 z-10 sm:left-10 sm:top-8">
-        <img
+    <main
+      className={`${beVietnamPro.className} relative flex min-h-screen items-center justify-center overflow-hidden bg-white px-5 py-28 text-[#323542] sm:px-8`}
+    >
+      {/* Hintergrund */}
+      <div
+        className="pointer-events-none absolute -right-28 -top-28 h-[420px] w-[420px] rounded-full bg-[#31AEF0]/10 blur-3xl"
+        aria-hidden="true"
+      />
+
+      <div
+        className="pointer-events-none absolute -bottom-40 -left-32 h-[460px] w-[460px] rounded-full bg-[#E7EDF1] blur-3xl"
+        aria-hidden="true"
+      />
+
+      {/* Logo */}
+      <div className="absolute left-6 top-7 z-10 sm:left-10 sm:top-9">
+        <Image
           src="/logo/dipera-logo-dark.png"
           alt="Dipera"
-          className="h-auto w-28 sm:w-36"
+          width={1024}
+          height={280}
+          priority
+          className="h-auto w-[140px] sm:w-[150px]"
         />
       </div>
 
-      <div className="pointer-events-none absolute inset-0">
-        <div className="absolute -left-24 bottom-16 h-72 w-[55rem] rotate-[-18deg] rounded-full bg-gradient-to-r from-blue-100/40 via-white to-blue-200/30 blur-2xl" />
-        <div className="absolute right-20 top-24 h-80 w-[38rem] rotate-[22deg] rounded-full bg-gradient-to-r from-white via-blue-100/50 to-slate-200/40 blur-2xl" />
-      </div>
-
-      <section className="relative z-10 w-full max-w-md rounded-3xl border border-white bg-white/95 p-8 text-center shadow-2xl">
+      {/* Inhalt */}
+      <section className="relative z-10 w-full max-w-[520px] rounded-[30px] bg-[#F2F5F8] px-6 py-9 text-center sm:px-10 sm:py-11">
         {setupState === "loading" ? (
           <>
-            <div className="mx-auto mb-5 h-11 w-11 animate-spin rounded-full border-4 border-blue-100 border-t-[#005CA8]" />
+            <div className="mx-auto mb-7 flex h-16 w-16 items-center justify-center rounded-[20px] bg-white">
+              <div className="h-8 w-8 animate-spin rounded-full border-[3px] border-[#E7EDF1] border-t-[#31AEF0]" />
+            </div>
 
-            <h1 className="text-2xl font-semibold text-blue-950">
+            <div className="mx-auto mb-4 inline-flex rounded-full bg-white px-4 py-2 text-xs font-bold uppercase tracking-[0.14em] text-[#168FD0]">
+              Zugang aktivieren
+            </div>
+
+            <h1 className="text-[30px] font-bold leading-[1.12] tracking-[-0.035em] text-black sm:text-[36px]">
               Mitarbeiter-Zugang wird eingerichtet
             </h1>
 
-            <p className="mt-3 text-sm leading-6 text-slate-500">
-              Dein Konto wird automatisch mit deinem Betrieb
-              verbunden. Bitte schließe diese Seite nicht.
+            <p className="mx-auto mt-5 max-w-[390px] text-[15px] leading-7 text-[#323542]">
+              Dein Konto wird automatisch mit deinem Betrieb verbunden. Bitte
+              schließe diese Seite nicht.
             </p>
+
+            <div className="mx-auto mt-8 flex max-w-[330px] items-center justify-center gap-2 text-sm text-[#667085]">
+              <span className="h-2 w-2 shrink-0 animate-pulse rounded-full bg-[#31AEF0]" />
+              <span>Aktivierung läuft</span>
+            </div>
           </>
         ) : (
           <>
-            <div className="mx-auto mb-5 flex h-12 w-12 items-center justify-center rounded-2xl bg-red-50 text-xl text-red-600">
-              !
+            <div className="mx-auto mb-7 flex h-16 w-16 items-center justify-center rounded-[20px] bg-white">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                className="h-7 w-7 text-[#D92D20]"
+                aria-hidden="true"
+              >
+                <circle
+                  cx="12"
+                  cy="12"
+                  r="9"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                />
+                <path
+                  d="M12 7.5v6"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                />
+                <path
+                  d="M12 17h.01"
+                  stroke="currentColor"
+                  strokeWidth="2.4"
+                  strokeLinecap="round"
+                />
+              </svg>
             </div>
 
-            <h1 className="text-2xl font-semibold text-blue-950">
+            <div className="mx-auto mb-4 inline-flex rounded-full bg-white px-4 py-2 text-xs font-bold uppercase tracking-[0.14em] text-[#D92D20]">
+              Aktivierung fehlgeschlagen
+            </div>
+
+            <h1 className="text-[30px] font-bold leading-[1.12] tracking-[-0.035em] text-black sm:text-[36px]">
               Aktivierung nicht möglich
             </h1>
 
-            <p className="mt-3 text-sm leading-6 text-slate-600">
+            <p className="mx-auto mt-5 max-w-[400px] text-[15px] leading-7 text-[#323542]">
               {errorMessage}
             </p>
 
-            <div className="mt-6 flex flex-col gap-3">
+            <div className="mt-8 flex flex-col gap-3">
               <button
                 type="button"
                 onClick={() =>
                   void completeEmployeeSetup()
                 }
-                className="h-12 rounded-xl bg-[#005CA8] font-semibold text-white transition hover:bg-[#004b8a]"
+                className="flex min-h-[54px] w-full items-center justify-center rounded-[16px] bg-[#31AEF0] px-6 text-[15px] font-bold text-white transition hover:bg-[#219DDB]"
               >
                 Erneut versuchen
               </button>
@@ -242,7 +303,7 @@ export default function EmployeeSetupPage() {
                   await supabase.auth.signOut();
                   window.location.replace("/login");
                 }}
-                className="h-12 rounded-xl border border-slate-300 bg-white font-semibold text-slate-700 transition hover:bg-slate-50"
+                className="flex min-h-[54px] w-full items-center justify-center rounded-[16px] border border-black/[0.08] bg-white px-6 text-[15px] font-bold text-black transition hover:bg-[#E7EDF1]"
               >
                 Zurück zum Login
               </button>

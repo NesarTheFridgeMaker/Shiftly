@@ -3,10 +3,17 @@
 import Link from "next/link";
 import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { Eye, EyeOff } from "lucide-react";
+import { Check, Eye, EyeOff } from "lucide-react";
+import { Be_Vietnam_Pro } from "next/font/google";
 
 import DiperaPopup from "@/components/DiperaPopup";
 import { supabase } from "@/lib/supabaseClient";
+
+const beVietnamPro = Be_Vietnam_Pro({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700", "800"],
+  display: "swap",
+});
 
 function EmployeeRegisterContent() {
   const searchParams = useSearchParams();
@@ -17,7 +24,8 @@ function EmployeeRegisterContent() {
   const [confirmPassword, setConfirmPassword] = useState("");
 
   const [showPassword, setShowPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] =
+    useState(false);
 
   const [isLoading, setIsLoading] = useState(false);
 
@@ -150,22 +158,24 @@ function EmployeeRegisterContent() {
 
       const appUrl = window.location.origin;
 
-      const { data, error: signUpError } = await supabase.auth.signUp({
-        email: cleanedEmail,
-        password,
-        options: {
-          emailRedirectTo: `${appUrl}/auth/callback`,
-          data: {
-            registration_type: "employee_invite",
-            invite_code: cleanedInviteCode,
+      const { data, error: signUpError } =
+        await supabase.auth.signUp({
+          email: cleanedEmail,
+          password,
+          options: {
+            emailRedirectTo: `${appUrl}/auth/callback`,
+            data: {
+              registration_type: "employee_invite",
+              invite_code: cleanedInviteCode,
+            },
           },
-        },
-      });
+        });
 
       if (signUpError) {
         console.error("EMPLOYEE SIGN-UP ERROR:", signUpError);
 
-        const normalizedMessage = signUpError.message.toLowerCase();
+        const normalizedMessage =
+          signUpError.message.toLowerCase();
 
         if (
           normalizedMessage.includes("already") ||
@@ -243,207 +253,267 @@ function EmployeeRegisterContent() {
   }
 
   return (
-    <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[#f7f7f8] p-4">
-      <div className="absolute left-5 top-5 z-10 sm:left-10 sm:top-8">
+    <main
+      className={`${beVietnamPro.className} relative flex min-h-screen items-center justify-center overflow-hidden bg-white px-5 py-28 text-[#323542] sm:px-8`}
+    >
+      {/* Hintergrund */}
+      <div
+        className="pointer-events-none absolute -right-28 -top-28 h-[420px] w-[420px] rounded-full bg-[#31AEF0]/10 blur-3xl"
+        aria-hidden="true"
+      />
+
+      <div
+        className="pointer-events-none absolute -bottom-40 -left-32 h-[460px] w-[460px] rounded-full bg-[#E7EDF1] blur-3xl"
+        aria-hidden="true"
+      />
+
+      {/* Logo */}
+      <div className="absolute left-6 top-7 z-10 sm:left-10 sm:top-9">
         <img
           src="/logo/dipera-logo-dark.png"
           alt="Dipera"
-          className="h-auto w-28 sm:w-36"
+          className="h-auto w-[140px] sm:w-[150px]"
         />
       </div>
 
-      <div className="pointer-events-none absolute inset-0">
-        <div className="absolute -left-24 bottom-16 h-72 w-[55rem] rotate-[-18deg] rounded-full bg-gradient-to-r from-blue-100/40 via-white to-blue-200/30 blur-2xl" />
+      <section className="relative z-10 w-full max-w-[540px] rounded-[30px] bg-[#F2F5F8] px-6 py-9 sm:px-10 sm:py-11">
+        <div className="text-center">
+          <div className="mb-4 inline-flex rounded-full bg-white px-4 py-2 text-xs font-bold uppercase tracking-[0.14em] text-[#168FD0]">
+            Einladung
+          </div>
 
-        <div className="absolute right-20 top-24 h-80 w-[38rem] rotate-[22deg] rounded-full bg-gradient-to-r from-white via-blue-100/50 to-slate-200/40 blur-2xl" />
-
-        {[...Array(9)].map((_, index) => (
-          <div
-            key={index}
-            className="absolute h-40 w-12 rounded-2xl border border-white/80 bg-white/55 shadow-2xl backdrop-blur"
-            style={{
-              left: `${18 + index * 8}%`,
-              top: `${56 - Math.sin(index) * 18}%`,
-              transform: `rotate(${-34 + index * 9}deg)`,
-              opacity: 0.45,
-            }}
-          />
-        ))}
-      </div>
-
-      <section className="relative z-10 mt-16 w-full max-w-md rounded-3xl border border-white bg-white/95 p-6 shadow-2xl sm:mt-0 sm:p-8">
-        <div className="mb-8 text-center">
-          <h1 className="text-[2.25rem] font-light leading-tight tracking-[-0.04em] text-blue-950 sm:text-[2.6rem]">
+          <h1 className="text-[32px] font-bold leading-[1.1] tracking-[-0.04em] text-black sm:text-[40px]">
             Mitarbeiter-Zugang
           </h1>
 
-          <p className="mt-2 text-sm leading-6 text-slate-500">
+          <p className="mx-auto mt-4 max-w-[410px] text-[15px] leading-7 text-[#667085]">
             Gib deinen Einladungscode ein und erstelle deinen persönlichen
             Dipera-Zugang.
           </p>
         </div>
 
-        <div className="flex flex-col gap-4">
-          <input
-            type="text"
-            autoCapitalize="characters"
-            autoComplete="off"
-            spellCheck={false}
-            placeholder="Einladungscode, z. B. DIPERA-ABC123"
-            value={inviteCode}
-            onChange={(event) =>
-              setInviteCode(event.target.value.toUpperCase())
-            }
-            disabled={isLoading}
-            className="h-12 w-full rounded-xl border border-slate-300 bg-white px-4 font-mono text-sm font-semibold tracking-wide text-black outline-none transition focus:border-[#005CA8] focus:ring-4 focus:ring-blue-100 disabled:cursor-not-allowed disabled:bg-slate-100"
-          />
+        <div className="mt-8 flex flex-col gap-5">
+          {/* Einladungscode */}
+          <div>
+            <label
+              htmlFor="inviteCode"
+              className="mb-2 block text-sm font-bold text-black"
+            >
+              Einladungscode
+            </label>
 
-          <input
-            type="email"
-            autoComplete="email"
-            placeholder="E-Mail-Adresse"
-            value={email}
-            onChange={(event) => setEmail(event.target.value)}
-            disabled={isLoading}
-            className="h-12 w-full rounded-xl border border-slate-300 bg-white px-4 text-black outline-none transition focus:border-[#005CA8] focus:ring-4 focus:ring-blue-100 disabled:cursor-not-allowed disabled:bg-slate-100"
-          />
-
-          <div className="relative">
             <input
-              type={showPassword ? "text" : "password"}
-              autoComplete="new-password"
-              placeholder="Passwort"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              disabled={isLoading}
-              className="h-12 w-full rounded-xl border border-slate-300 bg-white px-4 pr-12 text-black outline-none transition focus:border-[#005CA8] focus:ring-4 focus:ring-blue-100 disabled:cursor-not-allowed disabled:bg-slate-100"
-            />
-
-            <button
-              type="button"
-              onClick={() => setShowPassword((current) => !current)}
-              disabled={isLoading}
-              aria-label={
-                showPassword ? "Passwort ausblenden" : "Passwort anzeigen"
+              id="inviteCode"
+              type="text"
+              autoCapitalize="characters"
+              autoComplete="off"
+              spellCheck={false}
+              placeholder="z. B. DIPERA-ABC123"
+              value={inviteCode}
+              onChange={(event) =>
+                setInviteCode(event.target.value.toUpperCase())
               }
-              className="absolute right-3 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-lg text-slate-500 transition hover:bg-slate-100 hover:text-slate-900 disabled:cursor-not-allowed"
-            >
-              {showPassword ? (
-                <EyeOff className="h-5 w-5" />
-              ) : (
-                <Eye className="h-5 w-5" />
-              )}
-            </button>
-          </div>
-
-          <div className="-mt-1 space-y-1 text-sm">
-            <div
-              className={`flex items-center gap-2 ${
-                hasMinLength ? "text-green-600" : "text-slate-500"
-              }`}
-            >
-              <span>{hasMinLength ? "✓" : "○"}</span>
-              <span>Mindestens 8 Zeichen</span>
-            </div>
-
-            <div
-              className={`flex items-center gap-2 ${
-                hasUppercase ? "text-green-600" : "text-slate-500"
-              }`}
-            >
-              <span>{hasUppercase ? "✓" : "○"}</span>
-              <span>Mindestens ein Großbuchstabe</span>
-            </div>
-
-            <div
-              className={`flex items-center gap-2 ${
-                hasNumber ? "text-green-600" : "text-slate-500"
-              }`}
-            >
-              <span>{hasNumber ? "✓" : "○"}</span>
-              <span>Mindestens eine Zahl</span>
-            </div>
-
-            <div
-              className={`flex items-center gap-2 ${
-                hasSpecialChar ? "text-green-600" : "text-slate-500"
-              }`}
-            >
-              <span>{hasSpecialChar ? "✓" : "○"}</span>
-              <span>Mindestens ein Sonderzeichen</span>
-            </div>
-          </div>
-
-          <div className="relative">
-            <input
-              type={showConfirmPassword ? "text" : "password"}
-              autoComplete="new-password"
-              placeholder="Passwort wiederholen"
-              value={confirmPassword}
-              onChange={(event) => setConfirmPassword(event.target.value)}
               disabled={isLoading}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") {
-                  event.preventDefault();
-                  void handleRegister();
+              className="h-[54px] w-full rounded-[16px] border border-black/[0.08] bg-white px-4 font-mono text-sm font-semibold tracking-wide text-black outline-none transition placeholder:font-sans placeholder:font-normal placeholder:tracking-normal placeholder:text-[#8B93A1] focus:border-[#31AEF0] focus:ring-4 focus:ring-[#31AEF0]/10 disabled:cursor-not-allowed disabled:opacity-60"
+            />
+          </div>
+
+          {/* E-Mail */}
+          <div>
+            <label
+              htmlFor="email"
+              className="mb-2 block text-sm font-bold text-black"
+            >
+              E-Mail-Adresse
+            </label>
+
+            <input
+              id="email"
+              type="email"
+              autoComplete="email"
+              placeholder="name@unternehmen.de"
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+              disabled={isLoading}
+              className="h-[54px] w-full rounded-[16px] border border-black/[0.08] bg-white px-4 text-[15px] text-black outline-none transition placeholder:text-[#8B93A1] focus:border-[#31AEF0] focus:ring-4 focus:ring-[#31AEF0]/10 disabled:cursor-not-allowed disabled:opacity-60"
+            />
+          </div>
+
+          {/* Passwort */}
+          <div>
+            <label
+              htmlFor="password"
+              className="mb-2 block text-sm font-bold text-black"
+            >
+              Passwort
+            </label>
+
+            <div className="relative">
+              <input
+                id="password"
+                type={showPassword ? "text" : "password"}
+                autoComplete="new-password"
+                placeholder="Sicheres Passwort eingeben"
+                value={password}
+                onChange={(event) =>
+                  setPassword(event.target.value)
                 }
-              }}
-              className={[
-                "h-12 w-full rounded-xl border bg-white px-4 pr-12 text-black outline-none transition",
-                "focus:ring-4 disabled:cursor-not-allowed disabled:bg-slate-100",
-                confirmPassword.length === 0
-                  ? "border-slate-300 focus:border-[#005CA8] focus:ring-blue-100"
-                  : passwordsMatch
-                    ? "border-green-500 focus:border-green-600 focus:ring-green-100"
-                    : "border-red-400 focus:border-red-500 focus:ring-red-100",
-              ].join(" ")}
-            />
+                disabled={isLoading}
+                className="h-[54px] w-full rounded-[16px] border border-black/[0.08] bg-white px-4 pr-12 text-[15px] text-black outline-none transition placeholder:text-[#8B93A1] focus:border-[#31AEF0] focus:ring-4 focus:ring-[#31AEF0]/10 disabled:cursor-not-allowed disabled:opacity-60"
+              />
 
-            <button
-              type="button"
-              onClick={() => setShowConfirmPassword((current) => !current)}
-              disabled={isLoading}
-              aria-label={
-                showConfirmPassword
-                  ? "Passwortwiederholung ausblenden"
-                  : "Passwortwiederholung anzeigen"
-              }
-              className="absolute right-3 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-lg text-slate-500 transition hover:bg-slate-100 hover:text-slate-900 disabled:cursor-not-allowed"
-            >
-              {showConfirmPassword ? (
-                <EyeOff className="h-5 w-5" />
-              ) : (
-                <Eye className="h-5 w-5" />
-              )}
-            </button>
+              <button
+                type="button"
+                onClick={() =>
+                  setShowPassword((current) => !current)
+                }
+                disabled={isLoading}
+                aria-label={
+                  showPassword
+                    ? "Passwort ausblenden"
+                    : "Passwort anzeigen"
+                }
+                className="absolute right-3 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-[10px] text-[#8B93A1] transition hover:bg-[#F2F5F8] hover:text-black disabled:cursor-not-allowed"
+              >
+                {showPassword ? (
+                  <EyeOff className="h-5 w-5" />
+                ) : (
+                  <Eye className="h-5 w-5" />
+                )}
+              </button>
+            </div>
+
+            <div className="mt-4 rounded-[18px] bg-white px-4 py-4">
+              <p className="mb-3 text-xs font-bold uppercase tracking-[0.08em] text-[#667085]">
+                Dein Passwort benötigt
+              </p>
+
+              <div className="space-y-2.5">
+                <PasswordRequirement
+                  fulfilled={hasMinLength}
+                  label="Mindestens 8 Zeichen"
+                />
+
+                <PasswordRequirement
+                  fulfilled={hasUppercase}
+                  label="Mindestens ein Großbuchstabe"
+                />
+
+                <PasswordRequirement
+                  fulfilled={hasNumber}
+                  label="Mindestens eine Zahl"
+                />
+
+                <PasswordRequirement
+                  fulfilled={hasSpecialChar}
+                  label="Mindestens ein Sonderzeichen"
+                />
+              </div>
+            </div>
           </div>
 
-          {confirmPassword.length > 0 && (
-            <p
-              className={`-mt-2 text-sm ${
-                passwordsMatch ? "text-green-600" : "text-red-600"
-              }`}
+          {/* Passwort wiederholen */}
+          <div>
+            <label
+              htmlFor="confirmPassword"
+              className="mb-2 block text-sm font-bold text-black"
             >
-              {passwordsMatch
-                ? "✓ Die Passwörter stimmen überein."
-                : "Die Passwörter stimmen noch nicht überein."}
-            </p>
-          )}
+              Passwort wiederholen
+            </label>
+
+            <div className="relative">
+              <input
+                id="confirmPassword"
+                type={
+                  showConfirmPassword ? "text" : "password"
+                }
+                autoComplete="new-password"
+                placeholder="Passwort erneut eingeben"
+                value={confirmPassword}
+                onChange={(event) =>
+                  setConfirmPassword(event.target.value)
+                }
+                disabled={isLoading}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    void handleRegister();
+                  }
+                }}
+                className={[
+                  "h-[54px] w-full rounded-[16px] border bg-white px-4 pr-12 text-[15px] text-black outline-none transition placeholder:text-[#8B93A1]",
+                  "focus:ring-4 disabled:cursor-not-allowed disabled:opacity-60",
+                  confirmPassword.length === 0
+                    ? "border-black/[0.08] focus:border-[#31AEF0] focus:ring-[#31AEF0]/10"
+                    : passwordsMatch
+                      ? "border-emerald-400 focus:border-emerald-500 focus:ring-emerald-100"
+                      : "border-red-400 focus:border-red-500 focus:ring-red-100",
+                ].join(" ")}
+              />
+
+              <button
+                type="button"
+                onClick={() =>
+                  setShowConfirmPassword(
+                    (current) => !current,
+                  )
+                }
+                disabled={isLoading}
+                aria-label={
+                  showConfirmPassword
+                    ? "Passwortwiederholung ausblenden"
+                    : "Passwortwiederholung anzeigen"
+                }
+                className="absolute right-3 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-[10px] text-[#8B93A1] transition hover:bg-[#F2F5F8] hover:text-black disabled:cursor-not-allowed"
+              >
+                {showConfirmPassword ? (
+                  <EyeOff className="h-5 w-5" />
+                ) : (
+                  <Eye className="h-5 w-5" />
+                )}
+              </button>
+            </div>
+
+            {confirmPassword.length > 0 && (
+              <p
+                className={`mt-2 flex items-center gap-2 text-xs font-semibold ${
+                  passwordsMatch
+                    ? "text-emerald-600"
+                    : "text-red-600"
+                }`}
+              >
+                {passwordsMatch && (
+                  <Check size={15} strokeWidth={3} />
+                )}
+
+                {passwordsMatch
+                  ? "Die Passwörter stimmen überein."
+                  : "Die Passwörter stimmen noch nicht überein."}
+              </p>
+            )}
+          </div>
 
           <button
             type="button"
             onClick={() => void handleRegister()}
             disabled={isLoading}
-            className="mt-1 h-12 rounded-xl bg-[#005CA8] font-semibold text-white transition hover:bg-[#004b8a] disabled:cursor-not-allowed disabled:bg-gray-400"
+            className="mt-1 flex min-h-[54px] w-full items-center justify-center rounded-[16px] bg-[#31AEF0] px-6 text-[15px] font-bold text-white transition hover:bg-[#219DDB] disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {isLoading ? "Zugang wird erstellt..." : "Zugang erstellen"}
+            {isLoading ? (
+              <>
+                <span className="mr-3 h-5 w-5 animate-spin rounded-full border-2 border-white/40 border-t-white" />
+                Zugang wird erstellt...
+              </>
+            ) : (
+              "Zugang erstellen"
+            )}
           </button>
 
-          <p className="mt-2 text-center text-sm text-slate-500">
+          <p className="text-center text-sm leading-6 text-[#667085]">
             Bereits registriert?{" "}
             <Link
               href="/login"
-              className="font-semibold text-[#005CA8] hover:text-blue-950"
+              className="font-bold text-[#168FD0] transition hover:text-[#0F76AE]"
             >
               Zum Login
             </Link>
@@ -462,14 +532,52 @@ function EmployeeRegisterContent() {
   );
 }
 
+type PasswordRequirementProps = {
+  fulfilled: boolean;
+  label: string;
+};
+
+function PasswordRequirement({
+  fulfilled,
+  label,
+}: PasswordRequirementProps) {
+  return (
+    <div
+      className={`flex items-center gap-2.5 text-xs transition ${
+        fulfilled
+          ? "font-semibold text-emerald-600"
+          : "text-[#667085]"
+      }`}
+    >
+      <span
+        className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border transition ${
+          fulfilled
+            ? "border-emerald-500 bg-emerald-500 text-white"
+            : "border-[#C8D0D9] bg-[#F2F5F8] text-transparent"
+        }`}
+      >
+        <Check size={13} strokeWidth={3} />
+      </span>
+
+      <span>{label}</span>
+    </div>
+  );
+}
+
 export default function EmployeeRegisterPage() {
   return (
     <Suspense
       fallback={
-        <div className="flex min-h-screen items-center justify-center bg-[#f7f7f8]">
-          <p className="text-sm text-slate-500">
-            Registrierungsseite wird geladen...
-          </p>
+        <div
+          className={`${beVietnamPro.className} flex min-h-screen items-center justify-center bg-white`}
+        >
+          <div className="flex flex-col items-center">
+            <div className="h-8 w-8 animate-spin rounded-full border-[3px] border-[#E7EDF1] border-t-[#31AEF0]" />
+
+            <p className="mt-4 text-sm text-[#667085]">
+              Registrierungsseite wird geladen...
+            </p>
+          </div>
         </div>
       }
     >

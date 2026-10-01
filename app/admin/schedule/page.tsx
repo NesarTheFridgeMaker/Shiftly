@@ -76,7 +76,7 @@ const WORK_TYPE_COLOR_STYLES: Record<string, WorkTypeColorStyle> = {
     card: "border-[#BFDBFE] bg-[#DBEAFE] hover:bg-[#D2E7FD]",
     time: "text-[#0758C9]",
     label: "text-[#1265D6]",
-    deleteButton: "bg-[#2563EB]/10 text-[#2563EB] hover:bg-[#2563EB]/20",
+    deleteButton: "bg-[#2563EB]/10 text-[#168FD0] hover:bg-[#2563EB]/20",
     draftBadge: "bg-[#2563EB]/10 text-[#1D4ED8]",
   },
   green: {
@@ -1874,7 +1874,7 @@ setPlannedBreakMinutes(
         description="Plane alle Mitarbeiter und Wochentage in einer kompakten Wochenmatrix. Klicke in eine Zelle oder verschiebe bestehende Schichten per Drag & Drop."
       />
 
-      <div className="rounded-3xl border border-[#D7DEE8] bg-[#EEF2F6] p-4 shadow-[0_6px_18px_rgba(15,23,42,0.08)] md:p-5">
+      <div className="rounded-[30px] bg-[#F2F5F8] p-4 md:p-5">
         <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-4">
           <StatCard
             title="Mitarbeiter"
@@ -1924,7 +1924,7 @@ setPlannedBreakMinutes(
             <button
               type="button"
               onClick={goToPreviousWeek}
-              className="inline-flex h-9 items-center justify-center rounded-lg border border-[#CBD5E1] bg-white px-3 text-xs font-semibold text-[#334155] shadow-[0_3px_9px_rgba(15,23,42,0.09)] transition hover:bg-[#EEF2F6] hover:shadow-[0_5px_12px_rgba(15,23,42,0.12)]"
+              className="inline-flex h-9 items-center justify-center rounded-lg bg-white px-3 text-xs font-semibold text-[#323542] transition hover:bg-[#E7EDF1]"
             >
               ← Vorherige
             </button>
@@ -1932,7 +1932,7 @@ setPlannedBreakMinutes(
             <button
               type="button"
               onClick={goToCurrentWeek}
-              className="inline-flex h-9 items-center justify-center rounded-lg border border-[#CBD5E1] bg-white px-3 text-xs font-semibold text-[#334155] shadow-[0_3px_9px_rgba(15,23,42,0.09)] transition hover:bg-[#EEF2F6] hover:shadow-[0_5px_12px_rgba(15,23,42,0.12)]"
+              className="inline-flex h-9 items-center justify-center rounded-lg bg-white px-3 text-xs font-semibold text-[#323542] transition hover:bg-[#E7EDF1]"
             >
               Aktuelle Woche
             </button>
@@ -1940,7 +1940,7 @@ setPlannedBreakMinutes(
             <button
               type="button"
               onClick={goToNextWeek}
-              className="inline-flex h-9 items-center justify-center rounded-lg border border-[#CBD5E1] bg-white px-3 text-xs font-semibold text-[#334155] shadow-[0_3px_9px_rgba(15,23,42,0.09)] transition hover:bg-[#EEF2F6] hover:shadow-[0_5px_12px_rgba(15,23,42,0.12)]"
+              className="inline-flex h-9 items-center justify-center rounded-lg bg-white px-3 text-xs font-semibold text-[#323542] transition hover:bg-[#E7EDF1]"
             >
               Nächste →
             </button>
@@ -1950,7 +1950,7 @@ setPlannedBreakMinutes(
             <button
               type="button"
               onClick={handleCopyWeekToNext}
-              className="inline-flex h-9 items-center justify-center rounded-lg border border-[#CBD5E1] bg-white px-3 text-xs font-semibold text-[#334155] shadow-[0_3px_9px_rgba(15,23,42,0.09)] transition hover:bg-[#EEF2F6] hover:shadow-[0_5px_12px_rgba(15,23,42,0.12)]"
+              className="inline-flex h-9 items-center justify-center rounded-lg bg-white px-3 text-xs font-semibold text-[#323542] transition hover:bg-[#E7EDF1]"
             >
               Woche kopieren
             </button>
@@ -1958,7 +1958,7 @@ setPlannedBreakMinutes(
             <button
               type="button"
               onClick={handlePublishSelectedWeek}
-              className="inline-flex h-9 items-center justify-center rounded-lg bg-[#2563EB] px-3.5 text-xs font-semibold text-white shadow-[0_6px_14px_rgba(37,99,235,0.24)] transition hover:bg-[#1D4ED8] hover:shadow-[0_8px_18px_rgba(37,99,235,0.28)]"
+              className="inline-flex h-9 items-center justify-center rounded-lg bg-[#31AEF0] px-3.5 text-xs font-semibold text-white transition hover:bg-[#219DDB]"
             >
               Veröffentlichen
             </button>
@@ -1966,7 +1966,7 @@ setPlannedBreakMinutes(
         }
         bodyClassName="p-0"
       >
-        <div className="border-b border-[#CBD5E1] bg-[#E9EEF4] px-5 py-3 shadow-[0_3px_10px_rgba(15,23,42,0.05)]">
+        <div className="bg-[#E7EDF1] px-5 py-3">
           <div className="flex flex-wrap items-center gap-3">
             <Badge
               variant={
@@ -1980,7 +1980,7 @@ setPlannedBreakMinutes(
                 : "Entwurf"}
             </Badge>
 
-            <span className="text-sm text-[#64748B]">
+            <span className="text-sm text-[#667085]">
               Klicke in eine Zelle, um eine Schicht anzulegen.
               Bestehende Schichten kannst du per Drag & Drop auf
               einen anderen Mitarbeiter oder Wochentag verschieben.
@@ -1989,13 +1989,13 @@ setPlannedBreakMinutes(
         </div>
 
         <div className="max-h-[72vh] overflow-y-auto">
-          <div className="sticky top-0 z-30 grid grid-cols-[minmax(190px,1.35fr)_repeat(7,minmax(0,1fr))] border-b border-[#CBD5E1] bg-[#EEF2F6] shadow-[0_4px_12px_rgba(15,23,42,0.10)]">
-            <div className="flex min-h-[82px] items-center border-r border-[#CBD5E1] px-4">
+          <div className="sticky top-0 z-30 grid grid-cols-[minmax(190px,1.35fr)_repeat(7,minmax(0,1fr))] bg-[#F2F5F8]">
+            <div className="flex min-h-[82px] items-center border-r border-black/[0.06] px-4">
               <div>
-                <p className="text-sm font-semibold text-[#0F172A]">
+                <p className="text-sm font-semibold text-black">
                   Mitarbeiter
                 </p>
-                <p className="mt-1 text-xs text-[#64748B]">
+                <p className="mt-1 text-xs text-[#667085]">
                   {employees.length} aktiv
                 </p>
               </div>
@@ -2013,15 +2013,15 @@ setPlannedBreakMinutes(
                     key={
                       day.date
                     }
-                    className={`min-w-0 border-r border-[#CBD5E1] px-2 py-3 text-center last:border-r-0 ${
+                    className={`min-w-0 border-r border-black/[0.06] px-2 py-3 text-center last:border-r-0 ${
                       day.date ===
                       todayDate
-                        ? "bg-[#DBEAFE]"
+                        ? "bg-[#E7F5FC]"
                         : ""
                     }`}
                   >
                     <div className="flex items-center justify-center gap-1.5">
-                      <p className="truncate text-sm font-semibold text-[#0F172A]">
+                      <p className="truncate text-sm font-semibold text-black">
                         {
                           day.label
                         }
@@ -2029,17 +2029,17 @@ setPlannedBreakMinutes(
 
                       {day.date ===
                         todayDate && (
-                        <span className="h-2 w-2 shrink-0 rounded-full bg-[#2563EB]" />
+                        <span className="h-2 w-2 shrink-0 rounded-full bg-[#31AEF0]" />
                       )}
                     </div>
 
-                    <p className="mt-1 text-[11px] text-[#64748B]">
+                    <p className="mt-1 text-[11px] text-[#667085]">
                       {
                         day.displayDate
                       }
                     </p>
 
-                    <p className="mt-1 truncate text-[10px] font-medium text-[#475569]">
+                    <p className="mt-1 truncate text-[10px] font-medium text-[#323542]">
                       {
                         daySummary.count
                       }{" "}
@@ -2067,7 +2067,7 @@ setPlannedBreakMinutes(
                   key={
                     employee.id
                   }
-                  className="grid grid-cols-[minmax(190px,1.35fr)_repeat(7,minmax(0,1fr))] border-b border-[#DCE3EC] last:border-b-0"
+                  className="grid grid-cols-[minmax(190px,1.35fr)_repeat(7,minmax(0,1fr))] border-b border-black/[0.06] last:border-b-0"
                 >
                   <button
                     type="button"
@@ -2076,15 +2076,15 @@ setPlannedBreakMinutes(
                         employee.id,
                       )
                     }
-                    className={`min-w-0 border-r border-[#CBD5E1] px-3 py-2 text-left transition ${
+                    className={`min-w-0 border-r border-black/[0.06] px-3 py-2 text-left transition ${
                       employeeId ===
                       employee.id
-                        ? "bg-[#E8F2FB]"
-                        : "bg-[#F8FAFC] hover:bg-[#EEF2F6]"
+                        ? "bg-[#E7F5FC]"
+                        : "bg-white hover:bg-[#F2F5F8]"
                     }`}
                   >
                     <div className="flex min-w-0 items-center gap-2.5">
-                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-[#2563EB] text-[11px] font-semibold text-white shadow-[0_4px_10px_rgba(37,99,235,0.18)]">
+                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-[#31AEF0] text-[11px] font-semibold text-white">
                         {employee.name
                           .slice(
                             0,
@@ -2094,13 +2094,13 @@ setPlannedBreakMinutes(
                       </div>
 
                       <div className="min-w-0">
-                        <p className="truncate text-sm font-semibold text-[#0F172A]">
+                        <p className="truncate text-sm font-semibold text-black">
                           {
                             employee.name
                           }
                         </p>
 
-                        <p className="mt-0.5 truncate text-[11px] text-[#64748B]">
+                        <p className="mt-0.5 truncate text-[11px] text-[#667085]">
                           {employee.note ||
                             "Bereit für die Planung"}
                         </p>
@@ -2169,11 +2169,11 @@ setPlannedBreakMinutes(
                               day.date,
                             )
                           }
-                          className={`group relative min-h-[66px] min-w-0 border-r border-[#CBD5E1] p-1 last:border-r-0 transition ${
+                          className={`group relative min-h-[66px] min-w-0 border-r border-black/[0.06] p-1 last:border-r-0 transition ${
                             day.date ===
                             todayDate
-                              ? "bg-[#EAF2FF]"
-                              : "bg-[#F8FAFC]"
+                              ? "bg-[#E7F5FC]"
+                              : "bg-white"
                           } ${
                             absenceForCell
                               ? "bg-[#FFF8E8]"
@@ -2181,7 +2181,7 @@ setPlannedBreakMinutes(
                           } ${
                             dragOverDay ===
                             cellKey
-                              ? "bg-[#DBEAFE] ring-2 ring-inset ring-[#60A5FA]"
+                              ? "bg-[#E7F5FC] ring-2 ring-inset ring-[#31AEF0]"
                               : ""
                           }`}
                         >
@@ -2322,7 +2322,7 @@ setPlannedBreakMinutes(
                             0 &&
                             !absenceForCell && (
                             <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center opacity-0 transition group-hover:opacity-100">
-                              <span className="rounded-lg border border-dashed border-[#93C5FD] bg-[#EFF6FF] px-2 py-1 text-[10px] font-medium text-[#2563EB]">
+                              <span className="rounded-lg border border-dashed border-[#31AEF0] bg-[#E7F5FC] px-2 py-1 text-[10px] font-medium text-[#168FD0]">
                                 + Schicht
                               </span>
                             </div>
@@ -2336,14 +2336,14 @@ setPlannedBreakMinutes(
             )
           ) : (
             <div className="px-6 py-12 text-center">
-              <p className="text-sm font-medium text-[#475569]">
+              <p className="text-sm font-medium text-[#323542]">
                 Keine aktiven Mitarbeiter gefunden.
               </p>
             </div>
           )}
         </div>
 
-        <div className="border-t border-[#CBD5E1] bg-[#E9EEF4] px-5 py-3 text-xs text-[#64748B]">
+        <div className="bg-[#E7EDF1] px-5 py-3 text-xs text-[#667085]">
           Genehmigte Abwesenheiten werden direkt in der Matrix markiert.
           Beim Anlegen oder Verschieben einer Schicht auf einen solchen Tag
           verlangt Dipera eine ausdrückliche Bestätigung.
@@ -2372,23 +2372,23 @@ setPlannedBreakMinutes(
                     key={
                       shift.id
                     }
-                    className="flex flex-col gap-4 rounded-2xl border border-[#CBD5E1] bg-[#EEF2F6] px-4 py-4 shadow-[0_6px_16px_rgba(15,23,42,0.08)] transition hover:shadow-[0_9px_22px_rgba(15,23,42,0.11)] md:flex-row md:items-center md:justify-between"
+                    className="flex flex-col gap-4 rounded-[24px] bg-[#E7EDF1] px-4 py-4 transition hover:bg-[#E1E8ED] md:flex-row md:items-center md:justify-between"
                   >
                     <div>
-                      <p className="text-sm font-medium text-[#0F172A]">
+                      <p className="text-sm font-medium text-black">
                         {
                           shift.employee_name
                         }
                       </p>
 
-                      <p className="mt-1 text-sm text-[#64748B]">
+                      <p className="mt-1 text-sm text-[#667085]">
                         {formatShiftTime(
                           shift.start_time,
                           shift.end_time,
                         )}
                       </p>
 
-                      <p className="mt-1 text-xs text-[#64748B]">
+                      <p className="mt-1 text-xs text-[#667085]">
                         Geplant
                         netto:{" "}
                         {formatMinutesAsHours(
@@ -2446,13 +2446,13 @@ setPlannedBreakMinutes(
             )}
           </div>
         ) : (
-          <div className="rounded-3xl border border-dashed border-[#B8C4D1] bg-[#EEF2F6] px-6 py-10 text-center shadow-[0_4px_14px_rgba(15,23,42,0.05)]">
-            <h3 className="text-lg font-semibold text-[#0F172A]">
+          <div className="rounded-[28px] bg-[#E7EDF1] px-6 py-10 text-center">
+            <h3 className="text-lg font-semibold text-black">
               Heute keine
               Schichten
             </h3>
 
-            <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-[#64748B]">
+            <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-[#667085]">
               Für heute sind
               keine Einsätze
               geplant. Du kannst
@@ -2465,28 +2465,28 @@ setPlannedBreakMinutes(
       </Section>
 
       {showShiftDialog && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#0F172A]/45 p-6 backdrop-blur-sm">
-          <div className="w-full max-w-2xl overflow-hidden rounded-[28px] border border-[#CBD5E1] bg-white shadow-[0_28px_90px_rgba(15,23,42,0.28)]">
-            <div className="border-b border-[#CBD5E1] bg-[#F8FAFC] px-6 py-5">
-              <p className="text-sm text-[#2563EB]">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 p-6 backdrop-blur-sm">
+          <div className="w-full max-w-2xl overflow-hidden rounded-[30px] bg-white shadow-[0_28px_90px_rgba(15,23,42,0.20)]">
+            <div className="border-b border-[#CBD5E1] bg-white px-6 py-5">
+              <p className="text-sm text-[#168FD0]">
                 {editingShiftId
                   ? "Schicht bearbeiten"
                   : "Neue Schicht"}
               </p>
 
-              <h2 className="mt-1 text-2xl font-light tracking-[-0.03em] text-[#0F172A]">
+              <h2 className="mt-1 text-2xl font-bold tracking-[-0.03em] text-black">
                 {selectedEmployee?.name ||
                   "Schicht planen"}
               </h2>
 
-              <p className="mt-1 text-sm text-[#64748B]">
+              <p className="mt-1 text-sm text-[#667085]">
                 Lege Arbeitstyp,
                 Beginn, Ende und
                 geplante Pause fest.
               </p>
             </div>
 
-            <div className="space-y-5 bg-[#EEF2F6] px-6 py-6">
+            <div className="space-y-5 bg-[#F2F5F8] px-6 py-6">
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <Select
                   label="Mitarbeiter"
@@ -2597,14 +2597,14 @@ setPlannedBreakMinutes(
               </div>
 
               {start && end && (
-                <div className="rounded-2xl border border-[#CBD5E1] bg-white px-4 py-4 shadow-[0_4px_12px_rgba(15,23,42,0.06)]">
+                <div className="rounded-[20px] bg-white px-4 py-4">
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                     <div>
-                      <p className="text-xs font-medium uppercase tracking-[0.06em] text-[#64748B]">
+                      <p className="text-xs font-medium uppercase tracking-[0.06em] text-[#667085]">
                         Brutto
                       </p>
 
-                      <p className="mt-1 text-sm font-semibold text-[#0F172A]">
+                      <p className="mt-1 text-sm font-semibold text-black">
                         {formatMinutesAsHours(
                           currentGrossMinutes,
                         )}{" "}
@@ -2613,11 +2613,11 @@ setPlannedBreakMinutes(
                     </div>
 
                     <div>
-                      <p className="text-xs font-medium uppercase tracking-[0.06em] text-[#64748B]">
+                      <p className="text-xs font-medium uppercase tracking-[0.06em] text-[#667085]">
                         Pause
                       </p>
 
-                      <p className="mt-1 text-sm font-semibold text-[#0F172A]">
+                      <p className="mt-1 text-sm font-semibold text-black">
                         {
                           currentBreakMinutes
                         }{" "}
@@ -2626,12 +2626,12 @@ setPlannedBreakMinutes(
                     </div>
 
                     <div>
-                      <p className="text-xs font-medium uppercase tracking-[0.06em] text-[#64748B]">
+                      <p className="text-xs font-medium uppercase tracking-[0.06em] text-[#667085]">
                         Geplant
                         netto
                       </p>
 
-                      <p className="mt-1 text-sm font-semibold text-[#0F172A]">
+                      <p className="mt-1 text-sm font-semibold text-black">
                         {formatMinutesAsHours(
                           currentNetMinutes,
                         )}{" "}
@@ -2681,7 +2681,7 @@ setPlannedBreakMinutes(
               )}
             </div>
 
-            <div className="flex flex-col-reverse gap-3 border-t border-[#CBD5E1] bg-[#F8FAFC] px-6 py-5 sm:flex-row sm:justify-end">
+            <div className="flex flex-col-reverse gap-3 border-t border-[#CBD5E1] bg-white px-6 py-5 sm:flex-row sm:justify-end">
               <Button
                 type="button"
                 variant="secondary"

@@ -8,13 +8,13 @@ export default function Skeleton({
   return (
     <div
       className={[
-        "relative overflow-hidden rounded-xl bg-[#E2E8F0]",
+        "relative overflow-hidden rounded-xl bg-[#E7EDF1]",
         "before:absolute before:inset-0",
         "before:-translate-x-full",
         "before:animate-[skeleton_1.4s_infinite]",
         "before:bg-gradient-to-r",
         "before:from-transparent",
-        "before:via-white/70",
+        "before:via-white/80",
         "before:to-transparent",
         className,
       ].join(" ")}

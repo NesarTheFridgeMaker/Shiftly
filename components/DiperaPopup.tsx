@@ -51,8 +51,8 @@ const variantStyles: Record<
   }
 > = {
   info: {
-    iconWrapper: "bg-[#EFF6FF]",
-    iconColor: "text-[#2563EB]",
+    iconWrapper: "bg-[#E7F5FC]",
+    iconColor: "text-[#168FD0]",
     defaultIcon: <Info className="h-6 w-6" />,
     confirmVariant: "primary",
   },
@@ -79,8 +79,8 @@ const variantStyles: Record<
   },
 
   upgrade: {
-    iconWrapper: "bg-[#EFF6FF]",
-    iconColor: "text-[#005CA8]",
+    iconWrapper: "bg-[#E7F5FC]",
+    iconColor: "text-[#168FD0]",
     defaultIcon: <Sparkles className="h-6 w-6" />,
     confirmVariant: "primary",
   },
@@ -133,9 +133,9 @@ export default function DiperaPopup({
       }
       aria-describedby="dipera-popup-message"
       onMouseDown={handleBackdropClick}
-      className="fixed inset-0 z-[110] flex items-center justify-center bg-[#0F172A]/40 p-4 backdrop-blur-sm sm:p-6"
+      className="fixed inset-0 z-[110] flex items-center justify-center bg-black/35 p-4 backdrop-blur-sm sm:p-6"
     >
-      <div className="w-full max-w-md overflow-hidden rounded-[30px] border border-[#E2E8F0] bg-white shadow-[0_30px_90px_rgba(15,23,42,0.22)]">
+      <div className="w-full max-w-md overflow-hidden rounded-[30px] bg-white shadow-[0_30px_90px_rgba(17,24,39,0.18)]">
         <div className="p-6 text-center sm:p-8">
           <div
             className={[
@@ -150,19 +150,19 @@ export default function DiperaPopup({
           {title && (
             <h2
               id="dipera-popup-title"
-              className="mt-5 text-2xl font-semibold tracking-[-0.03em] text-[#0F172A]"
+              className="mt-5 text-2xl font-bold tracking-[-0.03em] text-black"
             >
               {title}
             </h2>
           )}
 
           {highlight && (
-            <div className="mt-5 rounded-2xl border border-[#DBEAFE] bg-[#EFF6FF] px-4 py-4">
-              <p className="text-sm font-medium text-[#64748B]">
+            <div className="mt-5 rounded-[20px] bg-[#E7F5FC] px-4 py-4">
+              <p className="text-sm font-medium text-[#667085]">
                 Aktuelles Limit
               </p>
 
-              <p className="mt-1 text-2xl font-semibold tracking-[-0.03em] text-[#005CA8]">
+              <p className="mt-1 text-2xl font-bold tracking-[-0.03em] text-[#168FD0]">
                 {highlight}
               </p>
             </div>
@@ -171,7 +171,7 @@ export default function DiperaPopup({
           <p
             id="dipera-popup-message"
             className={[
-              "text-sm leading-6 text-[#64748B]",
+              "text-sm leading-6 text-[#667085]",
               title || highlight ? "mt-5" : "mt-4",
             ].join(" ")}
           >

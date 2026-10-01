@@ -1346,7 +1346,7 @@ if (
         description="Verwalte Unternehmensdaten, Arbeitstypen, Schichtvorlagen und Zuschläge."
       />
 
-      <div className="rounded-3xl border border-[#D7DEE8] bg-[#EEF2F6] p-4 shadow-[0_6px_18px_rgba(15,23,42,0.08)] md:p-5">
+      <div className="rounded-[30px] bg-[#F2F5F8] p-5 md:p-6">
         <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-4">
           <StatCard
             title="Arbeitstypen"
@@ -1391,8 +1391,8 @@ if (
           />
         </div>
 
-        <div className="mt-6 flex flex-col gap-3 border-t border-[#E2E8F0] pt-5 md:flex-row md:items-center md:justify-between">
-          <p className="text-sm leading-6 text-[#64748B]">
+        <div className="mt-6 flex flex-col gap-3 border-t border-black/[0.06] pt-5 md:flex-row md:items-center md:justify-between">
+          <p className="text-sm leading-6 text-[#667085]">
             DATEV-Einstellungen werden zentral unter Abrechnung verwaltet.
           </p>
 
@@ -1423,15 +1423,15 @@ if (
         }
       >
         {showLocationEditor && (
-          <div className="mb-6 rounded-3xl border border-[#CBD5E1] bg-[#EEF2F6] p-4 shadow-[0_8px_22px_rgba(15,23,42,0.09)] md:p-6">
+          <div className="mb-6 rounded-[26px] bg-[#E7EDF1] p-5 md:p-6">
             <div className="mb-6">
-              <h3 className="text-xl font-semibold text-[#0F172A]">
+              <h3 className="text-xl font-semibold text-black">
                 {editingLocation
                   ? "Betriebsstandort bearbeiten"
                   : "Betriebsstandort hinzufügen"}
               </h3>
 
-              <p className="mt-2 text-sm leading-6 text-[#64748B]">
+              <p className="mt-2 text-sm leading-6 text-[#667085]">
                 Lege den Mittelpunkt und den erlaubten Radius für die mobile
                 Zeiterfassung fest.
               </p>
@@ -1452,17 +1452,17 @@ if (
             businessLocations.map((location) => (
               <div
                 key={location.id}
-                className="rounded-3xl border border-[#CBD5E1] bg-[#F8FAFC] p-5 shadow-[0_8px_22px_rgba(15,23,42,0.10)] transition hover:-translate-y-0.5 hover:border-[#B8C4D1] hover:shadow-[0_14px_34px_rgba(15,23,42,0.14)]"
+                className="rounded-[24px] bg-[#E7EDF1] p-5 transition-colors hover:bg-[#E1E8ED]"
               >
                 <div className="flex flex-col gap-5">
                   <div className="flex items-start gap-3">
-                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[#EFF6FF] text-[#005CA8]">
+                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[#E7F5FC] text-[#31AEF0]">
                       <MapPin className="h-5 w-5" />
                     </div>
 
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
-                        <p className="text-base font-semibold text-[#0F172A]">
+                        <p className="text-base font-semibold text-black">
                           {location.name}
                         </p>
 
@@ -1474,24 +1474,24 @@ if (
                         </Badge>
                       </div>
 
-                      <p className="mt-2 text-sm leading-6 text-[#64748B]">
+                      <p className="mt-2 text-sm leading-6 text-[#667085]">
                         {location.address ||
                           "Keine postalische Adresse hinterlegt"}
                       </p>
 
                       <div className="mt-3 flex flex-wrap gap-2">
-                        <span className="rounded-full bg-[#E9EEF4] px-3 py-1 text-xs font-medium text-[#64748B]">
+                        <span className="rounded-full bg-white px-3 py-1 text-xs font-medium text-[#667085]">
                           Radius {location.radius_meters} m
                         </span>
 
-                        <span className="rounded-full bg-[#E9EEF4] px-3 py-1 text-xs font-medium text-[#64748B]">
+                        <span className="rounded-full bg-white px-3 py-1 text-xs font-medium text-[#667085]">
                           {location.timezone}
                         </span>
                       </div>
                     </div>
                   </div>
 
-                  <div className="flex flex-col gap-2 border-t border-[#E2E8F0] pt-4 sm:flex-row sm:flex-wrap">
+                  <div className="flex flex-col gap-2 border-t border-black/[0.06] pt-4 sm:flex-row sm:flex-wrap">
                     <Button
                       type="button"
                       variant="secondary"
@@ -1530,16 +1530,16 @@ if (
               </div>
             ))
           ) : (
-            <div className="rounded-3xl border border-dashed border-[#B8C4D1] bg-[#EEF2F6] px-6 py-10 text-center shadow-[0_4px_14px_rgba(15,23,42,0.05)] xl:col-span-2">
-              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-[#EFF6FF] text-[#005CA8]">
+            <div className="rounded-[24px] bg-[#E7EDF1] px-6 py-10 text-center xl:col-span-2">
+              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-[#E7F5FC] text-[#31AEF0]">
                 <MapPin className="h-5 w-5" />
               </div>
 
-              <p className="mt-4 text-base font-semibold text-[#0F172A]">
+              <p className="mt-4 text-base font-semibold text-black">
                 Noch kein Betriebsstandort
               </p>
 
-              <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-[#64748B]">
+              <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-[#667085]">
                 Füge einen Standort hinzu, damit die mobile GPS-Zeiterfassung
                 eingerichtet werden kann.
               </p>
@@ -1587,7 +1587,7 @@ if (
                 return (
                 <div
                   key={type.id}
-                  className="flex flex-col gap-3 rounded-2xl border border-[#CBD5E1] bg-[#EEF2F6] p-4 shadow-[0_5px_14px_rgba(15,23,42,0.07)] transition hover:border-[#B8C4D1] hover:shadow-[0_8px_18px_rgba(15,23,42,0.10)] md:flex-row md:items-center md:justify-between"
+                  className="flex flex-col gap-3 rounded-[22px] bg-[#E7EDF1] p-4 transition-colors hover:bg-[#E1E8ED] md:flex-row md:items-center md:justify-between"
                 >
                   <div className="flex items-center gap-3">
                     <div
@@ -1602,10 +1602,10 @@ if (
                     </div>
 
                     <div>
-                      <p className="text-sm font-semibold text-[#0F172A]">
+                      <p className="text-sm font-semibold text-black">
                         {type.name}
                       </p>
-                      <p className="mt-0.5 text-xs text-[#64748B]">
+                      <p className="mt-0.5 text-xs text-[#667085]">
                         In der Schichtplanung auswählbar
                       </p>
                     </div>
@@ -1627,7 +1627,7 @@ if (
                 );
               })
             ) : (
-              <div className="rounded-2xl border border-dashed border-[#CBD5E1] bg-[#F8FAFC] p-5 text-sm leading-6 text-[#64748B]">
+              <div className="rounded-[22px] bg-[#E7EDF1] p-5 text-sm leading-6 text-[#667085]">
                 Noch keine Arbeitstypen vorhanden. Lege zuerst deine wichtigsten
                 Arbeitsbereiche an.
               </div>
@@ -1703,19 +1703,19 @@ if (
               visibleShiftTemplates.map((template) => (
                 <div
                   key={template.id}
-                  className="flex flex-col gap-3 rounded-2xl border border-[#CBD5E1] bg-[#EEF2F6] p-4 shadow-[0_5px_14px_rgba(15,23,42,0.07)] transition hover:border-[#B8C4D1] hover:shadow-[0_8px_18px_rgba(15,23,42,0.10)] md:flex-row md:items-center md:justify-between"
+                  className="flex flex-col gap-3 rounded-[22px] bg-[#E7EDF1] p-4 transition-colors hover:bg-[#E1E8ED] md:flex-row md:items-center md:justify-between"
                 >
                   <div>
-                    <p className="text-sm font-semibold text-[#0F172A]">
+                    <p className="text-sm font-semibold text-black">
                       {template.name}
                     </p>
-                    <p className="mt-1 text-sm text-[#64748B]">
+                    <p className="mt-1 text-sm text-[#667085]">
                       {template.start_time.slice(0, 5)} –{" "}
                       {template.end_time.slice(0, 5)}
                     </p>
 
                       {template.planned_break_minutes > 0 && (
-                      <p className="mt-1 text-xs text-[#64748B]">
+                      <p className="mt-1 text-xs text-[#667085]">
                         Pause: {template.planned_break_minutes} Min.
                       </p>
                     )}
@@ -1737,7 +1737,7 @@ if (
                 </div>
               ))
             ) : (
-              <div className="rounded-2xl border border-dashed border-[#CBD5E1] bg-[#F8FAFC] p-5 text-sm leading-6 text-[#64748B]">
+              <div className="rounded-[22px] bg-[#E7EDF1] p-5 text-sm leading-6 text-[#667085]">
                 Noch keine Schichtvorlagen vorhanden. Vorlagen beschleunigen die
                 Wochenplanung deutlich.
               </div>
@@ -1777,17 +1777,17 @@ if (
       >
         <div
           id="pay-rule-editor"
-          className="scroll-mt-24 rounded-3xl border border-[#CBD5E1] bg-[#EEF2F6] p-5 shadow-[0_8px_22px_rgba(15,23,42,0.09)] md:p-6"
+          className="scroll-mt-24 rounded-[26px] bg-[#E7EDF1] p-5 md:p-6"
         >
           <div className="mb-6 flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
             <div>
-              <h3 className="text-base font-semibold text-[#0F172A]">
+              <h3 className="text-base font-semibold text-black">
                 {editingPayRuleId
                   ? "Zuschlagsregel bearbeiten"
                   : "Neue Zuschlagsregel"}
               </h3>
 
-              <p className="mt-1 max-w-3xl text-sm leading-6 text-[#64748B]">
+              <p className="mt-1 max-w-3xl text-sm leading-6 text-[#667085]">
                 Beispiele: 25 % Nachtzuschlag von 22:00–06:00 Uhr,
                 20 % samstags oder 15 % werktags von 20:00–23:00 Uhr.
                 Regeln derselben Konfliktgruppe konkurrieren über ihre Priorität.
@@ -1860,7 +1860,7 @@ if (
                 <p className="text-xs font-medium uppercase tracking-wide text-[#94A3B8]">
                   Wochentag
                 </p>
-                <p className="mt-1 text-sm font-semibold text-[#0F172A]">
+                <p className="mt-1 text-sm font-semibold text-black">
                   Sonntag
                 </p>
               </div>
@@ -1888,7 +1888,7 @@ if (
                 <p className="text-xs font-medium uppercase tracking-wide text-[#94A3B8]">
                   Gültigkeit
                 </p>
-                <p className="mt-1 text-sm font-semibold text-[#0F172A]">
+                <p className="mt-1 text-sm font-semibold text-black">
                   Ganztägig an gesetzlichen Feiertagen
                 </p>
               </div>
@@ -1949,8 +1949,8 @@ if (
             />
           </div>
 
-          <div className="mt-5 flex flex-col gap-3 border-t border-[#E2E8F0] pt-5 sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-sm leading-6 text-[#64748B]">
+          <div className="mt-5 flex flex-col gap-3 border-t border-black/[0.06] pt-5 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm leading-6 text-[#667085]">
               Innerhalb derselben Konfliktgruppe gewinnt die Regel mit der
               höheren Priorität. Bei gleicher Priorität entscheidet der höhere
               Prozentsatz.
@@ -1975,13 +1975,13 @@ if (
             payRules.map((rule) => (
               <div
                 key={rule.id}
-                className="rounded-3xl border border-[#CBD5E1] bg-[#F8FAFC] p-5 shadow-[0_8px_22px_rgba(15,23,42,0.10)] transition hover:-translate-y-0.5 hover:border-[#B8C4D1] hover:shadow-[0_14px_34px_rgba(15,23,42,0.14)]"
+                className="rounded-[24px] bg-[#E7EDF1] p-5 transition-colors hover:bg-[#E1E8ED]"
               >
                 <div className="flex h-full flex-col gap-4">
                   <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
-                        <p className="text-base font-semibold text-[#0F172A]">
+                        <p className="text-base font-semibold text-black">
                           {rule.name}
                         </p>
 
@@ -1997,17 +1997,17 @@ if (
                         </Badge>
                       </div>
 
-                      <div className="mt-3 flex flex-wrap gap-2 text-sm text-[#64748B]">
-                        <span className="rounded-full bg-[#E9EEF4] px-3 py-1">
+                      <div className="mt-3 flex flex-wrap gap-2 text-sm text-[#667085]">
+                        <span className="rounded-full bg-white px-3 py-1">
                           {rule.percentage}% Zuschlag
                         </span>
 
                         {rule.rule_type === "holiday" ? (
-                          <span className="rounded-full bg-[#E9EEF4] px-3 py-1">
+                          <span className="rounded-full bg-white px-3 py-1">
                             Gesetzliche Feiertage
                           </span>
                         ) : (
-                          <span className="rounded-full bg-[#E9EEF4] px-3 py-1">
+                          <span className="rounded-full bg-white px-3 py-1">
                             {rule.rule_type === "sunday"
                               ? "Sonntag"
                               : formatWeekday(rule.weekday)}
@@ -2015,32 +2015,32 @@ if (
                         )}
 
                         {rule.starts_at && rule.ends_at ? (
-                          <span className="rounded-full bg-[#E9EEF4] px-3 py-1">
+                          <span className="rounded-full bg-white px-3 py-1">
                             {rule.starts_at.slice(0, 5)} –{" "}
                             {rule.ends_at.slice(0, 5)}
                           </span>
                         ) : (
-                          <span className="rounded-full bg-[#E9EEF4] px-3 py-1">
+                          <span className="rounded-full bg-white px-3 py-1">
                             Ganztägig
                           </span>
                         )}
 
-                        <span className="rounded-full bg-[#E9EEF4] px-3 py-1">
+                        <span className="rounded-full bg-white px-3 py-1">
                           Priorität {rule.priority ?? 0}
                         </span>
 
-                        <span className="rounded-full bg-[#E9EEF4] px-3 py-1">
+                        <span className="rounded-full bg-white px-3 py-1">
                           Gruppe: {rule.conflict_group}
                         </span>
 
-                        <span className="rounded-full bg-[#E9EEF4] px-3 py-1">
+                        <span className="rounded-full bg-white px-3 py-1">
                           {rule.stack_with_other_rule_types
                             ? "Kombinierbar"
                             : "Nicht kombinierbar"}
                         </span>
 
                         {rule.datev_wage_type && (
-                          <span className="rounded-full bg-[#E9EEF4] px-3 py-1">
+                          <span className="rounded-full bg-white px-3 py-1">
                             DATEV {rule.datev_wage_type}
                           </span>
                         )}
@@ -2048,7 +2048,7 @@ if (
                     </div>
                   </div>
 
-                  <div className="mt-auto flex flex-col gap-2 border-t border-[#E2E8F0] pt-4 sm:flex-row sm:flex-wrap">
+                  <div className="mt-auto flex flex-col gap-2 border-t border-black/[0.06] pt-4 sm:flex-row sm:flex-wrap">
                     <Button
                       type="button"
                       variant="secondary"
@@ -2086,7 +2086,7 @@ if (
               </div>
             ))
           ) : (
-            <div className="rounded-2xl border border-dashed border-[#CBD5E1] bg-[#F8FAFC] p-6 text-sm leading-6 text-[#64748B] xl:col-span-2">
+            <div className="rounded-[22px] bg-[#E7EDF1] p-6 text-sm leading-6 text-[#667085] xl:col-span-2">
               Noch keine Zuschlagsregeln vorhanden. Du kannst Regeln frei nach
               Wochentag, Zeitfenster oder Feiertag definieren.
             </div>

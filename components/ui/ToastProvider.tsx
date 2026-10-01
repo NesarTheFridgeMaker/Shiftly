@@ -60,9 +60,9 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     },
     info: {
       icon: "i",
-      bg: "bg-[#EFF6FF]",
-      text: "text-[#2563EB]",
-      accent: "bg-[#2563EB]",
+      bg: "bg-[#E7F5FC]",
+      text: "text-[#168FD0]",
+      accent: "bg-[#31AEF0]",
     },
   };
 
@@ -79,35 +79,37 @@ export function ToastProvider({ children }: { children: ReactNode }) {
               key={toast.id}
               type="button"
               onClick={() => removeToast(toast.id)}
-              className="group relative overflow-hidden rounded-3xl border border-[#E2E8F0] bg-white p-4 text-left shadow-[0_18px_50px_rgba(15,23,42,0.16)] transition-all duration-200 ease-out animate-[fadeIn_.18s_ease-out] hover:-translate-y-0.5 hover:shadow-[0_22px_60px_rgba(15,23,42,0.20)]"
+              className="group relative overflow-hidden rounded-[24px] bg-white p-4 text-left shadow-[0_18px_50px_rgba(17,24,39,0.14)] transition-colors duration-200 animate-[fadeIn_.18s_ease-out] hover:bg-[#F2F5F8]"
             >
-              <div className={`absolute left-0 top-0 h-full w-1 ${style.accent}`} />
+              <div
+                className={`absolute left-0 top-0 h-full w-1 ${style.accent}`}
+              />
 
               <div className="flex gap-3 pl-2">
                 <div
-                  className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl text-sm font-semibold ${style.bg} ${style.text}`}
+                  className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl text-sm font-bold ${style.bg} ${style.text}`}
                 >
                   {style.icon}
                 </div>
 
                 <div className="min-w-0 pr-4">
-                  <p className="text-sm font-semibold text-[#0F172A]">
+                  <p className="text-sm font-bold text-black">
                     {toast.title}
                   </p>
 
                   {toast.description && (
-                    <p className="mt-1 text-sm leading-5 text-[#64748B]">
+                    <p className="mt-1 text-sm leading-5 text-[#667085]">
                       {toast.description}
                     </p>
                   )}
                 </div>
 
-                <span className="ml-auto text-sm text-[#94A3B8] opacity-0 transition group-hover:opacity-100">
+                <span className="ml-auto text-sm text-[#8A94A3] opacity-0 transition group-hover:opacity-100">
                   ×
                 </span>
               </div>
 
-              <div className="absolute bottom-0 left-0 h-1 w-full bg-[#F1F5F9]">
+              <div className="absolute bottom-0 left-0 h-1 w-full bg-[#E7EDF1]">
                 <div
                   className={`h-full ${style.accent} animate-[toastProgress_4s_linear_forwards]`}
                 />

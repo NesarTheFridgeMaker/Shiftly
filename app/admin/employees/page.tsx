@@ -242,7 +242,7 @@ function EmployeeDetailIcon({ name }: { name: EmployeeDetailIconName }) {
   };
 
   return (
-    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#F8FAFC] text-[#64748B]">
+    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#F2F5F8] text-[#667085]">
       <svg viewBox="0 0 24 24" aria-hidden="true" className="h-[18px] w-[18px]">
         {name === "calendar" && (
           <>
@@ -2212,11 +2212,11 @@ export default function EmployeesPage() {
 
   function renderNotes(employee: EmployeeWithTargetHours) {
     return (
-      <div className="mt-4 rounded-2xl border border-[#E2E8F0] bg-white p-4">
+      <div className="mt-4 rounded-[22px] bg-white p-4">
         <div className="mb-3 flex items-start justify-between gap-3">
           <div>
-            <h4 className="font-semibold text-[#0F172A]">Interne Notizen</h4>
-            <p className="mt-1 text-sm text-[#64748B]">
+            <h4 className="font-semibold text-[#000000]">Interne Notizen</h4>
+            <p className="mt-1 text-sm text-[#667085]">
               Hinweise für Planung, Verfügbarkeit oder Besonderheiten.
             </p>
           </div>
@@ -2255,14 +2255,14 @@ export default function EmployeesPage() {
             {employee.notes.map((note) => (
               <div
                 key={note.id}
-                className="rounded-2xl border border-[#D7DEE8] bg-[#EEF2F6] p-4 shadow-[0_4px_12px_rgba(15,23,42,0.07)] transition hover:border-[#B8C4D1] hover:shadow-[0_6px_16px_rgba(15,23,42,0.10)]"
+                className="rounded-[22px] bg-[#E7EDF1] p-4 shadow-[0_4px_12px_rgba(15,23,42,0.07)] transition hover:border-[#B8C4D1] hover:shadow-[0_6px_16px_rgba(15,23,42,0.10)]"
               >
-                <p className="whitespace-pre-wrap text-sm leading-6 text-[#0F172A]">
+                <p className="whitespace-pre-wrap text-sm leading-6 text-[#000000]">
                   {note.note}
                 </p>
 
                 <div className="mt-3 flex items-center justify-between gap-3">
-                  <span className="text-xs text-[#64748B]">
+                  <span className="text-xs text-[#667085]">
                     {formatNoteDate(note.created_at)}
                   </span>
 
@@ -2279,7 +2279,7 @@ export default function EmployeesPage() {
             ))}
           </div>
         ) : (
-          <p className="rounded-2xl border border-dashed border-[#CBD5E1] bg-[#F8FAFC] px-4 py-5 text-center text-sm text-[#64748B]">
+          <p className="rounded-2xl border border-dashed border-[#D7E0E6] bg-[#F2F5F8] px-4 py-5 text-center text-sm text-[#667085]">
             Noch keine Notizen vorhanden.
           </p>
         )}
@@ -3291,8 +3291,8 @@ export default function EmployeesPage() {
         description="Alle aktiven Mitarbeiter deines Betriebs."
       >
         {showForm && (
-          <div className="mb-6 rounded-3xl border border-[#D7DEE8] bg-[#EEF2F6] p-4 shadow-[0_6px_18px_rgba(15,23,42,0.08)] md:p-6">
-            <h2 className="mb-4 text-2xl font-semibold tracking-[-0.02em] text-[#0F172A]">
+          <div className="mb-6 rounded-3xl border border-[#DDE4E9] bg-[#E7EDF1] p-4 shadow-[0_6px_18px_rgba(15,23,42,0.08)] md:p-6">
+            <h2 className="mb-4 text-2xl font-semibold tracking-[-0.02em] text-[#000000]">
               Neuer Mitarbeiter
             </h2>
 
@@ -3421,7 +3421,7 @@ export default function EmployeesPage() {
 
               {newWorkdayPattern === "fixed" && (
                 <div className="md:col-span-2 xl:col-span-2">
-                  <p className="mb-2 text-sm font-medium text-[#334155]">
+                  <p className="mb-2 text-sm font-medium text-[#323542]">
                     Regelmäßige Arbeitstage
                   </p>
                   <div className="flex flex-wrap gap-2">
@@ -3442,8 +3442,8 @@ export default function EmployeesPage() {
                           className={[
                             "rounded-xl border px-3 py-2 text-sm font-semibold transition",
                             active
-                              ? "border-[#005CA8] bg-[#E8F2FB] text-[#005CA8]"
-                              : "border-[#CBD5E1] bg-white text-[#475569] hover:border-[#94A3B8]",
+                              ? "border-[#168FD0] bg-[#E8F2FB] text-[#168FD0]"
+                              : "border-[#D7E0E6] bg-white text-[#4D5562] hover:border-[#8A94A3]",
                           ].join(" ")}
                         >
                           {day.label}
@@ -3451,7 +3451,7 @@ export default function EmployeesPage() {
                       );
                     })}
                   </div>
-                  <p className="mt-2 text-xs text-[#64748B]">
+                  <p className="mt-2 text-xs text-[#667085]">
                     {newRegularWorkdays.length} Arbeitstag(e) pro Woche
                   </p>
                 </div>
@@ -3852,7 +3852,7 @@ export default function EmployeesPage() {
                 viewBox="0 0 24 24"
                 fill="none"
                 aria-hidden="true"
-                className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-[#94A3B8]"
+                className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-[#8A94A3]"
               >
                 <path
                   d="m21 21-4.35-4.35m2.35-5.15a7.5 7.5 0 1 1-15 0 7.5 7.5 0 0 1 15 0Z"
@@ -3869,11 +3869,11 @@ export default function EmployeesPage() {
                 placeholder="Mitarbeiter nach Name, Rolle oder PIN suchen..."
                 className={[
                   "h-12 w-full rounded-2xl border border-transparent bg-[#E9EEF4]",
-                  "pl-12 pr-12 text-sm text-[#0F172A] outline-none",
-                  "placeholder:text-[#64748B]",
+                  "pl-12 pr-12 text-sm text-[#000000] outline-none",
+                  "placeholder:text-[#667085]",
                   "transition hover:bg-[#E3E9F0]",
                   "focus:border-[#60A5FA] focus:bg-white",
-                  "focus:ring-4 focus:ring-[#DBEAFE]",
+                  "focus:ring-4 focus:ring-[#DDF3FD]",
                 ].join(" ")}
               />
 
@@ -3882,7 +3882,7 @@ export default function EmployeesPage() {
                   type="button"
                   onClick={() => setEmployeeSearch("")}
                   aria-label="Suche zurücksetzen"
-                  className="absolute right-3 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-lg text-[#64748B] transition hover:bg-[#F1F5F9] hover:text-[#0F172A]"
+                  className="absolute right-3 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-lg text-[#667085] transition hover:bg-[#E7EDF1] hover:text-[#000000]"
                 >
                   <svg
                     viewBox="0 0 20 20"
@@ -3902,7 +3902,7 @@ export default function EmployeesPage() {
             </div>
 
             {employeeSearch && (
-              <p className="mt-2 text-sm text-[#64748B]">
+              <p className="mt-2 text-sm text-[#667085]">
                 {filteredActiveEmployees.length === 1
                   ? "1 Mitarbeiter gefunden"
                   : `${filteredActiveEmployees.length} Mitarbeiter gefunden`}
@@ -3912,12 +3912,12 @@ export default function EmployeesPage() {
         )}
 
         {activeEmployees.length === 0 ? (
-          <div className="rounded-3xl border border-dashed border-[#B8C4D1] bg-[#EEF2F6] px-6 py-12 text-center shadow-[0_4px_14px_rgba(15,23,42,0.05)]">
-            <h3 className="text-xl font-semibold text-[#0F172A]">
+          <div className="rounded-3xl border border-dashed border-[#B8C4D1] bg-[#E7EDF1] px-6 py-12 text-center shadow-[0_4px_14px_rgba(15,23,42,0.05)]">
+            <h3 className="text-xl font-semibold text-[#000000]">
               Noch keine Mitarbeiter vorhanden
             </h3>
 
-            <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-[#64748B]">
+            <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-[#667085]">
               Lege deinen ersten Mitarbeiter an, um Schichten zu planen,
               Arbeitszeiten zu erfassen und Einladungen zu versenden.
             </p>
@@ -3933,8 +3933,8 @@ export default function EmployeesPage() {
             </div>
           </div>
         ) : filteredActiveEmployees.length === 0 ? (
-          <div className="rounded-3xl border border-dashed border-[#B8C4D1] bg-[#EEF2F6] px-6 py-12 text-center shadow-[0_4px_14px_rgba(15,23,42,0.05)]">
-            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-[#E8F2FB] text-[#005CA8]">
+          <div className="rounded-3xl border border-dashed border-[#B8C4D1] bg-[#E7EDF1] px-6 py-12 text-center shadow-[0_4px_14px_rgba(15,23,42,0.05)]">
+            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-[#E8F2FB] text-[#168FD0]">
               <svg
                 viewBox="0 0 24 24"
                 fill="none"
@@ -3950,11 +3950,11 @@ export default function EmployeesPage() {
               </svg>
             </div>
 
-            <h3 className="mt-4 text-xl font-semibold text-[#0F172A]">
+            <h3 className="mt-4 text-xl font-semibold text-[#000000]">
               Kein Mitarbeiter gefunden
             </h3>
 
-            <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-[#64748B]">
+            <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-[#667085]">
               Zu „{employeeSearch}“ wurde kein passender aktiver Mitarbeiter
               gefunden.
             </p>
@@ -3977,7 +3977,7 @@ export default function EmployeesPage() {
                 : "grid gap-5"
             }
           >
-            <div className="rounded-[22px] border border-[#E2E8F0] bg-[#F8FAFC] p-3 sm:p-4">
+            <div className="rounded-[24px] bg-white p-3 sm:p-4">
               <div
                 className={
                   selectedEmployee
@@ -4017,79 +4017,90 @@ export default function EmployeesPage() {
                         setEmployeeDetailTab("overview");
                       }}
                       className={[
-                        "group w-full rounded-[18px] border bg-white p-4 text-left transition-all",
+                        "group relative w-full overflow-hidden rounded-[24px] bg-[#E7EDF1] p-5 text-left transition-all",
                         selected
-                          ? "border-[#93C5FD] shadow-[0_8px_24px_rgba(15,23,42,0.08)] ring-2 ring-[#DBEAFE]"
-                          : "border-[#E2E8F0] shadow-[0_3px_12px_rgba(15,23,42,0.04)] hover:border-[#CBD5E1] hover:shadow-[0_8px_22px_rgba(15,23,42,0.07)]",
+                          ? "ring-2 ring-[#31AEF0]/35"
+                          : "hover:bg-[#E1E8ED]",
                       ].join(" ")}
                     >
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="flex min-w-0 items-center gap-3">
-                          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#EFF6FF] text-sm font-bold text-[#2563EB]">
-                            {getEmployeeInitials(employee.name)}
-                          </div>
-                          <div className="min-w-0">
-                            <p className="truncate font-semibold text-[#0F172A]">
-                              {employee.name}
-                            </p>
-                            <p className="mt-0.5 truncate text-sm text-[#64748B]">
-                              {employee.role}
-                            </p>
+                      <div className="flex items-start gap-4">
+                        <span
+                          aria-hidden="true"
+                          className={[
+                            "mt-1 h-[72px] w-1.5 shrink-0 rounded-full",
+                            inviteOpen
+                              ? "bg-[#F59E0B]"
+                              : isActive
+                                ? "bg-[#58C49A]"
+                                : "bg-[#AAB4C0]",
+                          ].join(" ")}
+                        />
+
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <p className="truncate text-xl font-bold leading-tight tracking-[-0.025em] text-black">
+                                {employee.name}
+                              </p>
+                              <p className="mt-1 truncate text-sm text-[#667085]">
+                                {employee.role}
+                              </p>
+                            </div>
+
+                            <span
+                              className={[
+                                "inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold",
+                                inviteOpen
+                                  ? "bg-[#FFF7E8] text-[#B45309]"
+                                  : isActive
+                                    ? "bg-[#ECFDF3] text-[#047857]"
+                                    : "bg-[#E7EDF1] text-[#667085]",
+                              ].join(" ")}
+                            >
+                              <span
+                                className={[
+                                  "h-1.5 w-1.5 rounded-full",
+                                  inviteOpen
+                                    ? "bg-[#F59E0B]"
+                                    : isActive
+                                      ? "bg-[#10B981]"
+                                      : "bg-[#8A94A3]",
+                                ].join(" ")}
+                              />
+                              {inviteOpen
+                                ? "Einladung offen"
+                                : isActive
+                                  ? "Aktiv"
+                                  : "Inaktiv"}
+                            </span>
                           </div>
                         </div>
-
-                        <span
-                          className={[
-                            "inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold",
-                            inviteOpen
-                              ? "bg-[#FFF7E8] text-[#B45309]"
-                              : isActive
-                                ? "bg-[#ECFDF3] text-[#047857]"
-                                : "bg-[#F1F5F9] text-[#64748B]",
-                          ].join(" ")}
-                        >
-                          <span
-                            className={[
-                              "h-1.5 w-1.5 rounded-full",
-                              inviteOpen
-                                ? "bg-[#F59E0B]"
-                                : isActive
-                                  ? "bg-[#10B981]"
-                                  : "bg-[#94A3B8]",
-                            ].join(" ")}
-                          />
-                          {inviteOpen
-                            ? "Einladung offen"
-                            : isActive
-                              ? "Aktiv"
-                              : "Inaktiv"}
-                        </span>
                       </div>
 
-                      <div className="mt-5 space-y-3">
+                      <div className="mt-6 space-y-3 pl-[22px]">
                         <div className="flex items-start gap-3">
-                          <span className="mt-0.5 text-[#64748B]">◷</span>
+                          <span className="mt-0.5 text-[#667085]">◷</span>
                           <div>
-                            <p className="text-sm font-semibold text-[#0F172A]">
+                            <p className="text-sm font-normal text-[#323542]">
                               {targetLabel}
                             </p>
-                            <p className="text-xs text-[#94A3B8]">
+                            <p className="text-xs text-[#8A94A3]">
                               Sollstunden
                             </p>
                           </div>
                         </div>
                         <div className="flex items-start gap-3">
-                          <span className="mt-0.5 text-[#64748B]">◉</span>
+                          <span className="mt-0.5 text-[#667085]">◉</span>
                           <div>
-                            <p className="text-sm font-semibold text-[#0F172A]">
+                            <p className="text-sm font-normal text-[#323542]">
                               {wageLabel}
                             </p>
-                            <p className="text-xs text-[#94A3B8]">Vergütung</p>
+                            <p className="text-xs text-[#8A94A3]">Vergütung</p>
                           </div>
                         </div>
                       </div>
 
-                      <div className="mt-4 flex h-9 items-center justify-center rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] text-sm font-semibold text-[#334155] transition group-hover:bg-[#F1F5F9]">
+                      <div className="mt-5 ml-[22px] flex h-10 items-center justify-center rounded-xl bg-white text-sm font-semibold text-[#323542] transition-colors duration-200 group-hover:bg-[#F2F5F8] group-hover:text-[#31AEF0]">
                         Details anzeigen <span className="ml-2">→</span>
                       </div>
                     </button>
@@ -4116,16 +4127,16 @@ export default function EmployeesPage() {
 
             {selectedEmployee && (
               <aside className="xl:sticky xl:top-6 xl:self-start">
-                <div className="overflow-hidden rounded-[22px] border border-[#E2E8F0] bg-white shadow-[0_8px_28px_rgba(15,23,42,0.06)]">
+                <div className="overflow-hidden rounded-[22px] border border-[#DDE4E9] bg-white shadow-[0_8px_28px_rgba(15,23,42,0.06)]">
                   <div className="p-5">
                     <div className="flex items-start justify-between gap-4">
                       <div className="flex min-w-0 items-center gap-3">
-                        <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-[#EFF6FF] text-lg font-bold text-[#2563EB]">
+                        <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-[#E7F5FC] text-lg font-bold text-[#168FD0]">
                           {getEmployeeInitials(selectedEmployee.name)}
                         </div>
                         <div className="min-w-0">
                           <div className="flex flex-wrap items-center gap-2">
-                            <h3 className="truncate text-lg font-semibold text-[#0F172A]">
+                            <h3 className="truncate text-lg font-semibold text-[#000000]">
                               {selectedEmployee.name}
                             </h3>
                             <span className="inline-flex items-center gap-1.5 rounded-full bg-[#ECFDF3] px-2.5 py-1 text-xs font-semibold text-[#047857]">
@@ -4133,7 +4144,7 @@ export default function EmployeesPage() {
                               Aktiv
                             </span>
                           </div>
-                          <p className="mt-1 text-sm text-[#64748B]">
+                          <p className="mt-1 text-sm text-[#667085]">
                             {selectedEmployee.role}
                           </p>
                         </div>
@@ -4142,14 +4153,14 @@ export default function EmployeesPage() {
                         type="button"
                         onClick={() => setExpandedEmployeeId(null)}
                         aria-label="Mitarbeiterdetails schließen"
-                        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#F8FAFC] text-xl text-[#64748B] transition hover:bg-[#F1F5F9] hover:text-[#0F172A]"
+                        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#F2F5F8] text-xl text-[#667085] transition hover:bg-[#E7EDF1] hover:text-[#000000]"
                       >
                         ×
                       </button>
                     </div>
                   </div>
 
-                  <div className="flex border-b border-[#E2E8F0] px-4">
+                  <div className="flex border-b border-[#DDE4E9] px-4">
                     {(
                       [
                         ["overview", "Übersicht"],
@@ -4164,8 +4175,8 @@ export default function EmployeesPage() {
                         className={[
                           "border-b-2 px-3 py-3 text-sm font-medium transition",
                           employeeDetailTab === value
-                            ? "border-[#2563EB] text-[#2563EB]"
-                            : "border-transparent text-[#64748B] hover:text-[#334155]",
+                            ? "border-[#168FD0] text-[#168FD0]"
+                            : "border-transparent text-[#667085] hover:text-[#323542]",
                         ].join(" ")}
                       >
                         {label}
@@ -4175,17 +4186,17 @@ export default function EmployeesPage() {
 
                   {employeeDetailTab === "overview" && (
                     <div className="max-h-[62vh] overflow-y-auto p-5">
-                      <h4 className="text-sm font-semibold text-[#0F172A]">
+                      <h4 className="text-sm font-semibold text-[#000000]">
                         Persönliche Daten
                       </h4>
                       <div className="mt-4 space-y-3">
                         <div className="flex items-center gap-3">
                           <EmployeeDetailIcon name="calendar" />
                           <div className="min-w-0">
-                            <p className="text-xs text-[#94A3B8]">
+                            <p className="text-xs text-[#8A94A3]">
                               Geburtsdatum
                             </p>
-                            <p className="mt-0.5 text-sm font-medium text-[#334155]">
+                            <p className="mt-0.5 text-sm font-medium text-[#323542]">
                               {formatEmployeeDate(selectedEmployee.birth_date)}
                             </p>
                           </div>
@@ -4193,10 +4204,10 @@ export default function EmployeesPage() {
                         <div className="flex items-center gap-3">
                           <EmployeeDetailIcon name="badge" />
                           <div className="min-w-0">
-                            <p className="text-xs text-[#94A3B8]">
+                            <p className="text-xs text-[#8A94A3]">
                               Personalnummer
                             </p>
-                            <p className="mt-0.5 text-sm font-medium text-[#334155]">
+                            <p className="mt-0.5 text-sm font-medium text-[#323542]">
                               {selectedEmployee.datev_personnel_number || "–"}
                             </p>
                           </div>
@@ -4204,10 +4215,10 @@ export default function EmployeesPage() {
                         <div className="flex items-center gap-3">
                           <EmployeeDetailIcon name="calendar" />
                           <div className="min-w-0">
-                            <p className="text-xs text-[#94A3B8]">
+                            <p className="text-xs text-[#8A94A3]">
                               Eintrittsdatum
                             </p>
-                            <p className="mt-0.5 text-sm font-medium text-[#334155]">
+                            <p className="mt-0.5 text-sm font-medium text-[#323542]">
                               {formatEmployeeDate(
                                 selectedEmployee.employment_start_date,
                               )}
@@ -4217,10 +4228,10 @@ export default function EmployeesPage() {
                         <div className="flex items-center gap-3">
                           <EmployeeDetailIcon name="calendar" />
                           <div className="min-w-0">
-                            <p className="text-xs text-[#94A3B8]">
+                            <p className="text-xs text-[#8A94A3]">
                               Austrittsdatum
                             </p>
-                            <p className="mt-0.5 text-sm font-medium text-[#334155]">
+                            <p className="mt-0.5 text-sm font-medium text-[#323542]">
                               {formatEmployeeDate(
                                 selectedEmployee.employment_end_date,
                               )}
@@ -4229,16 +4240,16 @@ export default function EmployeesPage() {
                         </div>
                       </div>
 
-                      <div className="my-5 border-t border-[#E2E8F0]" />
-                      <h4 className="text-sm font-semibold text-[#0F172A]">
+                      <div className="my-5 border-t border-[#DDE4E9]" />
+                      <h4 className="text-sm font-semibold text-[#000000]">
                         Beschäftigung
                       </h4>
                       <div className="mt-4 space-y-3">
                         <div className="flex items-center gap-3">
                           <EmployeeDetailIcon name="user" />
                           <div className="min-w-0">
-                            <p className="text-xs text-[#94A3B8]">Rolle</p>
-                            <p className="mt-0.5 text-sm font-medium text-[#334155]">
+                            <p className="text-xs text-[#8A94A3]">Rolle</p>
+                            <p className="mt-0.5 text-sm font-medium text-[#323542]">
                               {selectedEmployee.role}
                             </p>
                           </div>
@@ -4246,10 +4257,10 @@ export default function EmployeesPage() {
                         <div className="flex items-center gap-3">
                           <EmployeeDetailIcon name="clock" />
                           <div className="min-w-0">
-                            <p className="text-xs text-[#94A3B8]">
+                            <p className="text-xs text-[#8A94A3]">
                               Arbeitszeitmodell
                             </p>
-                            <p className="mt-0.5 text-sm font-medium text-[#334155]">
+                            <p className="mt-0.5 text-sm font-medium text-[#323542]">
                               {employmentScopeLabel(
                                 selectedEmployee.employment_scope,
                               )}
@@ -4259,10 +4270,10 @@ export default function EmployeesPage() {
                         <div className="flex items-center gap-3">
                           <EmployeeDetailIcon name="clock" />
                           <div className="min-w-0">
-                            <p className="text-xs text-[#94A3B8]">
+                            <p className="text-xs text-[#8A94A3]">
                               Wochen-Soll
                             </p>
-                            <p className="mt-0.5 text-sm font-medium text-[#334155]">
+                            <p className="mt-0.5 text-sm font-medium text-[#323542]">
                               {selectedEmployee.weekly_target_hours} Std.
                             </p>
                           </div>
@@ -4270,10 +4281,10 @@ export default function EmployeesPage() {
                         <div className="flex items-center gap-3">
                           <EmployeeDetailIcon name="clock" />
                           <div className="min-w-0">
-                            <p className="text-xs text-[#94A3B8]">
+                            <p className="text-xs text-[#8A94A3]">
                               Monats-Soll
                             </p>
-                            <p className="mt-0.5 text-sm font-medium text-[#334155]">
+                            <p className="mt-0.5 text-sm font-medium text-[#323542]">
                               {selectedEmployee.monthly_target_hours} Std.
                             </p>
                           </div>
@@ -4281,8 +4292,8 @@ export default function EmployeesPage() {
                         <div className="flex items-center gap-3">
                           <EmployeeDetailIcon name="wallet" />
                           <div className="min-w-0">
-                            <p className="text-xs text-[#94A3B8]">Vergütung</p>
-                            <p className="mt-0.5 text-sm font-medium text-[#334155]">
+                            <p className="text-xs text-[#8A94A3]">Vergütung</p>
+                            <p className="mt-0.5 text-sm font-medium text-[#323542]">
                               {selectedEmployee.wage_type === "salary"
                                 ? `${formatEmployeeMoney(selectedEmployee.monthly_salary)} / Monat`
                                 : `${formatEmployeeMoney(selectedEmployee.hourly_rate)} / Std.`}
@@ -4292,8 +4303,8 @@ export default function EmployeesPage() {
                         <div className="flex items-center gap-3">
                           <EmployeeDetailIcon name="vacation" />
                           <div className="min-w-0">
-                            <p className="text-xs text-[#94A3B8]">Urlaub</p>
-                            <p className="mt-0.5 text-sm font-medium text-[#334155]">
+                            <p className="text-xs text-[#8A94A3]">Urlaub</p>
+                            <p className="mt-0.5 text-sm font-medium text-[#323542]">
                               {selectedEmployee.vacation_days_per_year} Tage /
                               Jahr
                             </p>
@@ -4390,7 +4401,7 @@ export default function EmployeesPage() {
         )}
 
         {inactiveEmployees.length > 0 && (
-          <div className="mt-8 border-t border-[#CBD5E1] pt-6">
+          <div className="mt-8 border-t border-[#D7E0E6] pt-6">
             <Button
               variant="secondary"
               type="button"
@@ -4406,15 +4417,15 @@ export default function EmployeesPage() {
                 {inactiveEmployees.map((employee) => (
                   <div
                     key={employee.id}
-                    className="rounded-2xl border border-[#D7DEE8] bg-[#EEF2F6] p-4 shadow-[0_4px_12px_rgba(15,23,42,0.07)] transition hover:border-[#B8C4D1] hover:shadow-[0_6px_16px_rgba(15,23,42,0.10)]"
+                    className="rounded-[22px] bg-[#E7EDF1] p-4 shadow-[0_4px_12px_rgba(15,23,42,0.07)] transition hover:border-[#B8C4D1] hover:shadow-[0_6px_16px_rgba(15,23,42,0.10)]"
                   >
                     <div className="flex items-center justify-between gap-4">
                       <div>
-                        <p className="font-semibold text-[#0F172A]">
+                        <p className="font-semibold text-[#000000]">
                           {employee.name}
                         </p>
 
-                        <p className="text-sm text-[#64748B]">
+                        <p className="text-sm text-[#667085]">
                           {employee.role}
                         </p>
                       </div>
@@ -4447,24 +4458,24 @@ export default function EmployeesPage() {
       />
 
       {createdEmployeeInvite && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#111827]/40 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-xl overflow-hidden rounded-3xl border border-[#E2E8F0] bg-white shadow-[0_24px_80px_rgba(15,23,42,0.18)]">
-            <div className="border-b border-[#E2E8F0] px-6 py-5">
-              <h2 className="text-2xl font-semibold tracking-[-0.02em] text-[#0F172A]">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-xl overflow-hidden rounded-[28px] bg-white shadow-[0_22px_70px_rgba(15,23,42,0.12)]">
+            <div className="border-b border-[#DDE4E9] px-6 py-5">
+              <h2 className="text-2xl font-bold tracking-[-0.025em] text-black">
                 Mitarbeiter einladen
               </h2>
-              <p className="mt-1 text-sm text-[#64748B]">
+              <p className="mt-1 text-sm text-[#667085]">
                 Versende die Einladung für {createdEmployeeInvite.employeeName}
                 per E-Mail, WhatsApp oder kopiere die Zugangsdaten.
               </p>
             </div>
 
             <div className="space-y-5 p-6">
-              <div className="rounded-2xl border border-[#DBEAFE] bg-[#EFF6FF] p-4">
-                <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[#64748B]">
+              <div className="rounded-2xl border border-[#DDF3FD] bg-[#E7F5FC] p-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[#667085]">
                   Einladungscode
                 </p>
-                <p className="mt-2 font-mono text-lg font-bold tracking-wide text-[#0F172A]">
+                <p className="mt-2 font-mono text-lg font-bold tracking-wide text-[#000000]">
                   {createdEmployeeInvite.inviteCode}
                 </p>
               </div>
@@ -4513,7 +4524,7 @@ export default function EmployeesPage() {
                 </Button>
               </div>
 
-              <p className="text-xs leading-5 text-[#64748B]">
+              <p className="text-xs leading-5 text-[#667085]">
                 Der Einladungscode wird über den Link automatisch übernommen.
                 Bei einer E-Mail-Einladung wird die hinterlegte E-Mail-Adresse
                 verwendet. Bei einer WhatsApp-Einladung gibt der Mitarbeiter
@@ -4521,7 +4532,7 @@ export default function EmployeesPage() {
               </p>
             </div>
 
-            <div className="flex justify-end border-t border-[#E2E8F0] px-6 py-5">
+            <div className="flex justify-end border-t border-[#DDE4E9] px-6 py-5">
               <Button
                 variant="secondary"
                 type="button"
@@ -4579,19 +4590,19 @@ export default function EmployeesPage() {
       />
 
       {editingLocationEmployee && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#111827]/40 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-xl overflow-hidden rounded-3xl border border-[#E2E8F0] bg-white shadow-[0_24px_80px_rgba(15,23,42,0.18)]">
-            <div className="border-b border-[#E2E8F0] px-6 py-5">
-              <h2 className="text-2xl font-semibold tracking-[-0.02em] text-[#0F172A]">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-xl overflow-hidden rounded-[30px] bg-white">
+            <div className="px-6 pb-4 pt-6 sm:px-7 sm:pt-7">
+              <h2 className="text-2xl font-bold tracking-[-0.025em] text-black">
                 Standortprüfung
               </h2>
 
-              <p className="mt-1 text-sm text-[#64748B]">
+              <p className="mt-1 text-sm text-[#667085]">
                 {editingLocationEmployee.name}
               </p>
             </div>
 
-            <div className="space-y-5 p-6">
+            <div className="mx-4 space-y-5 rounded-[24px] bg-[#F2F5F8] p-5 sm:mx-6 sm:p-6">
               <Select
                 label="Regel für die Zeiterfassung"
                 value={editLocationTrackingMode}
@@ -4617,8 +4628,8 @@ export default function EmployeesPage() {
                 ]}
               />
 
-              <div className="rounded-2xl border border-[#DBEAFE] bg-[#EFF6FF] p-4">
-                <p className="text-sm font-semibold text-[#0F172A]">
+              <div className="rounded-[18px] bg-[#E7F5FC] p-4">
+                <p className="text-sm font-semibold text-[#000000]">
                   {editLocationTrackingMode === "required" &&
                     "Stempeln ist nur innerhalb eines aktiven Betriebsstandorts möglich."}
 
@@ -4640,13 +4651,13 @@ export default function EmployeesPage() {
                 className="min-h-28"
               />
 
-              <p className="text-xs leading-5 text-[#64748B]">
+              <p className="text-xs leading-5 text-[#667085]">
                 Dieser Hinweis ist intern und wird bei erlaubten
                 Standortausnahmen zusammen mit der Stempelung protokolliert.
               </p>
             </div>
 
-            <div className="flex flex-col-reverse gap-3 border-t border-[#E2E8F0] px-6 py-5 sm:flex-row sm:justify-end">
+            <div className="flex flex-col-reverse gap-3 px-6 pb-6 pt-5 sm:flex-row sm:justify-end sm:px-7 sm:pb-7">
               <Button
                 variant="secondary"
                 type="button"
@@ -4674,20 +4685,20 @@ export default function EmployeesPage() {
       )}
 
       {editingPayrollEmployee && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#111827]/40 p-4 backdrop-blur-sm">
-          <div className="max-h-[92vh] w-full max-w-5xl overflow-y-auto rounded-3xl border border-[#E2E8F0] bg-white shadow-[0_24px_80px_rgba(15,23,42,0.18)]">
-            <div className="sticky top-0 z-10 border-b border-[#E2E8F0] bg-white px-6 py-5">
-              <h2 className="text-2xl font-semibold tracking-[-0.02em] text-[#0F172A]">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4 backdrop-blur-sm">
+          <div className="max-h-[92vh] w-full max-w-5xl overflow-y-auto rounded-[30px] bg-white">
+            <div className="sticky top-0 z-10 bg-white px-6 pb-4 pt-6 sm:px-7 sm:pt-7">
+              <h2 className="text-2xl font-bold tracking-[-0.025em] text-black">
                 Mitarbeiterdaten bearbeiten
               </h2>
-              <p className="mt-1 text-sm text-[#64748B]">
+              <p className="mt-1 text-sm text-[#667085]">
                 {editingPayrollEmployee.name}
               </p>
             </div>
 
-            <div className="space-y-8 p-6">
-              <div>
-                <h3 className="text-lg font-semibold text-[#0F172A]">
+            <div className="space-y-4 px-4 pb-4 sm:px-6 sm:pb-6">
+              <div className="rounded-[24px] bg-[#F2F5F8] p-5 sm:p-6">
+                <h3 className="text-lg font-semibold text-[#000000]">
                   Beschäftigungsdaten
                 </h3>
 
@@ -4784,7 +4795,7 @@ export default function EmployeesPage() {
 
                   {editWorkdayPattern === "fixed" && (
                     <div className="md:col-span-2 xl:col-span-2">
-                      <p className="mb-2 text-sm font-medium text-[#334155]">
+                      <p className="mb-2 text-sm font-medium text-[#323542]">
                         Regelmäßige Arbeitstage
                       </p>
                       <div className="flex flex-wrap gap-2">
@@ -4808,10 +4819,10 @@ export default function EmployeesPage() {
                                 )
                               }
                               className={[
-                                "rounded-xl border px-3 py-2 text-sm font-semibold transition",
+                                "rounded-xl px-3 py-2 text-sm font-semibold transition",
                                 active
-                                  ? "border-[#005CA8] bg-[#E8F2FB] text-[#005CA8]"
-                                  : "border-[#CBD5E1] bg-white text-[#475569] hover:border-[#94A3B8]",
+                                  ? "bg-[#E7F5FC] text-[#168FD0] ring-1 ring-[#31AEF0]/35"
+                                  : "bg-white text-[#4D5562] hover:bg-[#E7EDF1]",
                               ].join(" ")}
                             >
                               {day.label}
@@ -4819,7 +4830,7 @@ export default function EmployeesPage() {
                           );
                         })}
                       </div>
-                      <p className="mt-2 text-xs text-[#64748B]">
+                      <p className="mt-2 text-xs text-[#667085]">
                         {editRegularWorkdays.length} Arbeitstag(e) pro Woche
                       </p>
                     </div>
@@ -4838,8 +4849,8 @@ export default function EmployeesPage() {
                 </div>
               </div>
 
-              <div className="border-t border-[#E2E8F0] pt-6">
-                <h3 className="text-lg font-semibold text-[#0F172A]">
+              <div className="rounded-[24px] bg-[#F2F5F8] p-5 sm:p-6">
+                <h3 className="text-lg font-semibold text-[#000000]">
                   Vertrags- und Sollstunden
                 </h3>
 
@@ -4871,22 +4882,22 @@ export default function EmployeesPage() {
                   )}
 
                   {editTimeAccountPeriod === "none" && (
-                    <p className="text-sm text-[#64748B]">
+                    <p className="text-sm text-[#667085]">
                       Für Mitarbeiter ohne Arbeitszeitkonto ist keine
                       Zeitkonto-Sollperiode aktiv.
                     </p>
                   )}
                 </div>
 
-                <p className="mt-3 text-xs leading-5 text-[#64748B]">
+                <p className="mt-3 text-xs leading-5 text-[#667085]">
                   Wochen- und Monats-Sollstunden sind eigenständige
                   Vertragswerte und werden nicht automatisch ineinander
                   umgerechnet.
                 </p>
               </div>
 
-              <div className="border-t border-[#E2E8F0] pt-6">
-                <h3 className="text-lg font-semibold text-[#0F172A]">
+              <div className="rounded-[24px] bg-[#F2F5F8] p-5 sm:p-6">
+                <h3 className="text-lg font-semibold text-[#000000]">
                   Arbeitszeitkonto & Abwesenheiten
                 </h3>
 
@@ -5110,15 +5121,15 @@ export default function EmployeesPage() {
                   )}
                 </div>
 
-                <p className="mt-3 text-xs leading-5 text-[#64748B]">
+                <p className="mt-3 text-xs leading-5 text-[#667085]">
                   Der Startsaldo dient z. B. zur Übernahme bestehender Plus-
                   oder Minusstunden beim Wechsel aus einem anderen
                   Zeiterfassungssystem.
                 </p>
               </div>
 
-              <div className="border-t border-[#E2E8F0] pt-6">
-                <h3 className="text-lg font-semibold text-[#0F172A]">
+              <div className="rounded-[24px] bg-[#F2F5F8] p-5 sm:p-6">
+                <h3 className="text-lg font-semibold text-[#000000]">
                   Vergütung und DATEV
                 </h3>
 
@@ -5238,7 +5249,7 @@ export default function EmployeesPage() {
               </div>
             </div>
 
-            <div className="sticky bottom-0 flex flex-col-reverse gap-3 border-t border-[#E2E8F0] bg-white px-6 py-5 sm:flex-row sm:justify-end">
+            <div className="sticky bottom-0 flex flex-col-reverse gap-3 bg-white px-6 pb-6 pt-4 sm:flex-row sm:justify-end sm:px-7 sm:pb-7">
               <Button
                 variant="secondary"
                 type="button"

@@ -17,17 +17,17 @@ export default function PageHeader({
     <div className="mb-10 flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
       <div className="min-w-0">
         {eyebrow && (
-          <p className="mb-2 text-sm font-semibold uppercase tracking-[0.08em] text-[#2563EB]">
+          <p className="mb-3 inline-flex rounded-full bg-[#E7F5FC] px-3 py-1.5 text-xs font-bold uppercase tracking-[0.10em] text-[#168FD0]">
             {eyebrow}
           </p>
         )}
 
-        <h1 className="text-[2.6rem] leading-tight font-light tracking-[-0.04em] text-[#0F172A]">
+        <h1 className="text-[clamp(2.25rem,4vw,3.5rem)] font-bold leading-[1.05] tracking-[-0.05em] text-black">
           {title}
         </h1>
 
         {description && (
-          <p className="mt-3 max-w-3xl text-sm leading-7 text-[#64748B]">
+          <p className="mt-4 max-w-3xl text-[15px] leading-7 text-[#667085]">
             {description}
           </p>
         )}
