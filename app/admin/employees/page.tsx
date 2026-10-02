@@ -376,6 +376,8 @@ export default function EmployeesPage() {
   const [popupMessage, setPopupMessage] = useState("");
   const [showPopup, setShowPopup] = useState(false);
   const [employeeToDelete, setEmployeeToDelete] = useState<string | null>(null);
+  const [editPinValue, setEditPinValue] = useState("");
+  const [isSavingPin, setIsSavingPin] = useState(false);
 
   const [newEmployeeWageType, setNewEmployeeWageType] =
     useState<WageType>("hourly");
@@ -1701,6 +1703,91 @@ export default function EmployeesPage() {
         title: "WhatsApp konnte nicht geöffnet werden",
         description: "Bitte versuche es erneut.",
       });
+    }
+  }
+
+  async function handleSaveEmployeePin(employee: EmployeeWithTargetHours) {
+    const normalizedPin = editPinValue.replace(/\D/g, "").slice(0, 4);
+
+    if (!/^\d{4}$/.test(normalizedPin)) {
+      showToast({
+        type: "warning",
+        title: "Ungültige PIN",
+        description: "Die PIN muss genau 4 Zahlen haben.",
+      });
+      return;
+    }
+
+    if (normalizedPin === employee.pin) return;
+
+    const businessId = await getBusinessId();
+
+    if (!businessId) {
+      showToast({
+        type: "error",
+        title: "Betrieb nicht gefunden",
+        description: "Die PIN konnte nicht gespeichert werden.",
+      });
+      return;
+    }
+
+    setIsSavingPin(true);
+
+    try {
+      const { data: existingEmployeeWithPin, error: pinCheckError } =
+        await supabase
+          .from("employees")
+          .select("id")
+          .eq("business_id", businessId)
+          .eq("pin", normalizedPin)
+          .neq("id", employee.id)
+          .maybeSingle();
+
+      if (pinCheckError) {
+        console.error("PIN CHECK ERROR:", pinCheckError);
+        showToast({
+          type: "error",
+          title: "PIN konnte nicht geprüft werden",
+          description: "Bitte versuche es erneut.",
+        });
+        return;
+      }
+
+      if (existingEmployeeWithPin) {
+        showToast({
+          type: "warning",
+          title: "PIN bereits vergeben",
+          description: "Bitte wähle eine andere PIN.",
+        });
+        return;
+      }
+
+      const { error: updateError } = await supabase
+        .from("employees")
+        .update({ pin: normalizedPin })
+        .eq("id", employee.id)
+        .eq("business_id", businessId);
+
+      if (updateError) {
+        console.error("PIN UPDATE ERROR:", updateError);
+        showToast({
+          type: "error",
+          title: "PIN konnte nicht gespeichert werden",
+          description: updateError.message,
+        });
+        return;
+      }
+
+      await loadEmployees();
+      setEditPinValue(normalizedPin);
+
+      showToast({
+        type: "success",
+        title: "PIN gespeichert",
+        description: `Die PIN von ${employee.name} wurde aktualisiert.`,
+      });
+    } finally {
+      setIsSavingPin(false);
     }
   }
 
@@ -4015,6 +4102,7 @@ export default function EmployeesPage() {
                       onClick={() => {
                         setExpandedEmployeeId(employee.id);
                         setEmployeeDetailTab("overview");
+                        setEditPinValue(employee.pin);
                       }}
                       className={[
                         "group relative w-full overflow-hidden rounded-[24px] bg-[#E7EDF1] p-5 text-left transition-all",
@@ -4096,6 +4184,15 @@ export default function EmployeesPage() {
                               {wageLabel}
                             </p>
                             <p className="text-xs text-[#8A94A3]">Vergütung</p>
+                          </div>
+                        </div>
+                        <div className="flex items-start gap-3">
+                          <span className="mt-0.5 text-[#667085]">#</span>
+                          <div>
+                            <p className="font-mono text-sm font-semibold tracking-[0.12em] text-[#323542]">
+                              {employee.pin}
+                            </p>
+                            <p className="text-xs text-[#8A94A3]">Terminal-PIN</p>
                           </div>
                         </div>
                       </div>
@@ -4312,6 +4409,45 @@ export default function EmployeesPage() {
                         </div>
                       </div>
 
+                      <div className="my-5 border-t border-[#DDE4E9]" />
+                      <h4 className="text-sm font-semibold text-[#000000]">
+                        Terminal-PIN
+                      </h4>
+                      <p className="mt-1 text-xs leading-5 text-[#667085]">
+                        Diese 4-stellige PIN verwendet der Mitarbeiter am Terminal.
+                      </p>
+                      <div className="mt-3 flex items-end gap-2">
+                        <div className="min-w-0 flex-1">
+                          <Input
+                            label="PIN"
+                            type="text"
+                            inputMode="numeric"
+                            maxLength={4}
+                            value={editPinValue}
+                            disabled={isSavingPin}
+                            onChange={(event) => {
+                              const onlyNumbers = event.target.value.replace(/\D/g, "");
+                              setEditPinValue(onlyNumbers.slice(0, 4));
+                            }}
+                          />
+                        </div>
+                        <Button
+                          variant="secondary"
+                          type="button"
+                          loading={isSavingPin}
+                          disabled={
+                            isSavingPin ||
+                            editPinValue.length !== 4 ||
+                            editPinValue === selectedEmployee.pin
+                          }
+                          onClick={() =>
+                            void handleSaveEmployeePin(selectedEmployee)
+                          }
+                        >
+                          PIN speichern
+                        </Button>
+                      </div>
+
                       <div className="mt-6 grid gap-2">
                         {canEditPayroll && (
                           <Button
@@ -4363,6 +4499,23 @@ export default function EmployeesPage() {
                             Einladung erstellen
                           </Button>
                         ) : null}
+
+                        {selectedEmployee.invite &&
+                          !selectedEmployee.invite.used_at &&
+                          selectedEmployee.role !== "Owner" &&
+                          (selectedEmployee.role !== "Admin" ||
+                            currentUserRole === "owner") && (
+                            <Button
+                              variant="danger"
+                              type="button"
+                              fullWidth
+                              onClick={() =>
+                                setEmployeeToDelete(selectedEmployee.id)
+                              }
+                            >
+                              Mitarbeiter löschen
+                            </Button>
+                          )}
 
                         <Button
                           variant="secondary"
