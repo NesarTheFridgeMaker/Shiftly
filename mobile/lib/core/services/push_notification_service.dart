@@ -52,21 +52,18 @@ class PushNotificationService {
     if (settings.authorizationStatus == AuthorizationStatus.denied ||
         settings.authorizationStatus == AuthorizationStatus.notDetermined) {
       if (kDebugMode) {
-        debugPrint(
-          'PUSH: Benachrichtigungen nicht freigegeben.',
-        );
+        debugPrint('PUSH: Benachrichtigungen nicht freigegeben.');
       }
 
       return null;
     }
 
     /*
-     * Für iOS/macOS:
-     * Im Vordergrund dürfen Benachrichtigungen
-     * direkt vom Betriebssystem dargestellt werden.
+     * Auf Apple-Plattformen muss der APNs-Token verfügbar sein,
+     * bevor FCM-API-Aufrufe wie getToken() ausgeführt werden.
      *
-     * Unter Android zeigen wir sie über
-     * flutter_local_notifications.
+     * Direkt nach requestPermission() kann iOS noch etwas Zeit
+     * benötigen, bis der APNs-Token bereitsteht.
      */
     if (Platform.isIOS || Platform.isMacOS) {
       await _messaging.setForegroundNotificationPresentationOptions(
@@ -74,6 +71,19 @@ class PushNotificationService {
         badge: true,
         sound: true,
       );
+
+      final apnsTokenAvailable = await _waitForApnsToken();
+
+      if (!apnsTokenAvailable) {
+        if (kDebugMode) {
+          debugPrint(
+            'PUSH: APNs-Token wurde nicht rechtzeitig bereitgestellt.',
+          );
+        }
+
+        _initializeListeners();
+        return null;
+      }
     }
 
     final token = await _messaging.getToken();
@@ -82,15 +92,45 @@ class PushNotificationService {
       await _saveToken(token);
 
       if (kDebugMode) {
-        debugPrint(
-          'PUSH: FCM-Token erfolgreich registriert.',
-        );
+        debugPrint('PUSH: FCM-Token erfolgreich registriert.');
       }
+    } else if (kDebugMode) {
+      debugPrint('PUSH: Firebase hat keinen FCM-Token zurückgegeben.');
     }
 
     _initializeListeners();
 
     return token;
+  }
+
+  Future<bool> _waitForApnsToken() async {
+    const maxAttempts = 10;
+    const delay = Duration(milliseconds: 500);
+
+    for (var attempt = 1; attempt <= maxAttempts; attempt++) {
+      final apnsToken = await _messaging.getAPNSToken();
+
+      if (apnsToken != null && apnsToken.isNotEmpty) {
+        if (kDebugMode) {
+          debugPrint('PUSH: APNs-Token verfügbar.');
+        }
+
+        return true;
+      }
+
+      if (kDebugMode) {
+        debugPrint(
+          'PUSH: Warte auf APNs-Token '
+          '($attempt/$maxAttempts).',
+        );
+      }
+
+      if (attempt < maxAttempts) {
+        await Future<void>.delayed(delay);
+      }
+    }
+
+    return false;
   }
 
   Future<void> _initializeLocalNotifications() async {
@@ -102,8 +142,7 @@ class PushNotificationService {
       '@mipmap/ic_launcher',
     );
 
-    const darwinInitializationSettings =
-        DarwinInitializationSettings();
+    const darwinInitializationSettings = DarwinInitializationSettings();
 
     const initializationSettings = InitializationSettings(
       android: androidInitializationSettings,
@@ -142,9 +181,7 @@ class PushNotificationService {
     _localNotificationsInitialized = true;
 
     if (kDebugMode) {
-      debugPrint(
-        'PUSH: Lokaler High-Importance-Channel initialisiert.',
-      );
+      debugPrint('PUSH: Lokaler High-Importance-Channel initialisiert.');
     }
   }
 
@@ -156,88 +193,73 @@ class PushNotificationService {
     /*
      * Nachricht trifft ein, während Dipera geöffnet ist.
      */
-    _foregroundSubscription =
-        FirebaseMessaging.onMessage.listen(
-      (RemoteMessage message) async {
-        if (kDebugMode) {
-          debugPrint(
-            'PUSH: Nachricht im Vordergrund erhalten.',
-          );
-        }
+    _foregroundSubscription = FirebaseMessaging.onMessage.listen((
+      RemoteMessage message,
+    ) async {
+      if (kDebugMode) {
+        debugPrint('PUSH: Nachricht im Vordergrund erhalten.');
+      }
 
-        /*
+      /*
          * Android zeigt FCM-Notifications im
          * Vordergrund nicht automatisch sichtbar an.
          *
          * Deshalb erzeugen wir hier selbst eine
          * lokale Heads-up-Benachrichtigung.
          */
-        if (Platform.isAndroid) {
-          await _showForegroundNotification(message);
-        }
-      },
-    );
+      if (Platform.isAndroid) {
+        await _showForegroundNotification(message);
+      }
+    });
 
     /*
      * Firebase kann Tokens erneuern.
      */
-    _tokenRefreshSubscription =
-        _messaging.onTokenRefresh.listen(
-      (String newToken) async {
-        try {
-          await _saveToken(newToken);
+    _tokenRefreshSubscription = _messaging.onTokenRefresh.listen((
+      String newToken,
+    ) async {
+      try {
+        await _saveToken(newToken);
 
-          if (kDebugMode) {
-            debugPrint(
-              'PUSH: Aktualisierter FCM-Token gespeichert.',
-            );
-          }
-        } catch (error, stackTrace) {
-          if (kDebugMode) {
-            debugPrint(
-              'PUSH: Token-Refresh konnte nicht gespeichert werden: '
-              '$error',
-            );
-            debugPrintStack(stackTrace: stackTrace);
-          }
+        if (kDebugMode) {
+          debugPrint('PUSH: Aktualisierter FCM-Token gespeichert.');
         }
-      },
-    );
+      } catch (error, stackTrace) {
+        if (kDebugMode) {
+          debugPrint(
+            'PUSH: Token-Refresh konnte nicht gespeichert werden: '
+            '$error',
+          );
+          debugPrintStack(stackTrace: stackTrace);
+        }
+      }
+    });
 
     /*
      * Nachricht wurde angeklickt,
      * während App im Hintergrund war.
      */
-    FirebaseMessaging.onMessageOpenedApp.listen(
-      (RemoteMessage message) {
-        if (kDebugMode) {
-          debugPrint(
-            'PUSH: Benachrichtigung wurde geöffnet.',
-          );
-        }
+    FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
+      if (kDebugMode) {
+        debugPrint('PUSH: Benachrichtigung wurde geöffnet.');
+      }
 
-        /*
+      /*
          * Hier können wir später navigieren:
          *
          * type = shift      -> Schichten
          * type = document   -> Dokumente
          * type = absence    -> Abwesenheiten
          */
-      },
-    );
+    });
 
     _listenersInitialized = true;
   }
 
-  Future<void> _showForegroundNotification(
-    RemoteMessage message,
-  ) async {
+  Future<void> _showForegroundNotification(RemoteMessage message) async {
     final notification = message.notification;
 
-    final title =
-        notification?.title ??
-        message.data['title'] ??
-        'Dipera';
+    final title = notification?.title ?? message.data['title'] ?? 'Dipera';
 
     final body =
         notification?.body ??
@@ -256,11 +278,9 @@ class PushNotificationService {
       showWhen: true,
     );
 
-    const notificationDetails =
-        NotificationDetails(android: androidDetails);
+    const notificationDetails = NotificationDetails(android: androidDetails);
 
-    final notificationId =
-        DateTime.now().millisecondsSinceEpoch.remainder(
+    final notificationId = DateTime.now().millisecondsSinceEpoch.remainder(
       2147483647,
     );
 
@@ -273,19 +293,13 @@ class PushNotificationService {
     );
 
     if (kDebugMode) {
-      debugPrint(
-        'PUSH: Vordergrund-Banner angezeigt.',
-      );
+      debugPrint('PUSH: Vordergrund-Banner angezeigt.');
     }
   }
 
-  void _handleNotificationTap(
-    NotificationResponse response,
-  ) {
+  void _handleNotificationTap(NotificationResponse response) {
     if (kDebugMode) {
-      debugPrint(
-        'PUSH: Lokale Benachrichtigung geöffnet.',
-      );
+      debugPrint('PUSH: Lokale Benachrichtigung geöffnet.');
     }
 
     /*
@@ -299,16 +313,14 @@ class PushNotificationService {
     final user = _client.auth.currentUser;
 
     if (user == null) {
-      throw StateError(
-        'Kein angemeldeter Benutzer vorhanden.',
-      );
+      throw StateError('Kein angemeldeter Benutzer vorhanden.');
     }
 
     final platform = Platform.isAndroid
         ? 'android'
         : Platform.isIOS
-            ? 'ios'
-            : null;
+        ? 'ios'
+        : null;
 
     if (platform == null) {
       return;
@@ -316,15 +328,24 @@ class PushNotificationService {
 
     await _client.rpc(
       'register_my_push_device',
-      params: {
-        'p_fcm_token': token,
-        'p_platform': platform,
-      },
+      params: {'p_fcm_token': token, 'p_platform': platform},
     );
   }
 
   Future<void> unregisterCurrentDevice() async {
     try {
+      /*
+       * Auch beim Abmelden darf auf Apple nicht vor
+       * Verfügbarkeit des APNs-Tokens auf FCM zugegriffen werden.
+       */
+      if (Platform.isIOS || Platform.isMacOS) {
+        final apnsTokenAvailable = await _waitForApnsToken();
+
+        if (!apnsTokenAvailable) {
+          return;
+        }
+      }
+
       final token = await _messaging.getToken();
 
       if (token == null || token.isEmpty) {
@@ -337,15 +358,11 @@ class PushNotificationService {
 
       await _client.rpc(
         'unregister_my_push_device',
-        params: {
-          'p_fcm_token': token,
-        },
+        params: {'p_fcm_token': token},
       );
 
       if (kDebugMode) {
-        debugPrint(
-          'PUSH: Gerät wurde deregistriert.',
-        );
+        debugPrint('PUSH: Gerät wurde deregistriert.');
       }
     } catch (error, stackTrace) {
       if (kDebugMode) {
