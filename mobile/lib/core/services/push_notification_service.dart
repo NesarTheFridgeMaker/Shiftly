@@ -2,15 +2,69 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+enum PushDiagnosticStepState { pending, success, failure }
+
+class PushDiagnosticStatus {
+  const PushDiagnosticStatus({
+    this.permission = PushDiagnosticStepState.pending,
+    this.apns = PushDiagnosticStepState.pending,
+    this.fcm = PushDiagnosticStepState.pending,
+    this.registration = PushDiagnosticStepState.pending,
+    this.permissionDetail = 'Noch nicht geprüft',
+    this.apnsDetail = 'Noch nicht geprüft',
+    this.fcmDetail = 'Noch nicht geprüft',
+    this.registrationDetail = 'Noch nicht geprüft',
+  });
+
+  final PushDiagnosticStepState permission;
+  final PushDiagnosticStepState apns;
+  final PushDiagnosticStepState fcm;
+  final PushDiagnosticStepState registration;
+  final String permissionDetail;
+  final String apnsDetail;
+  final String fcmDetail;
+  final String registrationDetail;
+
+  PushDiagnosticStatus copyWith({
+    PushDiagnosticStepState? permission,
+    PushDiagnosticStepState? apns,
+    PushDiagnosticStepState? fcm,
+    PushDiagnosticStepState? registration,
+    String? permissionDetail,
+    String? apnsDetail,
+    String? fcmDetail,
+    String? registrationDetail,
+  }) {
+    return PushDiagnosticStatus(
+      permission: permission ?? this.permission,
+      apns: apns ?? this.apns,
+      fcm: fcm ?? this.fcm,
+      registration: registration ?? this.registration,
+      permissionDetail: permissionDetail ?? this.permissionDetail,
+      apnsDetail: apnsDetail ?? this.apnsDetail,
+      fcmDetail: fcmDetail ?? this.fcmDetail,
+      registrationDetail: registrationDetail ?? this.registrationDetail,
+    );
+  }
+}
+
 class PushNotificationService {
   PushNotificationService(this._client);
 
   final SupabaseClient _client;
+
+  static final ValueNotifier<PushDiagnosticStatus> diagnosticStatus =
+      ValueNotifier<PushDiagnosticStatus>(const PushDiagnosticStatus());
+
+  static void _updateDiagnostic(PushDiagnosticStatus status) {
+    diagnosticStatus.value = status;
+  }
 
   final FirebaseMessaging _messaging = FirebaseMessaging.instance;
 
@@ -33,6 +87,7 @@ class PushNotificationService {
       'Dipera-Aktualisierungen.';
 
   Future<String?> initialize() async {
+    _updateDiagnostic(const PushDiagnosticStatus());
     await _initializeLocalNotifications();
 
     final settings = await _messaging.requestPermission(
@@ -42,29 +97,23 @@ class PushNotificationService {
       provisional: false,
     );
 
-    if (kDebugMode) {
-      debugPrint(
-        'PUSH: Berechtigungsstatus = '
-        '${settings.authorizationStatus}',
-      );
-    }
+    final permissionGranted =
+        settings.authorizationStatus == AuthorizationStatus.authorized ||
+        settings.authorizationStatus == AuthorizationStatus.provisional;
 
-    if (settings.authorizationStatus == AuthorizationStatus.denied ||
-        settings.authorizationStatus == AuthorizationStatus.notDetermined) {
-      if (kDebugMode) {
-        debugPrint('PUSH: Benachrichtigungen nicht freigegeben.');
-      }
+    _updateDiagnostic(
+      diagnosticStatus.value.copyWith(
+        permission: permissionGranted
+            ? PushDiagnosticStepState.success
+            : PushDiagnosticStepState.failure,
+        permissionDetail: _authorizationStatusLabel(
+          settings.authorizationStatus,
+        ),
+      ),
+    );
 
-      return null;
-    }
+    if (!permissionGranted) return null;
 
-    /*
-     * Auf Apple-Plattformen muss der APNs-Token verfügbar sein,
-     * bevor FCM-API-Aufrufe wie getToken() ausgeführt werden.
-     *
-     * Direkt nach requestPermission() kann iOS noch etwas Zeit
-     * benötigen, bis der APNs-Token bereitsteht.
-     */
     if (Platform.isIOS || Platform.isMacOS) {
       await _messaging.setForegroundNotificationPresentationOptions(
         alert: true,
@@ -73,34 +122,111 @@ class PushNotificationService {
       );
 
       final apnsTokenAvailable = await _waitForApnsToken();
-
+      _updateDiagnostic(
+        diagnosticStatus.value.copyWith(
+          apns: apnsTokenAvailable
+              ? PushDiagnosticStepState.success
+              : PushDiagnosticStepState.failure,
+          apnsDetail: apnsTokenAvailable
+              ? 'Token verfügbar'
+              : 'Nach 5 Sekunden nicht verfügbar',
+        ),
+      );
       if (!apnsTokenAvailable) {
-        if (kDebugMode) {
-          debugPrint(
-            'PUSH: APNs-Token wurde nicht rechtzeitig bereitgestellt.',
-          );
-        }
-
         _initializeListeners();
         return null;
       }
+    } else {
+      _updateDiagnostic(
+        diagnosticStatus.value.copyWith(
+          apns: PushDiagnosticStepState.success,
+          apnsDetail: 'Nicht erforderlich',
+        ),
+      );
     }
 
-    final token = await _messaging.getToken();
+    String? token;
+    try {
+      token = await _messaging.getToken();
+    } catch (error, stackTrace) {
+      _updateDiagnostic(
+        diagnosticStatus.value.copyWith(
+          fcm: PushDiagnosticStepState.failure,
+          fcmDetail: _safeErrorLabel(error),
+        ),
+      );
+      if (kDebugMode) debugPrintStack(stackTrace: stackTrace);
+      _initializeListeners();
+      return null;
+    }
 
-    if (token != null && token.isNotEmpty) {
+    if (token == null || token.isEmpty) {
+      _updateDiagnostic(
+        diagnosticStatus.value.copyWith(
+          fcm: PushDiagnosticStepState.failure,
+          fcmDetail: 'Kein Token zurückgegeben',
+        ),
+      );
+      _initializeListeners();
+      return null;
+    }
+
+    _updateDiagnostic(
+      diagnosticStatus.value.copyWith(
+        fcm: PushDiagnosticStepState.success,
+        fcmDetail: 'Token verfügbar',
+      ),
+    );
+
+    try {
       await _saveToken(token);
-
-      if (kDebugMode) {
-        debugPrint('PUSH: FCM-Token erfolgreich registriert.');
-      }
-    } else if (kDebugMode) {
-      debugPrint('PUSH: Firebase hat keinen FCM-Token zurückgegeben.');
+      _updateDiagnostic(
+        diagnosticStatus.value.copyWith(
+          registration: PushDiagnosticStepState.success,
+          registrationDetail: 'Registriert',
+        ),
+      );
+    } catch (error, stackTrace) {
+      _updateDiagnostic(
+        diagnosticStatus.value.copyWith(
+          registration: PushDiagnosticStepState.failure,
+          registrationDetail: _safeErrorLabel(error),
+        ),
+      );
+      if (kDebugMode) debugPrintStack(stackTrace: stackTrace);
     }
 
     _initializeListeners();
-
     return token;
+  }
+
+  String _authorizationStatusLabel(AuthorizationStatus status) {
+    switch (status) {
+      case AuthorizationStatus.authorized:
+        return 'Erteilt';
+      case AuthorizationStatus.provisional:
+        return 'Vorläufig erteilt';
+      case AuthorizationStatus.denied:
+        return 'Abgelehnt';
+      case AuthorizationStatus.notDetermined:
+        return 'Noch nicht entschieden';
+    }
+  }
+
+  String _safeErrorLabel(Object error) {
+    if (error is PostgrestException) {
+      final code = error.code;
+      return code != null && code.isNotEmpty
+          ? 'Serverfehler $code'
+          : 'Serverfehler';
+    }
+    if (error is FirebaseException) {
+      return error.code.isNotEmpty
+          ? 'Firebase-Fehler ${error.code}'
+          : 'Firebase-Fehler';
+    }
+    if (error is StateError) return error.message;
+    return error.runtimeType.toString();
   }
 
   Future<bool> _waitForApnsToken() async {

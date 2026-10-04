@@ -20,8 +20,7 @@ class DashboardPage extends ConsumerWidget {
   Future<void> _logout() async {
     final client = Supabase.instance.client;
 
-    final pushNotificationService =
-        PushNotificationService(client);
+    final pushNotificationService = PushNotificationService(client);
 
     await pushNotificationService.unregisterCurrentDevice();
 
@@ -96,10 +95,8 @@ class DashboardPage extends ConsumerWidget {
     final employeeAsync = ref.watch(currentEmployeeProvider);
     final todayShiftsAsync = ref.watch(todayShiftsProvider);
     final nextShiftAsync = ref.watch(nextShiftProvider);
-    final timeAccountAsync =
-        ref.watch(currentTimeAccountDashboardProvider);
-    final vacationBalanceAsync =
-        ref.watch(currentVacationBalanceProvider);
+    final timeAccountAsync = ref.watch(currentTimeAccountDashboardProvider);
+    final vacationBalanceAsync = ref.watch(currentVacationBalanceProvider);
 
     return Scaffold(
       backgroundColor: const Color(0xFFF6F8FB),
@@ -282,19 +279,15 @@ class DashboardPage extends ConsumerWidget {
 
                     const SizedBox(height: 14),
 
-                    _TimeAccountOverviewCard(
-                      dashboardAsync: timeAccountAsync,
-                    ),
+                    _TimeAccountOverviewCard(dashboardAsync: timeAccountAsync),
 
                     const SizedBox(height: 14),
 
-                    _VacationCard(
-                      balanceAsync: vacationBalanceAsync,
-                    ),
+                    _VacationCard(balanceAsync: vacationBalanceAsync),
 
                     const SizedBox(height: 18),
 
-                                        DiperaCard(
+                    DiperaCard(
                       title: 'Dokumente',
                       subtitle: 'Neue Dokumente und Lohnabrechnungen',
                       leading: const _FeatureIcon(
@@ -314,6 +307,9 @@ class DashboardPage extends ConsumerWidget {
                         );
                       },
                     ),
+
+                    const SizedBox(height: 14),
+                    const _PushDiagnosticCard(),
                   ]),
                 ),
               ),
@@ -321,6 +317,116 @@ class DashboardPage extends ConsumerWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _PushDiagnosticCard extends StatelessWidget {
+  const _PushDiagnosticCard();
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<PushDiagnosticStatus>(
+      valueListenable: PushNotificationService.diagnosticStatus,
+      builder: (context, status, _) {
+        return DiperaCard(
+          padding: const EdgeInsets.all(18),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Push-Diagnose · Build 6',
+                style: TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.w800,
+                  color: Color(0xFF101828),
+                ),
+              ),
+              const SizedBox(height: 4),
+              const Text(
+                'Temporäre Testanzeige – keine Tokens werden angezeigt.',
+                style: TextStyle(fontSize: 12, color: Color(0xFF667085)),
+              ),
+              const SizedBox(height: 16),
+              _PushDiagnosticRow(
+                label: 'Berechtigung',
+                state: status.permission,
+                detail: status.permissionDetail,
+              ),
+              const SizedBox(height: 10),
+              _PushDiagnosticRow(
+                label: 'APNs',
+                state: status.apns,
+                detail: status.apnsDetail,
+              ),
+              const SizedBox(height: 10),
+              _PushDiagnosticRow(
+                label: 'FCM',
+                state: status.fcm,
+                detail: status.fcmDetail,
+              ),
+              const SizedBox(height: 10),
+              _PushDiagnosticRow(
+                label: 'Dipera-Server',
+                state: status.registration,
+                detail: status.registrationDetail,
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _PushDiagnosticRow extends StatelessWidget {
+  const _PushDiagnosticRow({
+    required this.label,
+    required this.state,
+    required this.detail,
+  });
+  final String label;
+  final PushDiagnosticStepState state;
+  final String detail;
+
+  @override
+  Widget build(BuildContext context) {
+    final IconData icon;
+    final Color color;
+    switch (state) {
+      case PushDiagnosticStepState.success:
+        icon = Icons.check_circle_rounded;
+        color = const Color(0xFF027A48);
+      case PushDiagnosticStepState.failure:
+        icon = Icons.cancel_rounded;
+        color = const Color(0xFFD92D20);
+      case PushDiagnosticStepState.pending:
+        icon = Icons.schedule_rounded;
+        color = const Color(0xFF667085);
+    }
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, size: 20, color: color),
+        const SizedBox(width: 10),
+        SizedBox(
+          width: 105,
+          child: Text(
+            label,
+            style: const TextStyle(
+              fontWeight: FontWeight.w700,
+              color: Color(0xFF344054),
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            detail,
+            style: TextStyle(color: color, fontWeight: FontWeight.w600),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -650,9 +756,7 @@ class _NextShiftCard extends StatelessWidget {
 }
 
 class _TimeAccountOverviewCard extends StatelessWidget {
-  const _TimeAccountOverviewCard({
-    required this.dashboardAsync,
-  });
+  const _TimeAccountOverviewCard({required this.dashboardAsync});
 
   final AsyncValue<TimeAccountDashboard> dashboardAsync;
 
@@ -660,8 +764,8 @@ class _TimeAccountOverviewCard extends StatelessWidget {
     final sign = totalMinutes > 0
         ? '+'
         : totalMinutes < 0
-            ? '−'
-            : '';
+        ? '−'
+        : '';
 
     final absoluteMinutes = totalMinutes.abs();
     final hours = absoluteMinutes ~/ 60;
@@ -683,15 +787,12 @@ class _TimeAccountOverviewCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return dashboardAsync.when(
-      loading: () =>
-          const _TimeAccountLoadingCard(),
-      error: (error, stackTrace) =>
-          const _TimeAccountErrorCard(),
+      loading: () => const _TimeAccountLoadingCard(),
+      error: (error, stackTrace) => const _TimeAccountErrorCard(),
       data: (dashboard) {
         if (!dashboard.accountEnabled) {
           final weeklyUnsupported =
-              dashboard.accountStatus ==
-                  'weekly_not_supported';
+              dashboard.accountStatus == 'weekly_not_supported';
 
           if (weeklyUnsupported) {
             return DiperaCard(
@@ -760,16 +861,11 @@ class _TimeAccountOverviewCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 22),
                 Text(
-                  _formatPlainMinutes(
-                    dashboard.workedMinutes,
+                  _formatPlainMinutes(dashboard.workedMinutes),
+                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                    color: const Color(0xFF101828),
+                    fontWeight: FontWeight.w800,
                   ),
-                  style: Theme.of(context)
-                      .textTheme
-                      .headlineSmall
-                      ?.copyWith(
-                        color: const Color(0xFF101828),
-                        fontWeight: FontWeight.w800,
-                      ),
                 ),
                 const SizedBox(height: 4),
                 const Text(
@@ -793,34 +889,25 @@ class _TimeAccountOverviewCard extends StatelessWidget {
           );
         }
 
-        final fullTarget =
-            dashboard.fullTargetMinutes;
+        final fullTarget = dashboard.fullTargetMinutes;
 
-        final achieved =
-            dashboard.targetAchievedMinutes;
+        final achieved = dashboard.targetAchievedMinutes;
 
-        final due =
-            dashboard.targetDueMinutes;
+        final due = dashboard.targetDueMinutes;
 
-        final future =
-            dashboard.targetFutureMinutes;
+        final future = dashboard.targetFutureMinutes;
 
         return DiperaCard(
-          padding:
-              const EdgeInsets.all(20),
+          padding: const EdgeInsets.all(20),
           child: Column(
-            crossAxisAlignment:
-                CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
                 children: [
                   const _FeatureIcon(
-                    icon:
-                        Icons.timelapse_rounded,
-                    foregroundColor:
-                        Color(0xFF027A48),
-                    backgroundColor:
-                        Color(0xFFECFDF3),
+                    icon: Icons.timelapse_rounded,
+                    foregroundColor: Color(0xFF027A48),
+                    backgroundColor: Color(0xFFECFDF3),
                   ),
                   const SizedBox(width: 14),
                   const Expanded(
@@ -828,10 +915,8 @@ class _TimeAccountOverviewCard extends StatelessWidget {
                       'Stundenkonto',
                       style: TextStyle(
                         fontSize: 18,
-                        fontWeight:
-                            FontWeight.w800,
-                        color:
-                            Color(0xFF101828),
+                        fontWeight: FontWeight.w800,
+                        color: Color(0xFF101828),
                       ),
                     ),
                   ),
@@ -839,70 +924,44 @@ class _TimeAccountOverviewCard extends StatelessWidget {
               ),
               const SizedBox(height: 22),
               Text(
-                _formatMinutes(
-                  dashboard
-                      .currentBalanceMinutes,
+                _formatMinutes(dashboard.currentBalanceMinutes),
+                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                  color: const Color(0xFF101828),
+                  fontWeight: FontWeight.w800,
                 ),
-                style: Theme.of(context)
-                    .textTheme
-                    .headlineSmall
-                    ?.copyWith(
-                      color:
-                          const Color(
-                            0xFF101828,
-                          ),
-                      fontWeight:
-                          FontWeight.w800,
-                    ),
               ),
               const SizedBox(height: 4),
               const Text(
                 'Aktueller Stand',
                 style: TextStyle(
-                  color:
-                      Color(0xFF667085),
-                  fontWeight:
-                      FontWeight.w600,
+                  color: Color(0xFF667085),
+                  fontWeight: FontWeight.w600,
                 ),
               ),
               const SizedBox(height: 20),
               Row(
                 children: [
                   Expanded(
-                    child:
-                        _TimeAccountMetric(
-                      label:
-                          'Monatsbeginn',
-                      value:
-                          _formatMinutes(
-                        dashboard
-                            .openingBalanceMinutes,
-                      ),
+                    child: _TimeAccountMetric(
+                      label: 'Monatsbeginn',
+                      value: _formatMinutes(dashboard.openingBalanceMinutes),
                     ),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
-                    child:
-                        _TimeAccountMetric(
-                      label:
-                          'Vorausschau',
-                      value: dashboard
-                                  .projectionAvailable &&
-                              dashboard
-                                      .projectedBalanceMinutes !=
-                                  null
-                          ? _formatMinutes(
-                              dashboard
-                                  .projectedBalanceMinutes!,
-                            )
+                    child: _TimeAccountMetric(
+                      label: 'Vorausschau',
+                      value:
+                          dashboard.projectionAvailable &&
+                              dashboard.projectedBalanceMinutes != null
+                          ? _formatMinutes(dashboard.projectedBalanceMinutes!)
                           : '–',
-                      subtitle: dashboard
-                              .projectionAvailable
+                      subtitle: dashboard.projectionAvailable
                           ? 'nach '
-                              'veröffentlichten '
-                              'Schichten'
+                                'veröffentlichten '
+                                'Schichten'
                           : 'keine '
-                              'Zukunftsplanung',
+                                'Zukunftsplanung',
                     ),
                   ),
                 ],
@@ -912,8 +971,7 @@ class _TimeAccountOverviewCard extends StatelessWidget {
                 achievedMinutes: achieved,
                 dueMinutes: due,
                 futureMinutes: future,
-                fullTargetMinutes:
-                    fullTarget,
+                fullTargetMinutes: fullTarget,
               ),
               const SizedBox(height: 12),
               Wrap(
@@ -922,38 +980,18 @@ class _TimeAccountOverviewCard extends StatelessWidget {
                 children: [
                   _ProgressLegend(
                     label: 'Erreicht',
-                    value:
-                        _formatPlainMinutes(
-                      achieved,
-                    ),
-                    color:
-                        const Color(
-                          0xFF12B76A,
-                        ),
+                    value: _formatPlainMinutes(achieved),
+                    color: const Color(0xFF12B76A),
                   ),
                   _ProgressLegend(
-                    label:
-                        'Aktuell im Rückstand',
-                    value:
-                        _formatPlainMinutes(
-                      due,
-                    ),
-                    color:
-                        const Color(
-                          0xFFF04438,
-                        ),
+                    label: 'Aktuell im Rückstand',
+                    value: _formatPlainMinutes(due),
+                    color: const Color(0xFFF04438),
                   ),
                   _ProgressLegend(
-                    label:
-                        'Später fällig',
-                    value:
-                        _formatPlainMinutes(
-                      future,
-                    ),
-                    color:
-                        const Color(
-                          0xFFD0D5DD,
-                        ),
+                    label: 'Später fällig',
+                    value: _formatPlainMinutes(future),
+                    color: const Color(0xFFD0D5DD),
                   ),
                 ],
               ),
@@ -963,11 +1001,9 @@ class _TimeAccountOverviewCard extends StatelessWidget {
                 '${_formatPlainMinutes(fullTarget)} '
                 '· davon bis heute '
                 '${_formatPlainMinutes(dashboard.currentTargetMinutes)}',
-                style:
-                    const TextStyle(
+                style: const TextStyle(
                   fontSize: 12,
-                  color:
-                      Color(0xFF667085),
+                  color: Color(0xFF667085),
                   height: 1.4,
                 ),
               ),
@@ -993,54 +1029,39 @@ class _TimeAccountMetric extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding:
-          const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color:
-            const Color(0xFFF8FAFC),
-        borderRadius:
-            BorderRadius.circular(16),
-        border: Border.all(
-          color:
-              const Color(0xFFE2E8F0),
-        ),
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
       ),
       child: Column(
-        crossAxisAlignment:
-            CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             label,
-            style:
-                const TextStyle(
+            style: const TextStyle(
               fontSize: 12,
-              color:
-                  Color(0xFF667085),
-              fontWeight:
-                  FontWeight.w600,
+              color: Color(0xFF667085),
+              fontWeight: FontWeight.w600,
             ),
           ),
           const SizedBox(height: 6),
           Text(
             value,
-            style:
-                const TextStyle(
+            style: const TextStyle(
               fontSize: 17,
-              color:
-                  Color(0xFF101828),
-              fontWeight:
-                  FontWeight.w800,
+              color: Color(0xFF101828),
+              fontWeight: FontWeight.w800,
             ),
           ),
           if (subtitle != null) ...[
             const SizedBox(height: 4),
             Text(
               subtitle!,
-              style:
-                  const TextStyle(
+              style: const TextStyle(
                 fontSize: 11,
-                color:
-                    Color(0xFF98A2B3),
+                color: Color(0xFF98A2B3),
                 height: 1.25,
               ),
             ),
@@ -1066,96 +1087,41 @@ class _TimeTargetProgressBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final denominator =
-        fullTargetMinutes > 0
-            ? fullTargetMinutes
-                .toDouble()
-            : 1.0;
+    final denominator = fullTargetMinutes > 0
+        ? fullTargetMinutes.toDouble()
+        : 1.0;
 
-    final achievedFraction =
-        (achievedMinutes /
-                denominator)
-            .clamp(0.0, 1.0);
+    final achievedFraction = (achievedMinutes / denominator).clamp(0.0, 1.0);
 
-    final dueFraction =
-        (dueMinutes /
-                denominator)
-            .clamp(0.0, 1.0);
+    final dueFraction = (dueMinutes / denominator).clamp(0.0, 1.0);
 
-    final futureFraction =
-        (futureMinutes /
-                denominator)
-            .clamp(0.0, 1.0);
+    final futureFraction = (futureMinutes / denominator).clamp(0.0, 1.0);
 
     return ClipRRect(
-      borderRadius:
-          BorderRadius.circular(999),
+      borderRadius: BorderRadius.circular(999),
       child: SizedBox(
         height: 12,
         child: Row(
           children: [
             if (achievedFraction > 0)
               Expanded(
-                flex:
-                    (achievedFraction *
-                            10000)
-                        .round()
-                        .clamp(
-                          1,
-                          10000,
-                        ),
-                child: Container(
-                  color:
-                      const Color(
-                        0xFF12B76A,
-                      ),
-                ),
+                flex: (achievedFraction * 10000).round().clamp(1, 10000),
+                child: Container(color: const Color(0xFF12B76A)),
               ),
             if (dueFraction > 0)
               Expanded(
-                flex:
-                    (dueFraction *
-                            10000)
-                        .round()
-                        .clamp(
-                          1,
-                          10000,
-                        ),
-                child: Container(
-                  color:
-                      const Color(
-                        0xFFF04438,
-                      ),
-                ),
+                flex: (dueFraction * 10000).round().clamp(1, 10000),
+                child: Container(color: const Color(0xFFF04438)),
               ),
             if (futureFraction > 0)
               Expanded(
-                flex:
-                    (futureFraction *
-                            10000)
-                        .round()
-                        .clamp(
-                          1,
-                          10000,
-                        ),
-                child: Container(
-                  color:
-                      const Color(
-                        0xFFD0D5DD,
-                      ),
-                ),
+                flex: (futureFraction * 10000).round().clamp(1, 10000),
+                child: Container(color: const Color(0xFFD0D5DD)),
               ),
             if (achievedFraction == 0 &&
                 dueFraction == 0 &&
                 futureFraction == 0)
-              Expanded(
-                child: Container(
-                  color:
-                      const Color(
-                        0xFFE4E7EC,
-                      ),
-                ),
-              ),
+              Expanded(child: Container(color: const Color(0xFFE4E7EC))),
           ],
         ),
       ),
@@ -1177,28 +1143,20 @@ class _ProgressLegend extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Row(
-      mainAxisSize:
-          MainAxisSize.min,
+      mainAxisSize: MainAxisSize.min,
       children: [
         Container(
           width: 8,
           height: 8,
-          decoration: BoxDecoration(
-            color: color,
-            shape:
-                BoxShape.circle,
-          ),
+          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
         ),
         const SizedBox(width: 6),
         Text(
           '$label $value',
-          style:
-              const TextStyle(
+          style: const TextStyle(
             fontSize: 12,
-            color:
-                Color(0xFF667085),
-            fontWeight:
-                FontWeight.w600,
+            color: Color(0xFF667085),
+            fontWeight: FontWeight.w600,
           ),
         ),
       ],
@@ -1212,49 +1170,34 @@ class _TimeAccountLoadingCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return DiperaCard(
-      padding:
-          const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(20),
       child: Row(
         children: [
           const _FeatureIcon(
-            icon:
-                Icons.timelapse_rounded,
-            foregroundColor:
-                Color(0xFF667085),
-            backgroundColor:
-                Color(0xFFF2F4F7),
+            icon: Icons.timelapse_rounded,
+            foregroundColor: Color(0xFF667085),
+            backgroundColor: Color(0xFFF2F4F7),
           ),
           const SizedBox(width: 16),
           Expanded(
             child: Column(
-              crossAxisAlignment:
-                  CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text(
                   'Stundenkonto',
                   style: TextStyle(
                     fontSize: 18,
-                    fontWeight:
-                        FontWeight.w800,
-                    color:
-                        Color(0xFF101828),
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF101828),
                   ),
                 ),
                 const SizedBox(height: 8),
                 Container(
                   height: 14,
                   width: 140,
-                  decoration:
-                      BoxDecoration(
-                    color:
-                        const Color(
-                          0xFFE4E7EC,
-                        ),
-                    borderRadius:
-                        BorderRadius
-                            .circular(
-                              8,
-                            ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFE4E7EC),
+                    borderRadius: BorderRadius.circular(8),
                   ),
                 ),
               ],
@@ -1272,34 +1215,26 @@ class _TimeAccountErrorCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return DiperaCard(
-      padding:
-          const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(20),
       child: Row(
-        crossAxisAlignment:
-            CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const _FeatureIcon(
-            icon:
-                Icons.error_outline_rounded,
-            foregroundColor:
-                Color(0xFFD92D20),
-            backgroundColor:
-                Color(0xFFFEF3F2),
+            icon: Icons.error_outline_rounded,
+            foregroundColor: Color(0xFFD92D20),
+            backgroundColor: Color(0xFFFEF3F2),
           ),
           const SizedBox(width: 16),
           const Expanded(
             child: Column(
-              crossAxisAlignment:
-                  CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   'Stundenkonto',
                   style: TextStyle(
                     fontSize: 18,
-                    fontWeight:
-                        FontWeight.w800,
-                    color:
-                        Color(0xFF101828),
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF101828),
                   ),
                 ),
                 SizedBox(height: 6),
@@ -1307,11 +1242,7 @@ class _TimeAccountErrorCard extends StatelessWidget {
                   'Der aktuelle Stand '
                   'konnte nicht geladen '
                   'werden.',
-                  style: TextStyle(
-                    color:
-                        Color(0xFF667085),
-                    height: 1.4,
-                  ),
+                  style: TextStyle(color: Color(0xFF667085), height: 1.4),
                 ),
               ],
             ),
@@ -1323,9 +1254,7 @@ class _TimeAccountErrorCard extends StatelessWidget {
 }
 
 class _VacationCard extends StatelessWidget {
-  const _VacationCard({
-    required this.balanceAsync,
-  });
+  const _VacationCard({required this.balanceAsync});
 
   final AsyncValue<VacationBalance> balanceAsync;
 
