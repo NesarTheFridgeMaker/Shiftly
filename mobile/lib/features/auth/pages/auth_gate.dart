@@ -1,3 +1,4 @@
+
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
@@ -34,6 +35,12 @@ class _AuthGateState extends ConsumerState<AuthGate> {
   bool _isDenyingAccess = false;
 
   String? _pushInitializedForUserId;
+  String? _pushInitializingForUserId;
+
+  int _pushRequestId = 0;
+
+  static const int _maxPushAttempts = 3;
+  static const Duration _pushRetryDelay = Duration(seconds: 10);
 
   @override
   void initState() {
@@ -65,6 +72,19 @@ class _AuthGateState extends ConsumerState<AuthGate> {
     );
   }
 
+  void _resetPushInitialization() {
+    _pushRequestId++;
+    _pushInitializedForUserId = null;
+    _pushInitializingForUserId = null;
+  }
+
+  bool _isPushRequestValid(String userId, int pushRequestId) {
+    return mounted &&
+        pushRequestId == _pushRequestId &&
+        _pushInitializingForUserId == userId &&
+        Supabase.instance.client.auth.currentUser?.id == userId;
+  }
+
   Future<void> _evaluateSession(Session? session) async {
     if (session == null && _isDenyingAccess) {
       return;
@@ -73,7 +93,7 @@ class _AuthGateState extends ConsumerState<AuthGate> {
     final requestId = ++_requestId;
 
     if (session == null) {
-      _pushInitializedForUserId = null;
+      _resetPushInitialization();
 
       if (!mounted || requestId != _requestId) {
         return;
@@ -113,8 +133,8 @@ class _AuthGateState extends ConsumerState<AuthGate> {
          * Push ist keine Voraussetzung für den Zugriff
          * auf Dipera.
          *
-         * Deshalb wird die Initialisierung bewusst
-         * unabhängig vom Login-Flow ausgeführt.
+         * Deshalb läuft die Push-Initialisierung
+         * unabhängig vom Login-Flow.
          */
         unawaited(_initializePushForUser(session.user.id));
 
@@ -176,44 +196,100 @@ class _AuthGateState extends ConsumerState<AuthGate> {
 
   Future<void> _initializePushForUser(String userId) async {
     /*
-     * Auth-Events können mehrfach eintreffen.
-     * Für denselben angemeldeten Benutzer initialisieren
-     * wir Push deshalb nur einmal.
+     * Bereits erfolgreich initialisiert:
+     * kein weiterer Versuch erforderlich.
      */
     if (_pushInitializedForUserId == userId) {
       return;
     }
 
-    _pushInitializedForUserId = userId;
+    /*
+     * Verhindert parallele Initialisierungen
+     * durch mehrere Auth-Events.
+     */
+    if (_pushInitializingForUserId == userId) {
+      return;
+    }
+
+    /*
+     * Ein Benutzerwechsel macht frühere
+     * Initialisierungsversuche ungültig.
+     */
+    _pushRequestId++;
+
+    final pushRequestId = _pushRequestId;
+
+    _pushInitializingForUserId = userId;
 
     try {
       final service = ref.read(pushNotificationServiceProvider);
 
-      final token = await service.initialize();
+      for (var attempt = 1; attempt <= _maxPushAttempts; attempt++) {
+        if (!_isPushRequestValid(userId, pushRequestId)) {
+          return;
+        }
 
-      if (token == null) {
         if (kDebugMode) {
           debugPrint(
-            'PUSH: Für diesen Benutzer wurde '
-            'kein FCM-Token erzeugt.',
+            'PUSH: Initialisierungsversuch '
+            '$attempt/$_maxPushAttempts.',
           );
         }
 
-        return;
+        String? token;
+
+        try {
+          token = await service.initialize();
+        } catch (error, stackTrace) {
+          if (kDebugMode) {
+            debugPrint(
+              'PUSH: Initialisierungsversuch '
+              '$attempt fehlgeschlagen: $error',
+            );
+            debugPrintStack(stackTrace: stackTrace);
+          }
+        }
+
+        if (!_isPushRequestValid(userId, pushRequestId)) {
+          return;
+        }
+
+        if (token != null && token.isNotEmpty) {
+          _pushInitializedForUserId = userId;
+
+          if (kDebugMode) {
+            debugPrint(
+              'PUSH: FCM-Token erfolgreich erhalten '
+              'bei Versuch $attempt.',
+            );
+          }
+
+          return;
+        }
+
+        if (attempt < _maxPushAttempts) {
+          if (kDebugMode) {
+            debugPrint(
+              'PUSH: Kein Token erhalten. '
+              'Nächster Versuch in '
+              '${_pushRetryDelay.inSeconds} Sekunden.',
+            );
+          }
+
+          await Future<void>.delayed(_pushRetryDelay);
+        }
       }
 
       if (kDebugMode) {
         debugPrint(
-          'PUSH: FCM-Token erfolgreich erhalten.',
+          'PUSH: Nach $_maxPushAttempts Versuchen '
+          'kein FCM-Token erhalten.',
         );
       }
     } catch (error, stackTrace) {
       /*
-       * Push darf niemals verhindern, dass der
-       * Mitarbeiter die App verwenden kann.
-       *
-       * Technische Details werden nur in Debug-Builds
-       * ausgegeben.
+       * Push-Fehler dürfen den Login
+       * nicht beeinträchtigen.
        */
       if (kDebugMode) {
         debugPrint(
@@ -221,12 +297,15 @@ class _AuthGateState extends ConsumerState<AuthGate> {
         );
         debugPrintStack(stackTrace: stackTrace);
       }
-
+    } finally {
       /*
-       * Bei einem echten Initialisierungsfehler darf
-       * später erneut versucht werden.
+       * Nur der aktuell gültige Versuch
+       * darf den Initialisierungsstatus freigeben.
        */
-      _pushInitializedForUserId = null;
+      if (pushRequestId == _pushRequestId &&
+          _pushInitializingForUserId == userId) {
+        _pushInitializingForUserId = null;
+      }
     }
   }
 
@@ -235,7 +314,7 @@ class _AuthGateState extends ConsumerState<AuthGate> {
     int requestId,
   ) async {
     _isDenyingAccess = true;
-    _pushInitializedForUserId = null;
+    _resetPushInitialization();
 
     try {
       await _authService.signOut().timeout(
@@ -272,7 +351,7 @@ class _AuthGateState extends ConsumerState<AuthGate> {
 
   void _returnToLogin() {
     _requestId++;
-    _pushInitializedForUserId = null;
+    _resetPushInitialization();
 
     setState(() {
       _status = _AuthGateStatus.signedOut;
@@ -283,6 +362,7 @@ class _AuthGateState extends ConsumerState<AuthGate> {
   @override
   void dispose() {
     _requestId++;
+    _resetPushInitialization();
     _authSubscription.cancel();
 
     super.dispose();

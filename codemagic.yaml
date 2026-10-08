@@ -1,3 +1,4 @@
+
 workflows:
   ios-testflight:
     name: Dipera Personal - iOS TestFlight
@@ -29,11 +30,41 @@ workflows:
       - name: Set up iOS code signing
         script: xcode-project use-profiles
 
+      - name: Diagnose provisioning profile entitlements
+        script: |
+          set -e
+
+          echo "=== Checking installed provisioning profiles ==="
+
+          FOUND=0
+
+          while IFS= read -r PROFILE; do
+            if ! security cms -D -i "$PROFILE" > /tmp/dipera-profile.plist 2>/dev/null; then
+              continue
+            fi
+
+            PROFILE_NAME=$(/usr/libexec/PlistBuddy -c "Print :Name" /tmp/dipera-profile.plist 2>/dev/null || true)
+
+            if [ "$PROFILE_NAME" = "Dipera Personal App Store" ]; then
+              FOUND=1
+              echo "Expected provisioning profile found."
+
+              echo "=== APNs entitlement ==="
+              /usr/libexec/PlistBuddy -c "Print :Entitlements:aps-environment" /tmp/dipera-profile.plist || echo "APNs entitlement missing"
+              break
+            fi
+          done < <(find "$HOME/Library/MobileDevice/Provisioning Profiles" "$HOME/Library/Developer/Xcode/UserData/Provisioning Profiles" -type f \( -name "*.mobileprovision" -o -name "*.provisionprofile" \) 2>/dev/null)
+
+          if [ "$FOUND" -ne 1 ]; then
+            echo "ERROR: Expected provisioning profile not found."
+            exit 1
+          fi
+
       - name: Build iOS IPA
         script: |
           flutter build ipa --release \
             --build-name=1.0.0 \
-            --build-number=6 \
+            --build-number=7 \
             --dart-define-from-file=dart_defines.production.json \
             --export-options-plist="$HOME/export_options.plist"
 
