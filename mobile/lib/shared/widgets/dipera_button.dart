@@ -75,7 +75,7 @@ class _DiperaButtonState extends State<DiperaButton> {
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 180),
             curve: Curves.easeOut,
-            height: 58,
+            constraints: const BoxConstraints(minHeight: 58),
             transform: Matrix4.translationValues(
               0,
               _isHovered && !_isPressed ? -2 : 0,
@@ -127,6 +127,7 @@ class _DiperaButtonState extends State<DiperaButton> {
                 child: Padding(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 24,
+                    vertical: 12,
                   ),
                   child: Center(
                     child: AnimatedSwitcher(
@@ -160,15 +161,19 @@ class _DiperaButtonState extends State<DiperaButton> {
                                   ),
                                   const SizedBox(width: 10),
                                 ],
-                                Text(
-                                  widget.text,
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .titleMedium
-                                      ?.copyWith(
-                                        color: Colors.white,
-                                        fontWeight: FontWeight.w700,
-                                      ),
+                                Flexible(
+                                  child: Text(
+                                    widget.text,
+                                    textAlign: TextAlign.center,
+                                    softWrap: true,
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .titleMedium
+                                        ?.copyWith(
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                  ),
                                 ),
                               ],
                             ),

@@ -64,10 +64,11 @@ class LoginPage extends ConsumerWidget {
       body: SafeArea(
         child: LayoutBuilder(
           builder: (context, constraints) {
-            final keyboardIsOpen =
-                mediaQuery.viewInsets.bottom > 0;
-            final compact =
-                constraints.maxHeight < 820 || keyboardIsOpen;
+            final keyboardIsOpen = mediaQuery.viewInsets.bottom > 0;
+            final largeText = mediaQuery.textScaler.scale(14) > 18;
+            final compact = constraints.maxHeight < 820 ||
+                keyboardIsOpen ||
+                largeText;
             final horizontalPadding =
                 constraints.maxWidth < 380 ? 18.0 : 24.0;
             final verticalPadding = compact ? 16.0 : 28.0;
@@ -80,9 +81,7 @@ class LoginPage extends ConsumerWidget {
             return SingleChildScrollView(
               keyboardDismissBehavior:
                   ScrollViewKeyboardDismissBehavior.onDrag,
-              physics: keyboardIsOpen
-                  ? const ClampingScrollPhysics()
-                  : const NeverScrollableScrollPhysics(),
+              physics: const ClampingScrollPhysics(),
               padding: EdgeInsets.symmetric(
                 horizontal: horizontalPadding,
                 vertical: verticalPadding,
@@ -95,55 +94,37 @@ class LoginPage extends ConsumerWidget {
                 ),
                 child: Center(
                   child: ConstrainedBox(
-                    constraints:
-                        const BoxConstraints(maxWidth: 420),
+                    constraints: const BoxConstraints(maxWidth: 420),
                     child: Column(
-                      mainAxisAlignment:
-                          MainAxisAlignment.center,
+                      mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         LoginHeader(compact: compact),
                         SizedBox(height: headerCardGap),
                         DiperaCard(
                           padding: EdgeInsets.zero,
                           child: Padding(
-                            padding:
-                                EdgeInsets.all(cardPadding),
+                            padding: EdgeInsets.all(cardPadding),
                             child: Column(
-                              crossAxisAlignment:
-                                  CrossAxisAlignment.start,
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
                                   'Schön, dass du da bist 👋',
-                                  style: theme
-                                      .textTheme
-                                      .headlineSmall
-                                      ?.copyWith(
-                                    color:
-                                        const Color(0xFF101828),
-                                    fontWeight:
-                                        FontWeight.w700,
-                                    fontSize:
-                                        compact ? 22 : null,
+                                  style: theme.textTheme.headlineSmall?.copyWith(
+                                    color: const Color(0xFF101828),
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: compact ? 22 : null,
                                   ),
                                 ),
-                                SizedBox(
-                                  height: compact ? 6 : 8,
-                                ),
+                                SizedBox(height: compact ? 6 : 8),
                                 Text(
                                   'Melde dich an, um deine Arbeitszeiten, Schichten und Urlaubsanträge im Blick zu behalten.',
-                                  style: theme
-                                      .textTheme.bodyLarge
-                                      ?.copyWith(
-                                    color:
-                                        const Color(0xFF667085),
+                                  style: theme.textTheme.bodyLarge?.copyWith(
+                                    color: const Color(0xFF667085),
                                     height: 1.4,
-                                    fontSize:
-                                        compact ? 14 : null,
+                                    fontSize: compact ? 14 : null,
                                   ),
                                 ),
-                                SizedBox(
-                                  height: titleFormGap,
-                                ),
+                                SizedBox(height: titleFormGap),
                                 LoginForm(
                                   compact: compact,
                                   onLogin: ({
@@ -152,9 +133,7 @@ class LoginPage extends ConsumerWidget {
                                   }) async {
                                     try {
                                       await ref
-                                          .read(
-                                            authServiceProvider,
-                                          )
+                                          .read(authServiceProvider)
                                           .signIn(
                                             email: email,
                                             password: password,
@@ -166,10 +145,7 @@ class LoginPage extends ConsumerWidget {
 
                                       _showMessage(
                                         context,
-                                        message:
-                                            _getLoginErrorMessage(
-                                          error,
-                                        ),
+                                        message: _getLoginErrorMessage(error),
                                         isError: true,
                                       );
                                       rethrow;
@@ -183,9 +159,7 @@ class LoginPage extends ConsumerWidget {
                                     );
                                   },
                                 ),
-                                SizedBox(
-                                  height: compact ? 14 : 20,
-                                ),
+                                SizedBox(height: compact ? 14 : 20),
                                 Center(
                                   child: TextButton(
                                     onPressed: () {
@@ -198,8 +172,7 @@ class LoginPage extends ConsumerWidget {
                                     },
                                     child: const Text(
                                       'Einladung erhalten? Konto erstellen',
-                                      textAlign:
-                                          TextAlign.center,
+                                      textAlign: TextAlign.center,
                                     ),
                                   ),
                                 ),

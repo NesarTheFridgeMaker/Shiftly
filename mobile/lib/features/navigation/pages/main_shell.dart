@@ -1,3 +1,4 @@
+
 import 'package:flutter/material.dart';
 
 import '../../dashboard/pages/dashboard_page.dart';
@@ -36,6 +37,11 @@ class _MainShellState extends State<MainShell> {
 
   @override
   Widget build(BuildContext context) {
+    final textScaler = MediaQuery.textScalerOf(context);
+
+    final useIconOnlyNavigation =
+        textScaler.scale(14) > 18;
+
     return Scaffold(
       backgroundColor: const Color(0xFFF6F8FB),
       body: IndexedStack(
@@ -50,28 +56,36 @@ class _MainShellState extends State<MainShell> {
         backgroundColor: Colors.white,
         surfaceTintColor: Colors.transparent,
         indicatorColor: const Color(0xFFEFF4FF),
+        labelBehavior: useIconOnlyNavigation
+            ? NavigationDestinationLabelBehavior.alwaysHide
+            : NavigationDestinationLabelBehavior.alwaysShow,
         destinations: const [
           NavigationDestination(
+            tooltip: 'Übersicht',
             icon: Icon(Icons.home_outlined),
             selectedIcon: Icon(Icons.home_rounded),
             label: 'Übersicht',
           ),
           NavigationDestination(
+            tooltip: 'Stempeln',
             icon: Icon(Icons.fingerprint_outlined),
             selectedIcon: Icon(Icons.fingerprint_rounded),
             label: 'Stempeln',
           ),
           NavigationDestination(
+            tooltip: 'Zeiten',
             icon: Icon(Icons.access_time_outlined),
             selectedIcon: Icon(Icons.access_time_rounded),
             label: 'Zeiten',
           ),
           NavigationDestination(
+            tooltip: 'Schichten',
             icon: Icon(Icons.calendar_month_outlined),
             selectedIcon: Icon(Icons.calendar_month_rounded),
             label: 'Schichten',
           ),
           NavigationDestination(
+            tooltip: 'Mehr',
             icon: Icon(Icons.grid_view_outlined),
             selectedIcon: Icon(Icons.grid_view_rounded),
             label: 'Mehr',
